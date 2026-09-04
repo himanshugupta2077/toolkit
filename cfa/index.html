@@ -1,0 +1,1206 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#efe6d6" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>CFA</title>
+  <style>
+    :root {
+      --bg: #efe6d6;
+      --paper: #f7f1e6;
+      --ink: #1b1712;
+      --muted: #7a7166;
+      --line: #d8cdb8;
+      --ox: #8f2a2a;
+      --ox-soft: rgba(143, 42, 42, 0.12);
+      --olive: #3d5c45;
+      --olive-soft: rgba(61, 92, 69, 0.14);
+      --gold: #b0892e;
+      --gold-soft: rgba(176, 137, 46, 0.18);
+      --prep: #3d5c45;
+      --rev: #b0892e;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background:
+        radial-gradient(120% 70% at 50% -10%, rgba(143, 42, 42, 0.08), transparent 50%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px calc(78px + var(--safe-b));
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(10px + var(--safe-t)) 0 12px;
+      background: rgba(239, 230, 214, 0.94);
+      backdrop-filter: blur(10px);
+    }
+
+    .back, .ghost {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font: inherit;
+      font-size: 1.15rem;
+      cursor: pointer;
+    }
+    .back:active, .ghost:active { transform: scale(0.96); }
+    .wordmark {
+      font-size: 0.78rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .view { display: none; flex-direction: column; gap: 28px; }
+    .view.on { display: flex; }
+
+    .dates { display: flex; flex-direction: column; gap: 28px; padding: 8px 2px 4px; }
+    .date-block { display: flex; flex-direction: column; gap: 8px; }
+    .date-k {
+      color: var(--muted);
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .date-v {
+      font-size: 1.55rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+    }
+    .date-sub {
+      color: var(--muted);
+      font-size: 0.95rem;
+      font-family: system-ui, -apple-system, sans-serif;
+      line-height: 1.45;
+    }
+    .date-v-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .icon-edit {
+      appearance: none;
+      flex: 0 0 auto;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--ink);
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .icon-edit:active { transform: scale(0.96); }
+    .icon-edit svg { display: block; }
+
+    .track { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 8px; }
+    .track-bar-wrap { position: relative; }
+    .track-bar {
+      display: flex;
+      height: 12px;
+      border-radius: 99px;
+      overflow: hidden;
+      background: rgba(27, 23, 18, 0.08);
+    }
+    .track-bar .prep { background: var(--prep); }
+    .track-bar .rev { background: var(--rev); }
+    .track-notch {
+      position: absolute;
+      top: -4px;
+      bottom: -4px;
+      width: 2px;
+      left: var(--rev-at, 50%);
+      transform: translateX(-50%);
+      background: var(--ink);
+      border-radius: 2px;
+      pointer-events: none;
+    }
+    .track-marks {
+      position: relative;
+      min-height: 1.25em;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 0.72rem;
+      font-weight: 650;
+    }
+    .track-marks .start { position: absolute; left: 0; }
+    .track-marks .end { position: absolute; right: 0; text-align: right; }
+    .track-marks .mid {
+      position: absolute;
+      left: var(--rev-at, 50%);
+      transform: translateX(-50%);
+      color: var(--gold);
+      white-space: nowrap;
+    }
+    .dot-prep, .dot-rev {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+    }
+    .dot-prep { background: var(--prep); }
+    .dot-rev { background: var(--rev); }
+
+    .card {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+    }
+    .sec-h {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .sec-h h2 {
+      font-size: 0.92rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+    .sec-h span { color: var(--muted); font-size: 0.78rem; font-family: system-ui, sans-serif; }
+
+    .empty {
+      color: var(--muted);
+      text-align: center;
+      padding: 18px 8px;
+      font-size: 0.95rem;
+    }
+
+    .row {
+      appearance: none;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 4px;
+      text-align: left;
+      cursor: pointer;
+      border-top: 1px solid rgba(216, 205, 184, 0.7);
+    }
+    .row:first-of-type { border-top: 0; }
+    .num {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+    .ttl {
+      font-size: 1rem;
+      line-height: 1.25;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .ttl.done { text-decoration: line-through; color: var(--muted); }
+    .sub {
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-family: system-ui, sans-serif;
+      margin-top: 2px;
+    }
+    .pct {
+      min-width: 46px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      font-size: 0.92rem;
+    }
+    .pct.done { color: var(--olive); }
+    .star { color: var(--gold); margin-left: 4px; }
+
+    .search {
+      width: 100%;
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      font-size: 1rem;
+      color: var(--ink);
+      outline: none;
+    }
+    .chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 2px; }
+    .chip {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--paper);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font: inherit;
+      font-size: 0.8rem;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .chip.on { color: var(--ink); background: #fff; border-color: var(--ink); }
+
+    .day {
+      appearance: none;
+      width: 100%;
+      border: 0;
+      border-top: 1px solid rgba(216, 205, 184, 0.75);
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      display: grid;
+      grid-template-columns: 56px 1fr auto;
+      gap: 10px;
+      align-items: start;
+      padding: 12px 4px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .day:first-of-type { border-top: 0; }
+    .day.today {
+      background: rgba(143, 42, 42, 0.06);
+      margin: 0 -8px;
+      padding-left: 12px;
+      padding-right: 12px;
+      border-radius: 12px;
+    }
+    .day.off .d-name { color: var(--muted); }
+    .d-wd { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+    .d-num { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .d-name { font-size: 0.95rem; min-width: 0; }
+    .d-alloc {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+    .d-alloc span { display: block; line-height: 1.25; }
+    .ex-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .ex-chip {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 999px;
+      padding: 7px 11px;
+      font: inherit;
+      font-size: 0.82rem;
+      font-family: system-ui, sans-serif;
+      cursor: pointer;
+    }
+    .plan-line {
+      font-size: 0.98rem;
+      padding: 6px 0;
+      border-top: 1px solid rgba(216, 205, 184, 0.7);
+    }
+    .plan-line:first-child { border-top: 0; }
+    .d-tag {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .d-tag.off { color: var(--ox); }
+    .d-tag.rev { color: var(--gold); }
+
+    .seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      background: rgba(27, 23, 18, 0.05);
+      padding: 4px;
+      border-radius: 14px;
+    }
+    .seg button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 11px;
+      padding: 10px 8px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .seg button.on { background: var(--paper); color: var(--ink); box-shadow: 0 1px 4px rgba(27, 23, 18, 0.08); }
+    .err { color: var(--ox); font-size: 0.82rem; min-height: 1.1em; }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--ink);
+      background: var(--ink);
+      color: var(--paper);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn.soft { background: var(--paper); color: var(--ink); border-color: var(--line); }
+    .btn.danger { background: var(--ox-soft); color: var(--ox); border-color: rgba(143, 42, 42, 0.3); }
+    .btn:disabled { opacity: 0.4; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+
+    .nav {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 0;
+      width: 100%;
+      max-width: 480px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 8px 12px calc(10px + var(--safe-b));
+      background: rgba(239, 230, 214, 0.92);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--line);
+    }
+    .nav button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 10px 0;
+      cursor: pointer;
+    }
+    .nav button.on { color: var(--ink); }
+
+    .sheet-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(27, 23, 18, 0.38);
+      z-index: 20;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .sheet-bg.on { display: flex; }
+    .sheet {
+      width: 100%;
+      max-width: 480px;
+      max-height: min(88dvh, 720px);
+      overflow: auto;
+      background: var(--bg);
+      border-radius: 22px 22px 0 0;
+      padding: 16px 16px calc(24px + var(--safe-b));
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .grab {
+      width: 42px;
+      height: 4px;
+      border-radius: 99px;
+      background: var(--line);
+      margin: 0 auto 4px;
+    }
+    .field { display: flex; flex-direction: column; gap: 8px; }
+    .field-lab {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .prog-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .prog-top .pct-now {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    input[type="range"].tube {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 14px;
+      border-radius: 99px;
+      background: linear-gradient(to right, var(--olive) var(--p, 0%), rgba(27, 23, 18, 0.08) var(--p, 0%));
+      outline: none;
+    }
+    input[type="range"].tube::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--ink);
+      border: 2px solid #fffdf8;
+      box-shadow: 0 1px 4px rgba(27, 23, 18, 0.2);
+      cursor: pointer;
+    }
+    input[type="range"].tube::-moz-range-thumb {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--ink);
+      border: 2px solid #fffdf8;
+      box-shadow: 0 1px 4px rgba(27, 23, 18, 0.2);
+      cursor: pointer;
+    }
+    .warn-copy {
+      font-size: 0.98rem;
+      line-height: 1.45;
+    }
+    .warn-copy ul {
+      margin: 10px 0 0 1.15em;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pick { display: flex; flex-direction: column; max-height: 34vh; overflow: auto; }
+    .actions { display: flex; gap: 8px; }
+    .actions .btn { flex: 1; }
+    .list-tools { display: flex; gap: 8px; }
+    .list-tools .search { flex: 1; }
+
+    .sheet input, .sheet textarea {
+      width: 100%;
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      border-radius: 12px;
+      padding: 12px;
+      font: inherit;
+      font-size: 1rem;
+      color: var(--ink);
+      outline: none;
+    }
+    .sheet input[type="date"] { min-height: 48px; }
+    .sheet textarea { min-height: 88px; resize: vertical; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <a class="back" href="/" aria-label="Apps">←</a>
+      <span style="width:40px" aria-hidden="true"></span>
+    </header>
+
+    <section id="view-home" class="view on"></section>
+    <section id="view-chapters" class="view"></section>
+    <section id="view-plan" class="view"></section>
+  </div>
+
+  <nav class="nav">
+    <button type="button" data-tab="home" class="on">Home</button>
+    <button type="button" data-tab="chapters">Chapters</button>
+    <button type="button" data-tab="plan">Plan</button>
+  </nav>
+
+  <div class="sheet-bg" id="sheetBg" hidden>
+    <div class="sheet" id="sheet"></div>
+  </div>
+
+  <script>
+    const EXAM = "2026-11-17";
+    let state = null;
+    let tab = "home";
+    let listFilter = "left";
+    let listQ = "";
+    let dayQ = "";
+    let dayDraftOff = false;
+    let saveTimer = 0;
+
+    const $ = (id) => document.getElementById(id);
+
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function parseISO(iso) {
+      const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return null;
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+
+    function fmtDay(iso, mode) {
+      const d = parseISO(iso);
+      if (!d) return iso || "";
+      if (mode === "short") {
+        return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+      }
+      if (mode === "tiny") {
+        return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+      }
+      return d.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    }
+
+    function addDays(iso, n) {
+      const d = parseISO(iso);
+      d.setDate(d.getDate() + n);
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function offMap() {
+      const m = {};
+      for (const o of state.offDays || []) m[o.date] = o.reason || "";
+      return m;
+    }
+
+    function chapterById(id) {
+      return (state.chapters || []).find((c) => c.id === id);
+    }
+
+    function chapterLabel(ch) {
+      return `Chapter ${ch.n}`;
+    }
+
+    function editIcon(attr) {
+      return (
+        `<button type="button" class="icon-edit" ${attr} aria-label="Edit">` +
+        `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">` +
+        `<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>` +
+        `</svg></button>`
+      );
+    }
+
+    function planDay(iso) {
+      return (state.plan || []).find((d) => d.date === iso) || null;
+    }
+
+    function planForChapter(id) {
+      const out = [];
+      for (const day of state.plan || []) {
+        for (const it of day.items || []) {
+          if (it.id === id) out.push({ date: day.date, percent: it.percent, from: it.from, to: it.to });
+        }
+      }
+      return out;
+    }
+
+    function revisionWindowDays() {
+      const s = state.stats || {};
+      const revStart = revisionStartIso();
+      const a = parseISO(revStart);
+      const b = parseISO(s.examDate || EXAM);
+      if (!a || !b) return state.revisionDays || 0;
+      return Math.max(0, Math.round((b - a) / 86400000));
+    }
+
+    function addOffDates(isos) {
+      const have = new Set((state.offDays || []).map((o) => o.date));
+      let added = false;
+      for (const iso of isos) {
+        if (!iso || iso >= EXAM || have.has(iso)) continue;
+        have.add(iso);
+        state.offDays.push({ date: iso, reason: "" });
+        added = true;
+      }
+      if (added) persist();
+    }
+
+    async function load() {
+      const r = await fetch("/api/cfa");
+      if (!r.ok) throw new Error("load failed");
+      state = await r.json();
+      render();
+    }
+
+    function persist() {
+      clearTimeout(saveTimer);
+      saveTimer = setTimeout(flush, 180);
+    }
+
+    async function flush() {
+      if (!state) return;
+      const r = await fetch("/api/cfa", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startedOn: state.startedOn,
+          revisionStart: state.revisionStart,
+          planVersion: state.planVersion,
+          chapters: state.chapters,
+          offDays: state.offDays,
+        }),
+      });
+      if (!r.ok) return;
+      const openId = $("sheet").dataset.chapter;
+      const openDay = $("sheet").dataset.day;
+      state = await r.json();
+      render();
+      const openSheetKind = $("sheet").dataset.sheet;
+      if (openId) openChapter(openId);
+      if (openDay) openDaySheet(openDay);
+      if (openSheetKind === "rev") openRevSheet();
+      if (openSheetKind === "ex-one") openExcludeOne();
+      if (openSheetKind === "ex-range") openExcludeRange();
+    }
+
+    function setProgress(ch, value) {
+      const next = Math.max(0, Math.min(100, Math.round(Number(value) / 10) * 10));
+      const today = state.stats.today;
+      ch.progress = next;
+      ch.updatedOn = today;
+      ch.completedOn = next >= 100 ? today : null;
+      persist();
+    }
+
+    function setTab(name) {
+      tab = name;
+      document.querySelectorAll(".nav button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.tab === name);
+      });
+      render();
+      window.scrollTo(0, 0);
+    }
+
+    function openSheet(html) {
+      const bg = $("sheetBg");
+      const el = $("sheet");
+      el.innerHTML = `<div class="grab"></div>` + html;
+      bg.hidden = false;
+      bg.classList.add("on");
+    }
+
+    function closeSheet() {
+      const bg = $("sheetBg");
+      bg.classList.remove("on");
+      bg.hidden = true;
+      $("sheet").innerHTML = "";
+      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.day;
+      delete $("sheet").dataset.sheet;
+      dayQ = "";
+    }
+
+    function chapterRow(ch, extra) {
+      const done = ch.progress >= 100;
+      return (
+        `<button type="button" class="row" data-open="${esc(ch.id)}">` +
+        `<span><div class="ttl${done ? " done" : ""}">${esc(chapterLabel(ch))}</div>` +
+        (extra ? `<div class="sub">${esc(extra)}</div>` : "") +
+        `</span>` +
+        `<span class="pct${done ? " done" : ""}">${ch.progress}%` +
+        (ch.bookmarked ? `<span class="star">★</span>` : "") +
+        `</span></button>`
+      );
+    }
+
+    function revisionStartIso() {
+      return state.revisionStart || (state.stats && state.stats.revisionStart) || "";
+    }
+
+    function examDaysCopy(s) {
+      if (s.daysToExam > 1) return `${s.daysToExam} days left`;
+      if (s.daysToExam === 1) return "1 day left";
+      if (s.daysToExam === 0) return "Exam today";
+      return "Exam passed";
+    }
+
+    function revisionDaysCopy(s) {
+      if (s.daysToRevision > 1) return `${s.daysToRevision} days to revision`;
+      if (s.daysToRevision === 1) return "1 day to revision";
+      if (s.daysToRevision === 0) return "Revision starts today";
+      return "In revision";
+    }
+
+    function renderHome() {
+      const s = state.stats;
+      const today = s.today;
+      const revStart = revisionStartIso();
+      const day = planDay(today);
+      const items = (day && day.items) || [];
+
+      const span = Math.max(s.daysToExam, 1);
+      const toRev = Math.max(s.daysToRevision, 0);
+      const revDays = Math.max(0, Math.min(span, span - toRev));
+      const prepPct = s.phase === "after" ? 0 : Math.max(0, (toRev / span) * 100);
+      const revPct = s.phase === "after" ? 100 : Math.max(0, (revDays / span) * 100);
+      const windowDays = revisionWindowDays();
+
+      let body = "";
+      if (day && day.kind === "off") {
+        body = `<div class="empty">Excluded</div>`;
+      } else if (day && day.kind === "revision") {
+        body = `<div class="empty">Revision</div>`;
+      } else if (day && day.kind === "exam") {
+        body = `<div class="empty">Exam</div>`;
+      } else if (!items.length) {
+        body = `<div class="empty">Nothing today</div>`;
+      } else {
+        body = items.map((it) => {
+          const ch = chapterById(it.id);
+          return ch ? chapterRow(ch, `${it.percent}% today`) : "";
+        }).join("");
+      }
+
+      $("view-home").innerHTML =
+        `<div class="dates">` +
+        `<div class="date-block">` +
+        `<div class="date-k">Exam date</div>` +
+        `<div class="date-v">${esc(fmtDay(s.examDate))}</div>` +
+        `<div class="date-sub">${esc(examDaysCopy(s))}</div>` +
+        `</div>` +
+        `<div class="date-block">` +
+        `<div class="date-k">Revision</div>` +
+        `<div class="date-v-row">` +
+        `<div class="date-v">${esc(fmtDay(revStart, "tiny"))} – ${esc(fmtDay(s.examDate, "tiny"))}</div>` +
+        editIcon("data-edit-rev") +
+        `</div>` +
+        `<div class="date-sub">${windowDays} days</div>` +
+        `<div class="date-sub">${esc(revisionDaysCopy(s))}</div>` +
+        `</div>` +
+        `</div>` +
+        `<div class="track" style="--rev-at:${prepPct}%">` +
+        `<div class="track-bar-wrap">` +
+        `<div class="track-bar"><i class="prep" style="width:${prepPct}%"></i><i class="rev" style="width:${revPct}%"></i></div>` +
+        `<b class="track-notch"></b>` +
+        `</div>` +
+        `<div class="track-marks">` +
+        `<span class="start">Today</span>` +
+        `<span class="mid">${esc(fmtDay(revStart, "tiny"))}</span>` +
+        `<span class="end">${esc(fmtDay(s.examDate, "tiny"))}</span>` +
+        `</div>` +
+        `</div>` +
+        `<div class="card">` +
+        `<div class="sec-h"><h2>${esc(fmtDay(today))}</h2><span>${items.length || ""}</span></div>` +
+        body +
+        `</div>`;
+    }
+
+    function renderPlan() {
+      const s = state.stats;
+      const revStart = revisionStartIso();
+      const windowDays = revisionWindowDays();
+      const excluded = (state.offDays || [])
+        .filter((o) => o.date >= s.today && o.date < EXAM)
+        .slice()
+        .sort((a, b) => (a.date < b.date ? -1 : 1));
+      const chips = excluded.length
+        ? excluded.map((o) =>
+            `<button type="button" class="ex-chip" data-unoff="${esc(o.date)}">${esc(fmtDay(o.date, "tiny"))} ×</button>`
+          ).join("")
+        : `<div class="empty">None</div>`;
+
+      const rows = (state.plan || []).map((day) => {
+        const d = parseISO(day.date);
+        let tag = "Prep";
+        let name = "";
+        if (day.kind === "exam") {
+          tag = "Exam";
+          name = "Exam";
+        } else if (day.kind === "off") {
+          tag = "Excluded";
+          name = "Excluded";
+        } else if (day.kind === "revision") {
+          tag = "Revision";
+          name = "Revision";
+        } else if (day.items && day.items.length) {
+          name = day.items.map((it) => `Chapter ${it.n} · ${it.percent}%`).join("\n");
+        } else {
+          name = "—";
+        }
+        const lines = String(name).split("\n").map((line) => `<span>${esc(line)}</span>`).join("");
+        return (
+          `<button type="button" class="day${day.date === s.today ? " today" : ""}${day.kind === "off" ? " off" : ""}" data-day="${day.date}">` +
+          `<span><div class="d-wd">${d.toLocaleDateString(undefined, { weekday: "short" })}</div>` +
+          `<div class="d-num">${d.getDate()}</div></span>` +
+          `<span class="d-name d-alloc">${lines}</span>` +
+          `<span class="d-tag${day.kind === "off" ? " off" : day.kind === "revision" || day.kind === "exam" ? " rev" : ""}">${esc(tag)}</span>` +
+          `</button>`
+        );
+      }).join("");
+
+      $("view-plan").innerHTML =
+        `<div class="card">` +
+        `<div class="sec-h"><h2>Revision</h2>${editIcon("data-edit-rev")}</div>` +
+        `<div class="date-v">${esc(fmtDay(revStart, "tiny"))} – ${esc(fmtDay(s.examDate, "tiny"))}</div>` +
+        `<div class="date-sub">${windowDays} days</div>` +
+        `</div>` +
+        `<div class="card">` +
+        `<div class="sec-h"><h2>Excluded</h2></div>` +
+        `<div class="ex-chips">${chips}</div>` +
+        `<div class="actions" style="margin-top:12px">` +
+        `<button type="button" class="btn soft" id="exAddOne">+ Date</button>` +
+        `<button type="button" class="btn soft" id="exAddRange">+ Range</button>` +
+        `</div>` +
+        `</div>` +
+        `<div class="card">${rows}</div>`;
+    }
+
+    function renderChapters() {
+      const q = listQ.trim().toLowerCase();
+      let items = state.chapters.slice().sort((a, b) => a.n - b.n);
+      if (listFilter === "left") items = items.filter((c) => c.progress < 100);
+      else if (listFilter === "done") items = items.filter((c) => c.progress >= 100);
+      else if (listFilter === "star") items = items.filter((c) => c.bookmarked);
+      if (q) {
+        items = items.filter((c) =>
+          String(c.n).includes(q) || String(c.title || "").toLowerCase().includes(q)
+        );
+      }
+      const chips = [
+        ["left", "Left"],
+        ["all", "All"],
+        ["done", "Done"],
+        ["star", "★"],
+      ].map(([k, lab]) =>
+        `<button type="button" class="chip${listFilter === k ? " on" : ""}" data-filter="${k}">${lab}</button>`
+      ).join("");
+
+      $("view-chapters").innerHTML =
+        `<div class="list-tools">` +
+        `<input class="search" id="listSearch" type="search" placeholder="Chapter" value="${esc(listQ)}" />` +
+        `</div>` +
+        `<div class="chips">${chips}</div>` +
+        `<div class="card">` +
+        (items.length ? items.map((c) => chapterRow(c)).join("") : `<div class="empty">None</div>`) +
+        `</div>`;
+
+      const input = $("listSearch");
+      if (input) {
+        input.addEventListener("input", () => {
+          listQ = input.value;
+          const pos = input.selectionStart;
+          renderChapters();
+          const next = $("listSearch");
+          if (next) {
+            next.focus();
+            next.setSelectionRange(pos, pos);
+          }
+        });
+      }
+    }
+
+    function render() {
+      if (!state) return;
+      document.querySelectorAll(".view").forEach((el) => el.classList.remove("on"));
+      const el = $(`view-${tab}`);
+      if (el) el.classList.add("on");
+      if (tab === "home") renderHome();
+      if (tab === "plan") renderPlan();
+      if (tab === "chapters") renderChapters();
+    }
+
+    function openChapter(id, mode) {
+      const ch = chapterById(id);
+      if (!ch) return;
+      if (mode === "reset") {
+        openSheet(
+          `<div class="sec-h"><h2>Reset chapter ${ch.n}?</h2><span></span></div>` +
+          `<div class="warn-copy">Are you sure you want to reset this chapter? This will:` +
+          `<ul>` +
+          `<li>Set progress to 0</li>` +
+          `<li>Clear notes</li>` +
+          `</ul></div>` +
+          `<div class="actions">` +
+          `<button type="button" class="btn soft" id="chResetNo">No</button>` +
+          `<button type="button" class="btn danger" id="chResetYes">Yes, reset</button>` +
+          `</div>`
+        );
+        $("sheet").dataset.chapter = id;
+        delete $("sheet").dataset.day;
+        return;
+      }
+      const slots = planForChapter(ch.id);
+      const planHtml = slots.length
+        ? slots.map((s) => `<div class="plan-line">${esc(fmtDay(s.date, "short"))} · ${s.percent}%</div>`).join("")
+        : `<div class="empty">${ch.progress >= 100 ? "Done" : "Not in prep window"}</div>`;
+      openSheet(
+        `<div class="sec-h"><h2>Chapter ${ch.n}</h2><span></span></div>` +
+        `<div class="field">` +
+        `<div class="prog-top"><div class="field-lab">Chapter Progress</div><span class="pct-now" id="chPct">${ch.progress}%</span></div>` +
+        `<input id="chProg" class="tube" type="range" min="0" max="100" step="10" value="${ch.progress}" style="--p:${ch.progress}%" />` +
+        `</div>` +
+        `<div class="field">` +
+        `<div class="field-lab">Plan</div>` +
+        `<div>${planHtml}</div>` +
+        `</div>` +
+        `<div class="field">` +
+        `<div class="field-lab">Notes</div>` +
+        `<textarea id="chNotes" maxlength="4000">${esc(ch.notes)}</textarea>` +
+        `</div>` +
+        `<div class="actions">` +
+        `<button type="button" class="btn soft" id="chStar">${ch.bookmarked ? "Bookmarked" : "Bookmark"}</button>` +
+        `<button type="button" class="btn danger" id="chReset">Reset</button>` +
+        `</div>`
+      );
+      $("sheet").dataset.chapter = id;
+      delete $("sheet").dataset.day;
+    }
+
+    function openRevSheet() {
+      const revStart = revisionStartIso();
+      const maxRev = addDays(EXAM, -1);
+      openSheet(
+        `<div class="sec-h"><h2>Revision start</h2><span></span></div>` +
+        `<input id="revStart" type="date" value="${esc(revStart)}" max="${esc(maxRev)}" />` +
+        `<button type="button" class="btn" id="revSave">Save</button>`
+      );
+      $("sheet").dataset.sheet = "rev";
+      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.day;
+    }
+
+    function openExcludeOne() {
+      const s = state.stats;
+      const max = addDays(revisionStartIso() || s.revisionStart, -1);
+      openSheet(
+        `<div class="sec-h"><h2>Exclude date</h2><span></span></div>` +
+        `<input id="exOne" type="date" value="${esc(s.today)}" min="${esc(s.today)}" max="${esc(max)}" />` +
+        `<button type="button" class="btn" id="exOneSave">Add</button>`
+      );
+      $("sheet").dataset.sheet = "ex-one";
+      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.day;
+    }
+
+    function openExcludeRange() {
+      const s = state.stats;
+      const max = addDays(revisionStartIso() || s.revisionStart, -1);
+      openSheet(
+        `<div class="sec-h"><h2>Exclude range</h2><span></span></div>` +
+        `<div class="field"><div class="field-lab">From</div><input id="exFrom" type="date" value="${esc(s.today)}" min="${esc(s.today)}" max="${esc(max)}" /></div>` +
+        `<div class="field"><div class="field-lab">To</div><input id="exTo" type="date" value="${esc(s.today)}" min="${esc(s.today)}" max="${esc(max)}" /></div>` +
+        `<button type="button" class="btn" id="exRangeSave">Add</button>`
+      );
+      $("sheet").dataset.sheet = "ex-range";
+      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.day;
+    }
+
+    function openDaySheet(iso) {
+      const day = planDay(iso);
+      const kind = day ? day.kind : "prep";
+      const items = (day && day.items) || [];
+      let extra = "";
+      if (kind === "exam") {
+        extra = `<div class="empty">Exam</div>`;
+      } else if (kind === "revision") {
+        extra = `<div class="empty">Revision</div>`;
+      } else if (kind === "off") {
+        extra =
+          `<div class="empty">Excluded</div>` +
+          `<button type="button" class="btn" id="dayInclude">Include this day</button>`;
+      } else {
+        extra =
+          (items.length
+            ? items.map((it) => `<div class="plan-line">Chapter ${it.n} · ${it.percent}%</div>`).join("")
+            : `<div class="empty">Nothing</div>`) +
+          `<button type="button" class="btn danger" id="dayExclude">Exclude this day</button>`;
+      }
+      openSheet(
+        `<div class="sec-h"><h2>${esc(fmtDay(iso))}</h2><span></span></div>` + extra
+      );
+      $("sheet").dataset.day = iso;
+      delete $("sheet").dataset.chapter;
+    }
+
+    document.querySelector(".nav").addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-tab]");
+      if (btn) setTab(btn.dataset.tab);
+    });
+
+    document.querySelector(".app").addEventListener("click", (e) => {
+      const filter = e.target.closest("[data-filter]");
+      if (filter) {
+        listFilter = filter.getAttribute("data-filter") || "left";
+        renderChapters();
+        return;
+      }
+      const open = e.target.closest("[data-open]");
+      if (open) {
+        openChapter(open.getAttribute("data-open"));
+        return;
+      }
+      if (e.target.closest("[data-edit-rev]")) {
+        openRevSheet();
+        return;
+      }
+      const unoff = e.target.closest("[data-unoff]");
+      if (unoff) {
+        const iso = unoff.getAttribute("data-unoff");
+        state.offDays = (state.offDays || []).filter((o) => o.date !== iso);
+        persist();
+        return;
+      }
+      if (e.target.id === "exAddOne") {
+        openExcludeOne();
+        return;
+      }
+      if (e.target.id === "exAddRange") {
+        openExcludeRange();
+        return;
+      }
+      const day = e.target.closest("[data-day]");
+      if (day) {
+        openDaySheet(day.getAttribute("data-day"));
+      }
+    });
+
+    $("sheetBg").addEventListener("click", (e) => {
+      if (e.target === $("sheetBg")) closeSheet();
+    });
+
+    $("sheet").addEventListener("click", (e) => {
+      const id = $("sheet").dataset.chapter;
+      const day = $("sheet").dataset.day;
+      if (id) {
+        const ch = chapterById(id);
+        if (!ch) return;
+        if (e.target.id === "chStar") {
+          ch.bookmarked = !ch.bookmarked;
+          persist();
+          return;
+        }
+        if (e.target.id === "chReset") {
+          openChapter(id, "reset");
+          return;
+        }
+        if (e.target.id === "chResetNo") {
+          openChapter(id);
+          return;
+        }
+        if (e.target.id === "chResetYes") {
+          ch.progress = 0;
+          ch.date = null;
+          ch.notes = "";
+          ch.updatedOn = null;
+          ch.completedOn = null;
+          persist();
+          return;
+        }
+      }
+      if (e.target.id === "revSave") {
+        const next = ($("revStart") && $("revStart").value) || "";
+        if (!next || next >= EXAM) return;
+        state.revisionStart = next;
+        closeSheet();
+        persist();
+        return;
+      }
+      if (e.target.id === "exOneSave") {
+        const iso = ($("exOne") && $("exOne").value) || "";
+        closeSheet();
+        addOffDates([iso]);
+        return;
+      }
+      if (e.target.id === "exRangeSave") {
+        const from = ($("exFrom") && $("exFrom").value) || "";
+        const to = ($("exTo") && $("exTo").value) || "";
+        if (!from || !to) return;
+        const start = from < to ? from : to;
+        const end = from < to ? to : from;
+        const dates = [];
+        for (let iso = start; iso <= end; iso = addDays(iso, 1)) dates.push(iso);
+        closeSheet();
+        addOffDates(dates);
+        return;
+      }
+      if (day) {
+        if (e.target.id === "dayExclude") {
+          closeSheet();
+          addOffDates([day]);
+          return;
+        }
+        if (e.target.id === "dayInclude") {
+          state.offDays = (state.offDays || []).filter((o) => o.date !== day);
+          closeSheet();
+          persist();
+        }
+      }
+    });
+
+    $("sheet").addEventListener("change", (e) => {
+      const id = $("sheet").dataset.chapter;
+      if (!id) return;
+      const ch = chapterById(id);
+      if (!ch) return;
+      if (e.target.id === "chNotes") ch.notes = e.target.value;
+      if (e.target.id === "revStart") {
+        const next = e.target.value;
+        if (!next || next >= EXAM) return;
+        state.revisionStart = next;
+        persist();
+        return;
+      }
+      if (e.target.id === "chProg") {
+        setProgress(ch, e.target.value);
+        return;
+      }
+      persist();
+    });
+
+    $("sheet").addEventListener("input", (e) => {
+      const id = $("sheet").dataset.chapter;
+      if (!id) return;
+      const ch = chapterById(id);
+      if (!ch) return;
+      if (e.target.id === "chNotes") ch.notes = e.target.value;
+      if (e.target.id === "chProg") {
+        const next = Math.max(0, Math.min(100, Math.round(Number(e.target.value) / 10) * 10));
+        e.target.style.setProperty("--p", next + "%");
+        const lab = $("chPct");
+        if (lab) lab.textContent = next + "%";
+        return;
+      }
+      persist();
+    });
+
+    load().catch(() => {
+      $("view-home").innerHTML = `<div class="empty">Could not load</div>`;
+    });
+  </script>
+</body>
+</html>

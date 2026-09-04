@@ -1,0 +1,1352 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#161410" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Food</title>
+  <style>
+    :root {
+      --bg: #161410;
+      --surface: #221e18;
+      --surface2: #2c2720;
+      --border: #3d362c;
+      --text: #f4eee6;
+      --muted: #9c9080;
+      --accent: #e2a84a;
+      --accent-dim: rgba(226, 168, 74, 0.16);
+      --chili: #c45c3e;
+      --leaf: #7ea85a;
+      --protein: #d46a6a;
+      --carbs: #e2a84a;
+      --fiber: #7ea85a;
+      --fat: #c4a06a;
+      --radius: 16px;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background:
+        radial-gradient(90% 50% at 50% -8%, rgba(226, 168, 74, 0.12), transparent 52%),
+        var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px calc(132px + var(--safe-b));
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(10px + var(--safe-t)) 0 12px;
+      background: rgba(22, 20, 16, 0.92);
+      backdrop-filter: blur(10px);
+    }
+    .back, .ghost {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font: inherit;
+      font-size: 1.15rem;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .back:active, .ghost:active { transform: scale(0.96); }
+    .wordmark {
+      font-size: 0.78rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .view { display: none; flex-direction: column; gap: 14px; padding-top: 4px; }
+    .view.on { display: flex; }
+
+    .daybar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .daybar h2 {
+      font-size: 1.05rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      text-align: center;
+      flex: 1;
+      min-width: 0;
+    }
+    .daybar .sub {
+      display: block;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+
+    .hint {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      color: var(--text);
+    }
+    .hint .kicker {
+      display: block;
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .macros {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 14px;
+      margin-top: 10px;
+    }
+    .mk {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-transform: capitalize;
+    }
+    .dots { display: flex; gap: 3px; }
+    .dots i {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--border);
+      display: block;
+    }
+    .dots.carbs i.on { background: var(--carbs); }
+    .dots.protein i.on { background: var(--protein); }
+    .dots.fiber i.on { background: var(--fiber); }
+    .dots.fat i.on { background: var(--fat); }
+
+    .meal {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      cursor: pointer;
+      width: 100%;
+    }
+    .meal:active { transform: scale(0.99); }
+    .meal-top {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .meal-food { font-weight: 650; font-size: 1.02rem; }
+    .meal-time {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      font-size: 0.82rem;
+      flex-shrink: 0;
+    }
+    .meal-const {
+      color: var(--muted);
+      font-size: 0.82rem;
+      line-height: 1.35;
+    }
+    .meal-sum {
+      font-size: 0.84rem;
+      line-height: 1.4;
+      color: var(--text);
+      opacity: 0.88;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+      padding: 22px 8px;
+      text-align: center;
+    }
+
+    .week {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 4px;
+    }
+    .week button {
+      appearance: none;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      border-radius: 12px;
+      padding: 8px 0 7px;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+    }
+    .week button .d {
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .week button .n { font-size: 0.95rem; font-weight: 650; color: var(--text); }
+    .week button.on {
+      background: var(--accent-dim);
+      border-color: rgba(226, 168, 74, 0.4);
+      color: var(--accent);
+    }
+    .week button.on .n { color: var(--accent); }
+    .week button.today .n { box-shadow: 0 2px 0 var(--accent); }
+    .week button.has { position: relative; }
+    .week button.has::after {
+      content: "";
+      width: 4px;
+      height: 4px;
+      border-radius: 50%;
+      background: var(--accent);
+      margin-top: 2px;
+    }
+
+    .slot-lab {
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin: 8px 2px 0;
+    }
+
+    .search {
+      width: 100%;
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      font-size: 1rem;
+      outline: none;
+    }
+    .search:focus { border-color: var(--accent); }
+
+    .item {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: inherit;
+      font: inherit;
+      text-align: left;
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      cursor: pointer;
+      width: 100%;
+    }
+    .item:active { transform: scale(0.99); }
+    .item .who { font-weight: 650; }
+    .item .meta { color: var(--muted); font-size: 0.78rem; margin-top: 2px; }
+    .item .tag {
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
+    .fab {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(64px + var(--safe-b));
+      z-index: 15;
+      appearance: none;
+      border: 0;
+      background: var(--accent);
+      color: #1a140c;
+      font: inherit;
+      font-weight: 750;
+      border-radius: 999px;
+      padding: 12px 18px;
+      min-height: 48px;
+      cursor: pointer;
+      box-shadow: 0 10px 28px rgba(226, 168, 74, 0.28);
+      max-width: calc(480px - 32px);
+      width: calc(100% - 32px);
+    }
+    .fab:active { transform: translateX(-50%) scale(0.98); }
+    body.tab-foods .fab { display: none; }
+    body.tab-foods .app { padding-bottom: calc(78px + var(--safe-b)); }
+
+    .nav {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 0;
+      width: 100%;
+      max-width: 480px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 8px 12px calc(10px + var(--safe-b));
+      background: rgba(22, 20, 16, 0.94);
+      backdrop-filter: blur(10px);
+      border-top: 1px solid var(--border);
+      z-index: 16;
+    }
+    .nav button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 10px 0;
+      cursor: pointer;
+    }
+    .nav button.on { color: var(--accent); }
+
+    .sheet-bg {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 8, 6, 0.55);
+      z-index: 30;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .sheet-bg.on { display: flex; }
+    .sheet {
+      width: 100%;
+      max-width: 480px;
+      max-height: min(92dvh, 760px);
+      overflow: auto;
+      background: var(--bg);
+      border-radius: 22px 22px 0 0;
+      padding: 16px 16px calc(20px + var(--safe-b));
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .grab {
+      width: 42px;
+      height: 4px;
+      border-radius: 99px;
+      background: var(--border);
+      margin: 0 auto 2px;
+    }
+    .sheet-h {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .sheet-h h3 { font-size: 1.05rem; font-weight: 700; }
+    .field { display: flex; flex-direction: column; gap: 7px; position: relative; }
+    .field-lab {
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .row2 { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 8px; }
+    input, textarea, select {
+      width: 100%;
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px;
+      font: inherit;
+      font-size: 1rem;
+      outline: none;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    input[type="date"], input[type="time"] { min-height: 48px; }
+    textarea { min-height: 72px; resize: vertical; }
+
+    .suggest {
+      display: none;
+      position: absolute;
+      left: 0; right: 0;
+      top: 100%;
+      z-index: 5;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      overflow: hidden;
+      margin-top: 4px;
+      box-shadow: 0 12px 28px rgba(0,0,0,0.35);
+    }
+    .suggest.on { display: block; }
+    .suggest button {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      width: 100%;
+      text-align: left;
+      padding: 11px 12px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .suggest button:active, .suggest button.hi { background: var(--accent-dim); }
+    .suggest .sub { color: var(--muted); font-size: 0.75rem; }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .chip {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.84rem;
+      border-radius: 999px;
+      padding: 6px 10px;
+      cursor: pointer;
+    }
+    .chip span { color: var(--muted); margin-left: 4px; }
+    .slots {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .slots button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 650;
+      border-radius: 999px;
+      padding: 8px 12px;
+      cursor: pointer;
+    }
+    .slots button.on {
+      color: #1a140c;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .actions { display: flex; gap: 8px; }
+    .btn {
+      appearance: none;
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #1a140c;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      font-weight: 750;
+      cursor: pointer;
+      flex: 1;
+      min-height: 48px;
+    }
+    .btn.soft {
+      background: var(--surface);
+      color: var(--text);
+      border-color: var(--border);
+      font-weight: 650;
+    }
+    .btn.danger {
+      background: rgba(196, 92, 62, 0.12);
+      color: #e08068;
+      border-color: rgba(196, 92, 62, 0.35);
+      flex: 0 0 auto;
+    }
+    .btn:disabled { opacity: 0.45; }
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .status {
+      font-size: 0.82rem;
+      color: var(--muted);
+      min-height: 1.2em;
+    }
+    .status.err { color: #e08068; }
+    .status.ok { color: var(--leaf); }
+
+    .detail-name { font-size: 1.35rem; font-weight: 750; letter-spacing: -0.03em; }
+    .detail-kind { color: var(--muted); font-size: 0.82rem; text-transform: capitalize; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <a class="back" href="/" aria-label="Apps">←</a>
+      <span class="wordmark">Food</span>
+      <span style="width:40px" aria-hidden="true"></span>
+    </header>
+
+    <section id="view-log" class="view on"></section>
+    <section id="view-plan" class="view"></section>
+    <section id="view-foods" class="view"></section>
+  </div>
+
+  <button type="button" class="fab" id="fab">Log what I ate</button>
+
+  <nav class="nav">
+    <button type="button" data-tab="log" class="on">Log</button>
+    <button type="button" data-tab="plan">Plan</button>
+    <button type="button" data-tab="foods">Kitchen</button>
+  </nav>
+
+  <div class="sheet-bg" id="sheetBg">
+    <div class="sheet" id="sheet"></div>
+  </div>
+
+  <script>
+    const MACROS = ["carbs", "protein", "fiber", "fat"];
+    const LEVEL = { none: 0, low: 1, medium: 2, high: 3 };
+    const SLOT_TIME = { breakfast: "08:00", lunch: "13:00", snack: "17:00", dinner: "20:00" };
+    const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    let items = [];
+    let logs = [];
+    let plans = [];
+    let today = "";
+    let tz = "Asia/Kolkata";
+    let aiEnabled = false;
+    let tab = "log";
+    let logDay = "";
+    let planDay = "";
+    let weekStart = "";
+    let foodsQ = "";
+    let sheetKind = null;
+    let editingId = null;
+    let constDraft = [];
+    let saving = false;
+
+    const $ = (id) => document.getElementById(id);
+
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function parseISODate(iso) {
+      const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!m) return null;
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+    }
+
+    function fmtDay(iso, withWeekday = true) {
+      const d = parseISODate(iso);
+      if (!d) return iso || "";
+      const opts = { day: "numeric", month: "short" };
+      if (withWeekday) opts.weekday = "long";
+      return d.toLocaleDateString(undefined, opts);
+    }
+
+    function addDays(iso, n) {
+      const d = parseISODate(iso);
+      if (!d) return iso;
+      d.setDate(d.getDate() + n);
+      return toISODate(d);
+    }
+
+    function toISODate(d) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    }
+
+    function mondayOf(iso) {
+      const d = parseISODate(iso);
+      if (!d) return iso;
+      const wd = (d.getDay() + 6) % 7;
+      d.setDate(d.getDate() - wd);
+      return toISODate(d);
+    }
+
+    function nowHM() {
+      const d = new Date();
+      return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    }
+
+    function dots(profile, key) {
+      const n = LEVEL[profile && profile[key]] || 0;
+      let html = `<span class="dots ${key}">`;
+      for (let i = 1; i <= 4; i++) html += `<i class="${i <= n ? "on" : ""}"></i>`;
+      return html + `</span>`;
+    }
+
+    function macrosBlock(profile) {
+      if (!profile) return "";
+      return `<div class="macros">${MACROS.map((k) =>
+        `<div class="mk">${dots(profile, k)} ${k}</div>`
+      ).join("")}</div>`;
+    }
+
+    function mainly(profile) {
+      if (!profile) return "";
+      const ranked = MACROS.slice().sort(
+        (a, b) => (LEVEL[profile[b]] || 0) - (LEVEL[profile[a]] || 0)
+      );
+      const top = ranked.filter((k) => (LEVEL[profile[k]] || 0) >= 2);
+      if (!top.length) return "";
+      if (top.length === 1) return `mainly ${top[0]}`;
+      return `mainly ${top[0]} and ${top[1]}`;
+    }
+
+    function findItem(name) {
+      const k = String(name || "").trim().toLowerCase();
+      if (!k) return null;
+      return items.find((it) =>
+        (it.key || "") === k ||
+        String(it.name || "").toLowerCase() === k ||
+        (it.aliases || []).some((a) => String(a).toLowerCase() === k)
+      ) || null;
+    }
+
+    function suggest(q, field) {
+      const k = String(q || "").trim().toLowerCase();
+      const scored = [];
+      for (const it of items) {
+        const name = String(it.name || "").toLowerCase();
+        const key = it.key || "";
+        let score = 0;
+        if (!k) {
+          score = field === "food"
+            ? (it.timesLogged || 0) * 3 + (it.timesUsed || 0)
+            : (it.timesUsed || 0) * 3 + (it.timesLogged || 0);
+          if (!score) score = 1;
+        } else if (name === k || key === k) score = 1000;
+        else if (name.startsWith(k) || key.startsWith(k)) score = 500;
+        else if (name.includes(k) || key.includes(k)) score = 200;
+        else continue;
+        scored.push({ it, score });
+      }
+      scored.sort((a, b) => b.score - a.score || String(a.it.name).localeCompare(b.it.name));
+      const cap = k ? 8 : 6;
+      return scored.slice(0, cap).map((s) => s.it);
+    }
+
+    function todayHint(dayLogs) {
+      if (!dayLogs.length) {
+        return items.length
+          ? "Nothing logged this day."
+          : "Kitchen is empty. Log the first meal and it becomes the database.";
+      }
+      const scores = { carbs: 0, protein: 0, fiber: 0, fat: 0 };
+      let n = 0;
+      for (const log of dayLogs) {
+        const p = log.analysis && log.analysis.profile;
+        if (!p) continue;
+        n += 1;
+        for (const k of MACROS) scores[k] += LEVEL[p[k]] || 0;
+      }
+      if (!n) return `${dayLogs.length} meal${dayLogs.length === 1 ? "" : "s"} — not profiled yet.`;
+      const ranked = MACROS.slice().sort((a, b) => scores[b] - scores[a]);
+      const low = MACROS.filter((k) => scores[k] <= 1);
+      const high = ranked.filter((k) => scores[k] >= 3);
+      if (low.length && high.length) {
+        return `Mostly ${high.slice(0, 2).join(" and ")}. Light on ${low.join(" and ")}.`;
+      }
+      if (high.length) return `Covered ${high.join(" and ")} today.`;
+      return "A light day so far.";
+    }
+
+    function rollupProfile(dayLogs) {
+      const out = { carbs: "none", protein: "none", fiber: "none", fat: "none" };
+      const maxN = { carbs: 0, protein: 0, fiber: 0, fat: 0 };
+      for (const log of dayLogs) {
+        const p = log.analysis && log.analysis.profile;
+        if (!p) continue;
+        for (const k of MACROS) maxN[k] = Math.max(maxN[k], LEVEL[p[k]] || 0);
+      }
+      const names = ["none", "low", "medium", "high"];
+      for (const k of MACROS) out[k] = names[maxN[k]] || "none";
+      return out;
+    }
+
+    async function load() {
+      const r = await fetch("/api/food");
+      if (!r.ok) throw new Error("Could not load food");
+      const data = await r.json();
+      items = data.items || [];
+      logs = data.logs || [];
+      plans = data.plans || [];
+      today = data.today;
+      tz = data.timezone || tz;
+      aiEnabled = !!(data.ai && data.ai.enabled);
+      if (!logDay) logDay = today;
+      if (!planDay) planDay = today;
+      if (!weekStart) weekStart = data.weekStart || mondayOf(today);
+    }
+
+    function logsOn(day) {
+      return logs
+        .filter((x) => x.date === day)
+        .sort((a, b) => String(a.time).localeCompare(String(b.time)));
+    }
+
+    function plansOn(day) {
+      return plans
+        .filter((x) => x.date === day)
+        .sort((a, b) => String(a.time).localeCompare(String(b.time)));
+    }
+
+    function constLine(list) {
+      const names = (list || []).map((c) => c.name).filter(Boolean);
+      return names.length ? names.join(" · ") : "";
+    }
+
+    function renderLog() {
+      const dayLogs = logsOn(logDay);
+      const isToday = logDay === today;
+      const hint = todayHint(dayLogs);
+      const profile = rollupProfile(dayLogs);
+      $("view-log").innerHTML =
+        `<div class="daybar">
+          <button type="button" class="ghost" data-log-nav="-1" aria-label="Previous day">‹</button>
+          <h2>${esc(fmtDay(logDay))}${isToday ? `<span class="sub">Today</span>` : ""}</h2>
+          <button type="button" class="ghost" data-log-nav="1" aria-label="Next day">›</button>
+        </div>
+        <div class="hint">
+          <span class="kicker">This day</span>
+          ${esc(hint)}
+          ${dayLogs.length ? macrosBlock(profile) : ""}
+        </div>
+        ${dayLogs.length
+          ? dayLogs.map((m) => mealCard(m, "log")).join("")
+          : `<div class="empty">No meals logged.</div>`}`;
+    }
+
+    function mealCard(m, kind) {
+      const analysis = m.analysis || {};
+      const cons = constLine(m.constitutes);
+      const sum = analysis.summary || "";
+      return `<button type="button" class="meal" data-open-${kind}="${esc(m.id)}">
+        <div class="meal-top">
+          <div class="meal-food">${esc(m.food)}</div>
+          <div class="meal-time">${esc(m.time || "")}${m.slot ? ` · ${esc(m.slot)}` : ""}</div>
+        </div>
+        ${cons ? `<div class="meal-const">${esc(cons)}</div>` : ""}
+        ${sum ? `<div class="meal-sum">${esc(sum)}</div>` : ""}
+      </button>`;
+    }
+
+    function renderPlan() {
+      const start = weekStart;
+      const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+      const end = days[6];
+      const selectedPlans = plansOn(planDay);
+      const bySlot = { breakfast: [], lunch: [], snack: [], dinner: [], other: [] };
+      for (const p of selectedPlans) {
+        const s = bySlot[p.slot] ? p.slot : "other";
+        bySlot[s].push(p);
+      }
+      const slots = ["breakfast", "lunch", "snack", "dinner", "other"];
+      const body = selectedPlans.length
+        ? slots
+            .filter((s) => bySlot[s].length)
+            .map((s) =>
+              `<div class="slot-lab">${s}</div>` +
+              bySlot[s].map((p) => mealCard(p, "plan")).join("")
+            )
+            .join("")
+        : `<div class="empty">Nothing planned this day.</div>`;
+
+      $("view-plan").innerHTML =
+        `<div class="daybar">
+          <button type="button" class="ghost" data-week-nav="-7" aria-label="Previous week">‹</button>
+          <h2>${esc(fmtDay(start, false))} – ${esc(fmtDay(end, false))}
+            <span class="sub">Week plan</span>
+          </h2>
+          <button type="button" class="ghost" data-week-nav="7" aria-label="Next week">›</button>
+        </div>
+        <div class="week">
+          ${days.map((iso, i) => {
+            const has = plans.some((p) => p.date === iso);
+            const on = iso === planDay ? " on" : "";
+            const td = iso === today ? " today" : "";
+            const hs = has ? " has" : "";
+            return `<button type="button" class="${on}${td}${hs}" data-plan-day="${iso}">
+              <span class="d">${DAYS[i]}</span>
+              <span class="n">${Number(iso.slice(8))}</span>
+            </button>`;
+          }).join("")}
+        </div>
+        <h2 style="font-size:1.02rem">${esc(fmtDay(planDay))}</h2>
+        ${body}`;
+    }
+
+    function renderFoods() {
+      const q = foodsQ.trim().toLowerCase();
+      const list = items
+        .filter((it) => {
+          if (!q) return true;
+          const blob = `${it.name} ${it.key} ${(it.aliases || []).join(" ")}`.toLowerCase();
+          return blob.includes(q);
+        })
+        .sort((a, b) =>
+          (b.timesLogged + b.timesUsed) - (a.timesLogged + a.timesUsed) ||
+          String(a.name).localeCompare(b.name)
+        );
+      $("view-foods").innerHTML =
+        `<input class="search" id="foodsSearch" placeholder="Search kitchen" value="${esc(foodsQ)}" />
+        ${!items.length
+          ? `<div class="empty">Nothing in the kitchen yet. Every food you log lands here — poha, potato, a random mix, all of it.</div>`
+          : list.length
+            ? list.map((it) => {
+                const p = it.profile || {};
+                const label = mainly(p) || (it.profile ? "" : "no profile yet");
+                const uses = [];
+                if (it.timesLogged) uses.push(`${it.timesLogged} logged`);
+                if (it.timesUsed) uses.push(`${it.timesUsed} in meals`);
+                return `<button type="button" class="item" data-open-item="${esc(it.id)}">
+                  <div>
+                    <div class="who">${esc(it.name)}</div>
+                    <div class="meta">${esc([label, uses.join(" · ")].filter(Boolean).join(" · "))}</div>
+                  </div>
+                  <div class="tag">${esc(it.kind || "")}</div>
+                </button>`;
+              }).join("")
+            : `<div class="empty">No match.</div>`}`;
+      const search = $("foodsSearch");
+      if (search) {
+        search.addEventListener("input", () => {
+          foodsQ = search.value;
+          renderFoods();
+          const el = $("foodsSearch");
+          if (el) {
+            el.focus();
+            const n = el.value.length;
+            el.setSelectionRange(n, n);
+          }
+        });
+      }
+    }
+
+    function render() {
+      document.body.classList.toggle("tab-foods", tab === "foods");
+      $("fab").textContent = tab === "plan" ? "Plan a meal" : "Log what I ate";
+      if (tab === "log") renderLog();
+      else if (tab === "plan") renderPlan();
+      else renderFoods();
+    }
+
+    function setTab(next) {
+      tab = next;
+      document.querySelectorAll(".nav button").forEach((b) => {
+        b.classList.toggle("on", b.dataset.tab === tab);
+      });
+      document.querySelectorAll(".view").forEach((v) => {
+        v.classList.toggle("on", v.id === "view-" + tab);
+      });
+      render();
+    }
+
+    function closeSheet() {
+      sheetKind = null;
+      editingId = null;
+      constDraft = [];
+      saving = false;
+      const bg = $("sheetBg");
+      bg.classList.remove("on");
+    }
+
+    function openSheet(html) {
+      $("sheet").innerHTML = html;
+      $("sheetBg").classList.add("on");
+      bindSheet();
+    }
+
+    function foodFields(food, constitutes, { dateVal, timeVal, slots }) {
+      const chips = (constitutes || [])
+        .map((c, i) => `<button type="button" class="chip" data-rm="${i}">${esc(c.name)} <span>×</span></button>`)
+        .join("");
+      const slotBtns = slots
+        ? `<div class="field"><span class="field-lab">Slot</span>
+            <div class="slots" id="slotBtns">
+              ${["breakfast", "lunch", "snack", "dinner"].map((s) =>
+                `<button type="button" data-slot="${s}">${s}</button>`
+              ).join("")}
+            </div></div>`
+        : "";
+      return `
+        <div class="row2">
+          <label class="field">
+            <span class="field-lab">Date</span>
+            <input type="date" id="fDate" value="${esc(dateVal)}" />
+          </label>
+          <label class="field">
+            <span class="field-lab">Time</span>
+            <input type="time" id="fTime" value="${esc(timeVal)}" />
+          </label>
+        </div>
+        ${slotBtns}
+        <label class="field">
+          <span class="field-lab">What I ${slots ? "will eat" : "ate"}</span>
+          <input id="fFood" autocomplete="off" placeholder="poha, dalia, mixed veg…" value="${esc(food || "")}" />
+          <div class="suggest" id="foodSuggest"></div>
+        </label>
+        <div class="field">
+          <span class="field-lab">Constitutes of</span>
+          <div class="chips" id="constChips">${chips}</div>
+          <input id="fConst" autocomplete="off" placeholder="potato, paneer, peas…" />
+          <div class="suggest" id="constSuggest"></div>
+        </div>`;
+    }
+
+    function openLogSheet(entry) {
+      sheetKind = "log";
+      editingId = entry && entry.id ? entry.id : null;
+      constDraft = ((entry && entry.constitutes) || []).map((c) => ({ name: c.name }));
+      const dateVal = (entry && entry.date) || logDay || today;
+      const timeVal = (entry && entry.time) || (dateVal === today ? nowHM() : "08:00");
+      openSheet(`
+        <div class="grab"></div>
+        <div class="sheet-h">
+          <h3>${editingId ? "Edit meal" : "Log meal"}</h3>
+          ${editingId ? `<button type="button" class="btn danger" id="sheetDel">Delete</button>` : ""}
+        </div>
+        ${foodFields(entry && entry.food, constDraft, { dateVal, timeVal, slots: false })}
+        <div class="status" id="sheetStatus"></div>
+        <div class="actions">
+          <button type="button" class="btn soft" id="sheetCancel">Cancel</button>
+          <button type="button" class="btn" id="sheetSave">Save</button>
+        </div>
+      `);
+      maybeSuggestFood($("fFood").value, true);
+    }
+
+    function openPlanSheet(entry) {
+      sheetKind = "plan";
+      editingId = entry && entry.id ? entry.id : null;
+      constDraft = ((entry && entry.constitutes) || []).map((c) => ({ name: c.name }));
+      const dateVal = (entry && entry.date) || planDay || today;
+      const timeVal = (entry && entry.time) || "08:00";
+      openSheet(`
+        <div class="grab"></div>
+        <div class="sheet-h">
+          <h3>${editingId ? "Edit plan" : "Plan a meal"}</h3>
+          ${editingId ? `<button type="button" class="btn danger" id="sheetDel">Delete</button>` : ""}
+        </div>
+        ${foodFields(entry && entry.food, constDraft, { dateVal, timeVal, slots: true })}
+        <div class="status" id="sheetStatus"></div>
+        <div class="actions">
+          <button type="button" class="btn soft" id="sheetCancel">Cancel</button>
+          ${editingId ? `<button type="button" class="btn soft" id="planLogIt">Log it</button>` : ""}
+          <button type="button" class="btn" id="sheetSave">Save</button>
+        </div>
+      `);
+      markSlotFromTime();
+    }
+
+    function openItemSheet(item) {
+      sheetKind = "item";
+      editingId = item.id;
+      const p = item.profile || null;
+      const cons = constLine(item.constitutes);
+      const uses = [];
+      if (item.timesLogged) uses.push(`logged ${item.timesLogged}×`);
+      if (item.timesUsed) uses.push(`used in ${item.timesUsed} meal${item.timesUsed === 1 ? "" : "s"}`);
+      openSheet(`
+        <div class="grab"></div>
+        <div class="detail-kind">${esc(item.kind || "")}</div>
+        <div class="detail-name">${esc(item.name)}</div>
+        <div class="hint">
+          <span class="kicker">Profile</span>
+          ${p && p.summary ? esc(p.summary) : (mainly(p) ? esc(mainly(p) + ".") : "No profile yet — it will fill in the next time you log this.")}
+          ${p ? macrosBlock(p) : ""}
+        </div>
+        ${cons ? `<div class="hint"><span class="kicker">Last constitutes</span>${esc(cons)}</div>` : ""}
+        <div class="status">${esc(uses.join(" · ") || "Not used yet")}</div>
+        <div class="actions">
+          <button type="button" class="btn soft" id="sheetCancel">Close</button>
+          <button type="button" class="btn" id="logThisFood">Log this</button>
+        </div>
+      `);
+    }
+
+    function redrawChips() {
+      const el = $("constChips");
+      if (!el) return;
+      el.innerHTML = constDraft
+        .map((c, i) => `<button type="button" class="chip" data-rm="${i}">${esc(c.name)} <span>×</span></button>`)
+        .join("");
+    }
+
+    function addConst(name) {
+      const n = String(name || "").trim();
+      if (!n) return;
+      const key = n.toLowerCase();
+      if (constDraft.some((c) => c.name.toLowerCase() === key)) return;
+      constDraft.push({ name: n });
+      redrawChips();
+    }
+
+    function showSuggest(el, list, field) {
+      if (!el) return;
+      if (!list.length) {
+        el.classList.remove("on");
+        el.innerHTML = "";
+        return;
+      }
+      el.innerHTML = list
+        .map((it) => `<button type="button" data-pick="${esc(it.name)}" data-field="${field}">
+          <span>${esc(it.name)}</span>
+          <span class="sub">${esc(mainly(it.profile) || it.kind || "")}</span>
+        </button>`)
+        .join("");
+      el.classList.add("on");
+    }
+
+    function maybeSuggestFood(q, onlyIfEmpty) {
+      const list = suggest(q, "food");
+      if (onlyIfEmpty && q) return;
+      showSuggest($("foodSuggest"), list, "food");
+    }
+
+    function markSlotFromTime() {
+      const t = ($("fTime") && $("fTime").value) || "";
+      const hh = Number((t || "00:00").split(":")[0]);
+      let slot = "dinner";
+      if (hh >= 5 && hh < 11) slot = "breakfast";
+      else if (hh >= 11 && hh < 16) slot = "lunch";
+      else if (hh >= 16 && hh < 19) slot = "snack";
+      document.querySelectorAll("#slotBtns [data-slot]").forEach((b) => {
+        b.classList.toggle("on", b.dataset.slot === slot);
+      });
+    }
+
+    function setStatus(text, cls) {
+      const el = $("sheetStatus");
+      if (!el) return;
+      el.className = "status" + (cls ? " " + cls : "");
+      el.textContent = text || "";
+    }
+
+    function bindSheet() {
+      const food = $("fFood");
+      const cons = $("fConst");
+      if (food) {
+        food.addEventListener("input", () => {
+          showSuggest($("foodSuggest"), suggest(food.value, "food"), "food");
+        });
+        food.addEventListener("focus", () => {
+          showSuggest($("foodSuggest"), suggest(food.value, "food"), "food");
+        });
+      }
+      if (cons) {
+        cons.addEventListener("input", () => {
+          const raw = cons.value;
+          if (raw.includes(",") || raw.toLowerCase().includes(" and ")) {
+            const parts = raw.split(/,|\band\b/i);
+            const last = parts.pop();
+            parts.forEach((p) => addConst(p));
+            cons.value = last || "";
+          }
+          showSuggest($("constSuggest"), suggest(cons.value, "const"), "const");
+        });
+        cons.addEventListener("focus", () => {
+          showSuggest($("constSuggest"), suggest(cons.value, "const"), "const");
+        });
+        cons.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            addConst(cons.value);
+            cons.value = "";
+            showSuggest($("constSuggest"), suggest("", "const"), "const");
+          }
+        });
+      }
+      const time = $("fTime");
+      if (time) time.addEventListener("change", markSlotFromTime);
+    }
+
+    async function saveSheet() {
+      if (saving) return;
+      const foodEl = $("fFood");
+      const consEl = $("fConst");
+      if (consEl && consEl.value.trim()) addConst(consEl.value.trim());
+      const food = foodEl ? foodEl.value.trim() : "";
+      if (!food) {
+        setStatus("What you ate is required.", "err");
+        return;
+      }
+      const payload = {
+        food,
+        date: $("fDate").value,
+        time: $("fTime").value,
+        constitutes: constDraft,
+      };
+      saving = true;
+      $("sheetSave").disabled = true;
+      const needsAi = sheetKind === "log" && aiEnabled && willNeedAi(food, constDraft);
+      setStatus(needsAi ? "Looking up what’s in this…" : "Saving…");
+      try {
+        if (sheetKind === "log") {
+          const url = editingId ? `/api/food/logs/${editingId}` : "/api/food/logs";
+          const method = editingId ? "PUT" : "POST";
+          const r = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`);
+          applyCommit(data);
+          if (data.aiError) setStatus(data.aiError, "err");
+        } else {
+          const url = editingId ? `/api/food/plans/${editingId}` : "/api/food/plans";
+          const method = editingId ? "PUT" : "POST";
+          const r = await fetch(url, {
+            method,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          const data = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(data.detail || data.error || `HTTP ${r.status}`);
+          applyCommit(data);
+        }
+        closeSheet();
+        render();
+      } catch (e) {
+        setStatus(e.message || "Save failed", "err");
+        saving = false;
+        $("sheetSave").disabled = false;
+      }
+    }
+
+    function willNeedAi(food, constitutes) {
+      const dish = findItem(food);
+      if (!dish || !dish.profile) return true;
+      if (!constitutes.length) return false;
+      return constitutes.some((c) => {
+        const it = findItem(c.name);
+        return !it || !it.profile;
+      });
+    }
+
+    function applyCommit(data) {
+      if (data.items) items = data.items;
+      if (data.entry && data.entry.date && !data.entry.slot) {
+        /* log */
+      }
+      if (data.entry && sheetKind === "log") {
+        logs = logs.filter((x) => x.id !== data.entry.id);
+        logs.push(data.entry);
+        logDay = data.entry.date || logDay;
+      }
+      if (data.entry && sheetKind === "plan") {
+        plans = plans.filter((x) => x.id !== data.entry.id);
+        plans.push(data.entry);
+        planDay = data.entry.date || planDay;
+        weekStart = mondayOf(planDay);
+      }
+    }
+
+    async function deleteCurrent() {
+      if (!editingId || saving) return;
+      saving = true;
+      try {
+        const url = sheetKind === "plan"
+          ? `/api/food/plans/${editingId}`
+          : `/api/food/logs/${editingId}`;
+        const r = await fetch(url, { method: "DELETE" });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(data.detail || "Delete failed");
+        if (data.items) items = data.items;
+        if (sheetKind === "plan") plans = plans.filter((x) => x.id !== editingId);
+        else logs = logs.filter((x) => x.id !== editingId);
+        closeSheet();
+        render();
+      } catch (e) {
+        setStatus(e.message || "Delete failed", "err");
+        saving = false;
+      }
+    }
+
+    $("sheetBg").addEventListener("click", (e) => {
+      if (e.target.id === "sheetBg") closeSheet();
+    });
+
+    $("sheet").addEventListener("click", (e) => {
+      const rm = e.target.closest("[data-rm]");
+      if (rm) {
+        const i = Number(rm.getAttribute("data-rm"));
+        constDraft.splice(i, 1);
+        redrawChips();
+        return;
+      }
+      const pick = e.target.closest("[data-pick]");
+      if (pick) {
+        const name = pick.getAttribute("data-pick");
+        const field = pick.getAttribute("data-field");
+        if (field === "food") {
+          $("fFood").value = name;
+          $("foodSuggest").classList.remove("on");
+          const it = findItem(name);
+          if (it && it.constitutes && it.constitutes.length && !constDraft.length) {
+            constDraft = it.constitutes.map((c) => ({ name: c.name }));
+            redrawChips();
+          }
+        } else {
+          addConst(name);
+          $("fConst").value = "";
+          showSuggest($("constSuggest"), suggest("", "const"), "const");
+        }
+        return;
+      }
+      const slot = e.target.closest("[data-slot]");
+      if (slot) {
+        const s = slot.getAttribute("data-slot");
+        $("fTime").value = SLOT_TIME[s] || "13:00";
+        markSlotFromTime();
+        return;
+      }
+      if (e.target.id === "sheetCancel") closeSheet();
+      if (e.target.id === "sheetSave") saveSheet();
+      if (e.target.id === "sheetDel") deleteCurrent();
+      if (e.target.id === "planLogIt") {
+        const planned = {
+          food: $("fFood") ? $("fFood").value.trim() : "",
+          constitutes: constDraft.slice(),
+          date: $("fDate") ? $("fDate").value : today,
+          time: $("fTime") ? $("fTime").value : nowHM(),
+        };
+        closeSheet();
+        setTab("log");
+        logDay = planned.date || today;
+        openLogSheet(planned);
+        return;
+      }
+      if (e.target.id === "logThisFood") {
+        const it = items.find((x) => x.id === editingId);
+        closeSheet();
+        setTab("log");
+        openLogSheet({
+          food: it && it.name,
+          constitutes: (it && it.constitutes) || [],
+          date: today,
+          time: nowHM(),
+        });
+      }
+    });
+
+    document.querySelector(".nav").addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-tab]");
+      if (btn) setTab(btn.dataset.tab);
+    });
+
+    $("fab").addEventListener("click", () => {
+      if (tab === "plan") openPlanSheet(null);
+      else openLogSheet(null);
+    });
+
+    document.querySelector(".app").addEventListener("click", (e) => {
+      const nav = e.target.closest("[data-log-nav]");
+      if (nav) {
+        logDay = addDays(logDay, Number(nav.getAttribute("data-log-nav")));
+        renderLog();
+        return;
+      }
+      const wn = e.target.closest("[data-week-nav]");
+      if (wn) {
+        weekStart = addDays(weekStart, Number(wn.getAttribute("data-week-nav")));
+        planDay = weekStart;
+        renderPlan();
+        return;
+      }
+      const pd = e.target.closest("[data-plan-day]");
+      if (pd) {
+        planDay = pd.getAttribute("data-plan-day");
+        renderPlan();
+        return;
+      }
+      const ol = e.target.closest("[data-open-log]");
+      if (ol) {
+        const entry = logs.find((x) => x.id === ol.getAttribute("data-open-log"));
+        if (entry) openLogSheet(entry);
+        return;
+      }
+      const op = e.target.closest("[data-open-plan]");
+      if (op) {
+        const entry = plans.find((x) => x.id === op.getAttribute("data-open-plan"));
+        if (entry) openPlanSheet(entry);
+        return;
+      }
+      const oi = e.target.closest("[data-open-item]");
+      if (oi) {
+        const item = items.find((x) => x.id === oi.getAttribute("data-open-item"));
+        if (item) openItemSheet(item);
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") closeSheet();
+    });
+
+    (async function init() {
+      try {
+        await load();
+      } catch (e) {
+        $("view-log").innerHTML = `<div class="empty">${esc(e.message || "Failed to load")}</div>`;
+        return;
+      }
+      render();
+    })();
+  </script>
+</body>
+</html>
