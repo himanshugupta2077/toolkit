@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start the Audio Notes server (replaces: python -m http.server 8000)
+# Start Toolkit (replaces: python -m http.server 8000)
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -61,7 +61,7 @@ if [[ -f ./.env ]]; then
   set +a
 fi
 
-echo "Starting Home Apps on ${HOST}:${PORT}"
+echo "Starting Toolkit on ${HOST}:${PORT}"
 echo "Finance → local log + xlsx Ledger (/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx)"
 if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "Finance AI → DeepSeek ${DEEPSEEK_MODEL:-deepseek-v4-flash} (thinking off)"

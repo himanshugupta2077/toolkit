@@ -1,8 +1,16 @@
-# Audio Notes over Tailscale
+# Toolkit
 
-Personal **phone → laptop** audio notes app.
+Personal **phone → laptop** tools on your Tailscale network.
 
-Record speech on your phone (or desktop), upload it securely over your **Tailscale** network, convert it to clean audio on the laptop, run **Faster Whisper** (GPU), and save a transcript as a note you can browse later.
+Home screen on the phone: audio notes, finance, food, CFA, AI usage, and a few private apps. Traffic stays on the tailnet. Recordings, ledger writes, and other data stay on this machine under `data/` (gitignored).
+
+AI working in this repo: start at **[AGENTS.md](./AGENTS.md)**.
+
+---
+
+## Audio notes
+
+Record speech on your phone (or desktop), upload it over **Tailscale**, convert it on the laptop, run **Faster Whisper** (GPU), and save a transcript you can browse later.
 
 ---
 
@@ -60,7 +68,7 @@ See **[AGENTS.md](./AGENTS.md)** — especially finance sheet updates:
 ## Project layout
 
 ```
-tailscale-stuff/
+toolkit/
 ├── README.md                 ← this file
 ├── AGENTS.md                 ← AI rules (surgical finance sheet updates, etc.)
 ├── index.html                ← full web app (UI + recorder + notes + finance)
@@ -133,7 +141,7 @@ https://msi.tailf7a628.ts.net/
 ### 1. One-time: Python env (if missing)
 
 ```bash
-cd ~/project-tool-scripts-whatnot/tailscale-stuff
+cd /home/himanshu/Documents/project-tool-scripts-whatnot/toolkit
 python -m venv whisper/.venv
 source whisper/.venv/bin/activate
 pip install faster-whisper fastapi uvicorn python-multipart
@@ -149,7 +157,7 @@ ffmpeg -version
 ### 2. Start the Audio Notes server
 
 ```bash
-cd ~/project-tool-scripts-whatnot/tailscale-stuff
+cd /home/himanshu/Documents/project-tool-scripts-whatnot/toolkit
 ./run.sh
 ```
 
@@ -473,7 +481,7 @@ curl -s http://127.0.0.1:8000/api/notes | jq
 Unchanged simple path for files already on disk:
 
 ```bash
-cd ~/project-tool-scripts-whatnot/tailscale-stuff
+cd /home/himanshu/Documents/project-tool-scripts-whatnot/toolkit
 source whisper/.venv/bin/activate
 python whisper/transcribe.py -i whisper/audio.mp3 -m medium
 # CPU:
@@ -566,7 +574,7 @@ cat data/notes/SOMEID.txt
 
 ```bash
 # Terminal 1 — laptop
-cd ~/project-tool-scripts-whatnot/tailscale-stuff
+cd /home/himanshu/Documents/project-tool-scripts-whatnot/toolkit
 ./run.sh
 
 # Terminal 2 — laptop

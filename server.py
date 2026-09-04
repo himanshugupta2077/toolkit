@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
-Audio Notes server — serves the web app, accepts recordings, transcribes with
-faster-whisper, and stores notes on this machine.
+Toolkit server — phone-to-laptop apps over Tailscale: notes, finance, food, CFA.
 """
 
 from __future__ import annotations
@@ -821,7 +820,7 @@ def transcribe_file(
             schedule_idle_unload()
 
 
-app = FastAPI(title="Home Apps", version="1.1.0")
+app = FastAPI(title="Toolkit", version="1.1.0")
 
 
 @app.get("/api/health")

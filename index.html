@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#0b0f14" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <title>Home Apps</title>
+  <title>Toolkit</title>
   <style>
     :root {
       --bg: #0b0f14;
@@ -3074,7 +3074,7 @@
     <div class="brand">
       <button type="button" class="icon-btn hidden" id="backBtn" title="Back" aria-label="Back">←</button>
       <span class="brand-dot" id="brandDot" aria-hidden="true"></span>
-      <h1 id="headerTitle">Apps</h1>
+      <h1 id="headerTitle">Toolkit</h1>
     </div>
     <div class="header-actions" id="headerActions">
       <button
@@ -5146,7 +5146,7 @@
         if (el) el.classList.toggle("active", k === name);
       });
       const titles = {
-        home: "Apps",
+        home: "Toolkit",
         record: "Audio Notes",
         list: "Notes",
         detail: "Note",
@@ -5155,7 +5155,7 @@
         heart: "",
       };
       document.getElementById("headerTitle").textContent =
-        name in titles ? titles[name] : "Apps";
+        name in titles ? titles[name] : "Toolkit";
 
       const backBtn = document.getElementById("backBtn");
       const brandDot = document.getElementById("brandDot");
@@ -5787,7 +5787,7 @@
           await showQueueSystemNote({
             id: "enable-test",
             kind: "batch_finished",
-            title: "Home Apps alerts on",
+            title: "Toolkit alerts on",
             message: "You should hear this, feel a vibrate, and see a system notification.",
           });
           showQueueToast({

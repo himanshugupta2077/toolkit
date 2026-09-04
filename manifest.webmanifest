@@ -1,6 +1,6 @@
 {
-  "name": "Home Apps",
-  "short_name": "Home Apps",
+  "name": "Toolkit",
+  "short_name": "Toolkit",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

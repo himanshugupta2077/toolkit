@@ -1,4 +1,4 @@
-/* Home Apps — lock-screen / heads-up notifications (Android Chrome needs this SW). */
+/* Toolkit — lock-screen / heads-up notifications (Android Chrome needs this SW). */
 self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
