@@ -29,7 +29,7 @@ Configuration  →  accounts, categories, budget default, monthly salary
 | **Simple / Detailed Dashboard** | Read-only. Driven by Ledger formulas — never update directly. |
 | **Monthly Budget** | Read-only. Not written by voice entry. |
 | **Reconciliation** | Read-only. Gaps fixed with Ledger rows (often Type=`Adjustment`), never by overwriting calculated balances. |
-| **Planned Expenses** | Planning lists only. **Never** write here from voice — it does not create Ledger rows or change balances. |
+| **Planned Expenses** | Planning lists only. **Never** write here from voice — it does not create Ledger rows or change balances. Recurring cash-due is helper columns Q:X + `SUMIFS` on the 6-month table (`L6:P12`). |
 
 ### Product policy (hard)
 
@@ -86,6 +86,8 @@ Day / Month / Year on the sheet are formulas from Date — do not output them.
 | `ICICI Credit Card` | Liability | Spent on ICICI card |
 | `FD` | Asset | Fixed deposits |
 | `Mutual Fund` | Asset | Investments |
+
+Classification flags live on **Configuration** (`Include in Net Worth`, `Include in Liquid Cash`, `Account Group`). Dashboards SUMIFS those flags — adding a savings account / card / folio there is enough; do not hard-code a new dashboard row.
 
 ### Virtual counterparties
 

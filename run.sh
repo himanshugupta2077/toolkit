@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Start Toolkit (replaces: python -m http.server 8000)
+# Start Toolkit + Tailscale Serve. Ctrl+C stops both (and the finance Node child).
+# Invokable as `toolkit` from anywhere (symlink in ~/.local/bin).
 set -euo pipefail
-cd "$(dirname "$0")"
+ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]:-$0}")")" && pwd)"
+cd "$ROOT"
 
 # Use the venv interpreter by path. `source activate` hardcodes the path from
 # `python -m venv` creation time, so a moved checkout prepends a missing dir
@@ -42,6 +44,10 @@ export WHISPER_KEEP_ALIVE_SEC="${WHISPER_KEEP_ALIVE_SEC:-45}"
 # Only force if you want: WHISPER_LANGUAGE=en  or  WHISPER_LANGUAGE=hi
 # export WHISPER_LANGUAGE=
 
+# New finance OS (Node) is spawned by server.py on 127.0.0.1:8787 and served at /finance.
+# Disable: FINANCE_OS=0. Port: FINANCE_OS_PORT=8787.
+export FINANCE_OS_PORT="${FINANCE_OS_PORT:-8787}"
+# Old phone ledger form remains at /old-finance (xlsx + data/finance/entries.jsonl).
 # Finance phone form → data/finance/entries.jsonl + Documents/Finance/Finance-Mng-V2.xlsx Ledger
 # export FINANCE_TZ=Asia/Kolkata
 # export FINANCE_WORKBOOK='/absolute/path/to/other.xlsx'  # optional override of default
@@ -50,6 +56,9 @@ export WHISPER_KEEP_ALIVE_SEC="${WHISPER_KEEP_ALIVE_SEC:-45}"
 # export DEEPSEEK_API_KEY='sk-...'
 # export DEEPSEEK_MODEL='deepseek-v4-flash'   # default
 # export DEEPSEEK_BASE_URL='https://api.deepseek.com'
+
+# Tailscale Serve (phone HTTPS). Disable: TAILSCALE_SERVE=0
+# export TAILSCALE_SERVE=1
 
 # Colored [upload]/[ffmpeg]/[whisper]… tags (app_log.py). Disable: APP_LOG_COLOR=0 or NO_COLOR=1
 # export APP_LOG_COLOR=1
@@ -61,16 +70,167 @@ if [[ -f ./.env ]]; then
   set +a
 fi
 
+FINANCE_APP="./finance/app"
+if [[ "${FINANCE_OS:-1}" != "0" && -d "$FINANCE_APP" ]]; then
+  if ! command -v node >/dev/null 2>&1; then
+    echo "Warning: node not on PATH — /finance will not start"
+  elif [[ ! -f "$FINANCE_APP/dist-server/server/index.js" || ! -f "$FINANCE_APP/dist/index.html" ]]; then
+    echo "Building Finance OS…"
+    if [[ ! -d "$FINANCE_APP/node_modules" ]]; then
+      (cd "$FINANCE_APP" && npm install)
+    fi
+    (cd "$FINANCE_APP" && npm run build)
+  fi
+fi
+
+APP_PID=""
+SERVE_OWNED=0
+STOP_COUNT=0
+CLEANING=0
+
+tailnet_dns() {
+  local json
+  json="$(tailscale status --json 2>/dev/null)" || return 0
+  python3 -c '
+import json, sys
+d = json.loads(sys.stdin.read() or "{}")
+if d.get("BackendState") != "Running":
+    raise SystemExit(0)
+dns = ((d.get("Self") or {}).get("DNSName") or "").strip().rstrip(".")
+if dns:
+    print(dns)
+' <<<"$json"
+}
+
+stop_leftover_finance() {
+  if [[ "${FINANCE_OS:-1}" == "0" ]]; then
+    return 0
+  fi
+  if command -v fuser >/dev/null 2>&1; then
+    fuser -k "${FINANCE_OS_PORT}/tcp" >/dev/null 2>&1 || true
+  fi
+}
+
+stop_serve() {
+  if [[ "$SERVE_OWNED" != 1 ]]; then
+    return 0
+  fi
+  SERVE_OWNED=0
+  echo "Stopping Tailscale Serve…"
+  tailscale serve reset >/dev/null 2>&1 || true
+}
+
+stop_app() {
+  local sig="${1:-INT}"
+  if [[ -z "$APP_PID" ]]; then
+    return 0
+  fi
+  if ! kill -0 "$APP_PID" 2>/dev/null; then
+    APP_PID=""
+    return 0
+  fi
+  kill "-$sig" "$APP_PID" 2>/dev/null || true
+}
+
+cleanup() {
+  if [[ "$CLEANING" == 1 ]]; then
+    return 0
+  fi
+  CLEANING=1
+  if [[ -n "$APP_PID" ]] && kill -0 "$APP_PID" 2>/dev/null; then
+    echo "Stopping Toolkit…"
+    stop_app INT
+    local i
+    for i in $(seq 1 20); do
+      kill -0 "$APP_PID" 2>/dev/null || break
+      sleep 0.25
+    done
+    if kill -0 "$APP_PID" 2>/dev/null; then
+      echo "Toolkit still stopping — sending SIGTERM"
+      stop_app TERM
+      sleep 0.6
+    fi
+    if kill -0 "$APP_PID" 2>/dev/null; then
+      echo "Force-killing Toolkit"
+      stop_app KILL
+      sleep 0.2
+    fi
+    wait "$APP_PID" 2>/dev/null || true
+    APP_PID=""
+  fi
+  stop_leftover_finance
+  stop_serve
+}
+
+on_stop() {
+  STOP_COUNT=$((STOP_COUNT + 1))
+  if [[ "$STOP_COUNT" -ge 2 ]]; then
+    echo "Second Ctrl+C — force stop"
+    stop_app KILL
+    stop_leftover_finance
+    stop_serve
+    trap - INT TERM EXIT
+    exit 130
+  fi
+  echo
+  echo "Stopping Toolkit… (press again to force-kill)"
+  exit 130
+}
+
+trap cleanup EXIT
+trap on_stop INT
+trap on_stop TERM
+
 echo "Starting Toolkit on ${HOST}:${PORT}"
-echo "Finance → local log + xlsx Ledger (/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx)"
+echo "  /finance      new finance app"
+echo "  /old-finance  previous phone ledger → xlsx"
+echo "  /food         kitchen"
+echo "  /cfa          CFA tracker"
+echo "Finance xlsx Ledger → /home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx"
 if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "Finance AI → DeepSeek ${DEEPSEEK_MODEL:-deepseek-v4-flash} (thinking off)"
   echo "Food AI → same key (meal composition; skipped once the kitchen knows the food)"
 else
-  echo "Finance AI → disabled (set DEEPSEEK_API_KEY for Update ledger)"
+  echo "Finance AI → disabled (set DEEPSEEK_API_KEY for Update ledger /old-finance)"
   echo "Food AI → disabled (set DEEPSEEK_API_KEY to profile new meals)"
 fi
-echo "Then in another terminal (if not already running):"
-echo "  sudo tailscale serve ${PORT}"
-echo "Open on phone: https://msi.tailf7a628.ts.net/"
-exec python server.py
+
+PHONE_URL=""
+if [[ "${TAILSCALE_SERVE:-1}" == "0" ]]; then
+  echo "Tailscale Serve → skipped (TAILSCALE_SERVE=0)"
+elif ! command -v tailscale >/dev/null 2>&1; then
+  echo "Tailscale Serve → skipped (tailscale not on PATH)"
+else
+  DNS="$(tailnet_dns || true)"
+  if [[ -z "$DNS" ]]; then
+    echo "Tailscale Serve → skipped (tailscale is not running / not logged in)"
+    echo "  Open the Tailscale app on this machine, then re-run ./run.sh"
+  else
+    if tailscale serve --bg --yes "${PORT}"; then
+      SERVE_OWNED=1
+      PHONE_URL="https://${DNS}"
+      export TOOLKIT_PUBLIC_URL="$PHONE_URL"
+      echo "Tailscale Serve → ${PHONE_URL}/  (this machine, HTTPS on your tailnet)"
+    else
+      echo "Tailscale Serve → failed (app still on http://127.0.0.1:${PORT}/)"
+    fi
+  fi
+fi
+
+echo "Local            → http://127.0.0.1:${PORT}/"
+if [[ -n "$PHONE_URL" ]]; then
+  echo "Phone            → ${PHONE_URL}/"
+  echo "  Finance          ${PHONE_URL}/finance"
+  echo "  Old finance      ${PHONE_URL}/old-finance"
+  echo "  Food             ${PHONE_URL}/food"
+  echo "  CFA              ${PHONE_URL}/cfa"
+fi
+
+# New session so the terminal Ctrl+C hits this script once; we then signal Python.
+setsid "$PYTHON" server.py < /dev/null &
+APP_PID=$!
+
+status=0
+wait "$APP_PID" || status=$?
+APP_PID=""
+exit "$status"

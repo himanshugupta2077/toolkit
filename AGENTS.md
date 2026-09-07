@@ -11,13 +11,14 @@ This is **not** a public product. It is Himanshu’s personal phone → laptop t
 
 ## What this is
 
-One FastAPI process (`server.py` / `./run.sh`) serves a phone-sized PWA (`index.html`) plus a few extra pages. The phone opens `https://msi.tailf7a628.ts.net/` (Tailscale Serve → port 8000).
+One FastAPI process (`server.py` / `./run.sh`) serves a phone-sized PWA (`index.html`) plus a page per module. `./run.sh` also starts Tailscale Serve and prints this machine’s HTTPS URL (MagicDNS, not a hardcoded hostname). Ctrl+C stops the app and resets Serve.
 
 | App | Where | What it does |
 |---|---|---|
 | Home | `index.html` tiles | Launcher |
 | Audio notes | `index.html` + `/api/notes` | Record → ffmpeg → Faster Whisper → `data/notes/` |
-| Finance | `index.html` + `finance/` | Form / voice / receipt → **one** Ledger row |
+| Finance | `/finance` + `finance/app/` | New finance OS (Vite/Hono, SQLite). Spawned by `server.py` |
+| Old finance | `/old-finance` + `index.html` | Previous phone form / voice / receipt → **one** xlsx Ledger row |
 | Food | `/food` + `food/` | Kitchen items, logs, meal plans |
 | CFA | `/cfa` + `cfa/` | Study tracker (state in `data/cfa/`) |
 | AI usage | `index.html` + `ai_usage.py` | Token/cost log in `data/ai/` |
@@ -25,6 +26,22 @@ One FastAPI process (`server.py` / `./run.sh`) serves a phone-sized PWA (`index.
 | Queue alerts | `/api/queue/*` | Push/SSE alerts for a local ChatGPT queue on `:3847` |
 
 Python env: `whisper/.venv`. Start with `./run.sh` (uses that interpreter by **relative path** so a moved checkout still works).
+
+---
+
+## How work runs (workflows)
+
+Implementation, review, and verification in this repo go through **project workflows** in `.grok/workflows/`. Use them instead of one-shotting a multi-file change in a single agent.
+
+| Workflow | Invoke | Use for |
+|---|---|---|
+| `toolkit-task` | `/toolkit-task` or `/workflow toolkit-task` | Feature, fix, or finance phase. Pass `args.objective`. Optional `args.paths`. |
+| `review-changes` | `/review-changes` | Review a diff, branch, or path. Pass `args.target`. Optional `args.since`. |
+| `verify-change` | `/verify-change` | Tests, AGENTS.md rules, sibling UI/state. After implementation or before commit. |
+
+Watch a run in `/workflows`. Tiny single-line copy/typo fixes can skip the orchestrator. Everything else should run as a workflow so scoping, parallel specialists, and adversarial checks actually happen.
+
+These workflows must still obey the non-negotiables below.
 
 ---
 
@@ -44,16 +61,18 @@ Python env: `whisper/.venv`. Start with `./run.sh` (uses that interpreter by **r
 ```
 toolkit/
 ├── AGENTS.md                 ← this file (AI rules)
+├── .grok/workflows/          ← toolkit-task, review-changes, verify-change
 ├── README.md                 ← human setup
-├── index.html                ← main PWA (home + notes + finance + heart + AI)
-├── server.py                 ← FastAPI: static UI + all /api/*
+├── index.html                ← main PWA (home + notes + old-finance + heart + AI)
+├── server.py                 ← FastAPI: static UI + all /api/* + /finance proxy
 ├── app_log.py                ← colored tags + data/logs/activity.jsonl
 ├── ai_usage.py               ← DeepSeek usage log
 ├── run.sh                    ← start with whisper/.venv + env defaults
 ├── manifest.webmanifest      ← PWA name: Toolkit
 ├── sw.js                     ← web push / lock-screen notifications
-├── finance/                  ← Ledger append, AI parse, workbook template
-│   ├── sync.py               ← one-row Ledger + JSONL
+├── finance/                  ← finance module (/finance + /old-finance)
+│   ├── app/                  ← new finance OS (Vite UI + Hono API)
+│   ├── sync.py               ← one-row xlsx Ledger + JSONL (old path)
 │   ├── ai_parse.py           ← DeepSeek voice/text/receipt → JSON
 │   ├── ai_docs/              ← model prompt docs (hot-reload on mtime)
 │   ├── build_workbook.py     ← blank template, or --patch-live if asked
@@ -74,12 +93,13 @@ toolkit/
 ## How to run (when the user wants the app)
 
 ```bash
-cd /home/himanshu/Documents/project-tool-scripts-whatnot/toolkit
-./run.sh
+toolkit
 ```
 
+Same as `./run.sh` in the repo. Works from any directory (`~/.local/bin/toolkit`).
+
 Defaults: `HOST=0.0.0.0`, `PORT=8000`, `WHISPER_MODEL=medium`, `WHISPER_DEVICE=cuda`.  
-Then (already typical): `sudo tailscale serve 8000`.
+`./run.sh` starts Tailscale Serve on this machine’s current MagicDNS name and tears it down on Ctrl+C. Skip Serve with `TAILSCALE_SERVE=0`.
 
 Local `.env` is sourced by `run.sh` if present (gitignored). Needed for finance/food AI: `DEEPSEEK_API_KEY`. Optional: `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_RECEIPT_MODE`, `FINANCE_WORKBOOK`, `WHISPER_*`.
 

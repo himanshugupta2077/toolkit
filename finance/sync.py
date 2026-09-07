@@ -205,13 +205,19 @@ def _read_config_lists(path: Path) -> tuple[list[str], list[str]]:
         if "Configuration" not in wb.sheetnames:
             return cats, accs
         cfg = wb["Configuration"]
-        # Accounts: column A starting row 11 until blank (Type in B)
+        # Accounts: column A starting row 11. Skip extra blank slots;
+        # stop at CATEGORIES / RULES rather than the first empty yellow row.
         for r in range(11, 80):
             name = cfg.cell(r, 1).value
-            typ = cfg.cell(r, 2).value
-            if not name or not typ:
+            name_s = str(name or "").strip()
+            if name_s.upper() in {"CATEGORIES", "CATEGORY", "RULES"}:
                 break
-            accs.append(str(name).strip())
+            typ = cfg.cell(r, 2).value
+            if not name_s:
+                continue
+            if not typ:
+                continue
+            accs.append(name_s)
         # Categories: find header "Category" then names in col A (skip Group header row)
         cat_start = None
         for r in range(1, 120):
@@ -454,6 +460,53 @@ def _last_ledger_data_row(led) -> int:
     return last
 
 
+# Empty Ledger rows keep Day/Month/Year + a default Include in Budget formula
+# so a typed-in transaction is not dropped from SUMIFS(..., K:K, TRUE()).
+LEDGER_PREFILL_LAST_ROW = 2000
+LEDGER_PREFILL_BUFFER = 80
+
+
+def _ledger_budget_default_formula(r: int) -> str:
+    return (
+        f'=IF(A{r}="","",IF(OR(F{r}="Expense",F{r}="Refund"),TRUE(),FALSE()))'
+    )
+
+
+def _is_ledger_data_row(led, r: int) -> bool:
+    return led.cell(r, 1).value is not None or led.cell(r, 6).value is not None
+
+
+def _apply_ledger_prefill_row(led, r: int) -> None:
+    """Day/Month/Year + default K on an empty Ledger row."""
+    led.cell(r, 3, f'=IF(A{r}="","",TEXT(A{r},"dddd"))')
+    led.cell(r, 4, f'=IF(A{r}="","",TEXT(A{r},"MMMM"))')
+    led.cell(r, 5, f'=IF(A{r}="","",YEAR(A{r}))')
+    led.cell(r, 11, _ledger_budget_default_formula(r))
+    for c in (1, 2, 6, 7, 8, 9, 10, 11, 12, 13):
+        led.cell(r, c).fill = _yellow
+        led.cell(r, c).border = _thin
+    led.cell(r, 7).number_format = _inr
+    led.cell(r, 1).number_format = "dd/mm/yyyy"
+    led.cell(r, 2).number_format = "HH:mm"
+
+
+def _ensure_ledger_prefill(led, last_data: int | None = None) -> int:
+    """Keep formula rows below the last transaction, including column K."""
+    if last_data is None:
+        last_data = _last_ledger_data_row(led)
+    target = max(LEDGER_PREFILL_LAST_ROW, last_data + LEDGER_PREFILL_BUFFER)
+    for r in range(last_data + 1, target + 1):
+        if _is_ledger_data_row(led, r):
+            continue
+        if (
+            led.cell(r, 3).value == f'=IF(A{r}="","",TEXT(A{r},"dddd"))'
+            and led.cell(r, 11).value == _ledger_budget_default_formula(r)
+        ):
+            continue
+        _apply_ledger_prefill_row(led, r)
+    return target
+
+
 def _entry_accounts(entry: dict[str, Any]) -> tuple[str, str]:
     """Resolve From/To, including legacy payment_method rows in the JSONL log."""
     fa = str(entry.get("from_account") or entry.get("fromAccount") or "").strip()
@@ -538,7 +591,7 @@ def _fill_ledger_row(
 
 
 def _extend_autofilter(led, last_row: int) -> None:
-    end = max(last_row, 50)
+    end = max(last_row, 50, LEDGER_PREFILL_LAST_ROW)
     # Keep room for future empty formula rows
     end = max(end, led.max_row or end)
     led.auto_filter.ref = f"A1:M{end}"
@@ -572,7 +625,8 @@ def append_to_workbook(entry: dict[str, Any]) -> dict[str, Any]:
         _ensure_source_header(led)
         r = _last_ledger_data_row(led) + 1
         _fill_ledger_row(led, r, entry)
-        _extend_autofilter(led, r)
+        prefill_end = _ensure_ledger_prefill(led, r)
+        _extend_autofilter(led, prefill_end)
 
         tmp = path.with_suffix(".xlsx.writing")
         try:
@@ -747,25 +801,67 @@ def simple_dashboard_payload() -> dict[str, Any]:
         default_budget = _as_float(cfg.cell(6, 2).value, 31000.0)
         monthly_salary = _as_float(cfg.cell(7, 2).value, 0.0)
 
-        # Accounts: rows 11+ until blank (name + type + opening)
+        # Accounts: rows 11+ (name + type + opening + classification flags)
+        acc_headers: dict[str, int] = {}
+        for c in range(1, 12):
+            hv = str(cfg.cell(10, c).value or "").strip().lower()
+            if hv:
+                acc_headers[hv] = c
+        nw_col = acc_headers.get("include in net worth", 5)
+        liq_col = acc_headers.get("include in liquid cash")
+        grp_col = acc_headers.get("account group")
+        limit_col = acc_headers.get("credit limit (₹)", 4)
+        if "credit limit" in "".join(acc_headers):
+            for k, col in acc_headers.items():
+                if k.startswith("credit limit"):
+                    limit_col = col
+                    break
+
         accounts: dict[str, dict[str, Any]] = {}
-        liquid_names = ("HDFC Savings", "ICICI Savings", "Cash", "Wallet")
+        _legacy_liquid = {"HDFC Savings", "ICICI Savings", "Cash", "Wallet"}
         for r in range(11, 80):
             name = cfg.cell(r, 1).value
-            typ = cfg.cell(r, 2).value
-            if not name or not typ:
+            name_s = str(name or "").strip()
+            if name_s.upper() in {"CATEGORIES", "CATEGORY", "RULES"}:
                 break
-            name_s = str(name).strip()
+            typ = cfg.cell(r, 2).value
+            if not name_s or not typ:
+                continue
+            typ_s = str(typ).strip()
+            group = (
+                str(cfg.cell(r, grp_col).value or "").strip() if grp_col else ""
+            )
+            if liq_col:
+                liquid = _as_bool_flag(cfg.cell(r, liq_col).value)
+            else:
+                liquid = name_s in _legacy_liquid
+            if not group:
+                if name_s in _legacy_liquid and name_s in {"Cash", "Wallet"}:
+                    group = "Cash"
+                elif name_s in _legacy_liquid:
+                    group = "Savings"
+                elif "credit card" in name_s.lower() or typ_s == "Liability":
+                    group = "Credit Card"
+                elif name_s == "FD":
+                    group = "FD"
+                elif name_s == "Mutual Fund":
+                    group = "Investment"
+                elif typ_s == "Virtual":
+                    group = "Virtual"
             accounts[name_s] = {
-                "type": str(typ).strip(),
+                "type": typ_s,
                 "opening": _as_float(cfg.cell(r, 3).value, 0.0),
+                "limit": _as_float(cfg.cell(r, limit_col).value, 0.0) if limit_col else 0.0,
+                "include_in_net_worth": _as_bool_flag(cfg.cell(r, nw_col).value),
+                "include_in_liquid": liquid,
+                "group": group,
             }
 
         # Monthly Budget grid (A20:B…) — only Budget column is manual
         mb_grid: list[tuple[date, float]] = []
         if "Monthly Budget" in wb.sheetnames:
             mb = wb["Monthly Budget"]
-            for r in range(20, 80):
+            for r in range(20, 220):
                 raw = mb.cell(r, 1).value
                 if raw is None:
                     break
@@ -786,6 +882,7 @@ def simple_dashboard_payload() -> dict[str, Any]:
         to_sums: dict[str, float] = {n: 0.0 for n in accounts}
         budget_expenses = 0.0
         budget_refunds = 0.0
+        emi_this_month = 0.0
         # Category charts: full month (all non-Income) vs budget-flagged only
         cat_totals_full: dict[str, float] = {}
         cat_kinds_full: dict[str, str] = {}  # spend | credit
@@ -824,6 +921,9 @@ def simple_dashboard_payload() -> dict[str, Any]:
                 budget_expenses += amount
             elif typ == "Refund" and in_budget:
                 budget_refunds += amount
+
+            if category == "EMIs":
+                emi_this_month += amount
 
             # Chart buckets (exclude Income only)
             if typ != "Income" and amount != 0:
@@ -867,13 +967,50 @@ def simple_dashboard_payload() -> dict[str, Any]:
                 to_sums.get(name, 0.0),
             )
 
-        liquid = sum(balances.get(n, 0.0) for n in liquid_names)
+        liquid = sum(
+            bal
+            for name, bal in balances.items()
+            if accounts.get(name, {}).get("include_in_liquid")
+        )
+        credit_cards = [
+            {
+                "name": name,
+                "due": round(balances.get(name, 0.0), 2),
+                "limit": round(float(accounts[name].get("limit") or 0.0), 2),
+            }
+            for name, meta in accounts.items()
+            if meta.get("group") == "Credit Card"
+            or (
+                not meta.get("group")
+                and (
+                    meta.get("type") == "Liability"
+                    or "credit card" in name.lower()
+                )
+            )
+        ]
+        cc_total = sum(c["due"] for c in credit_cards)
         hdfc_cc = balances.get("HDFC Credit Card", 0.0)
         icici_cc = balances.get("ICICI Credit Card", 0.0)
-        cc_total = hdfc_cc + icici_cc
         budget_reserved = max(0.0, budget_remaining)
-        free_to_allocate = liquid - budget_reserved
-        est_free_next = free_to_allocate - cc_total + monthly_salary - next_month_budget
+
+        planned = _planned_expenses_summary(wb, today)
+        remaining_emi = 0.0
+        upcoming_30 = 0.0
+        next_month_emi = 0.0
+        if planned.get("available"):
+            remaining_emi = max(
+                0.0,
+                float(planned.get("this_month_loan_emi") or 0.0) - emi_this_month,
+            )
+            upcoming_30 = float(planned.get("upcoming_30_days") or 0.0)
+            forecast = planned.get("forecast_6m") or []
+            if len(forecast) > 1:
+                next_month_emi = float(forecast[1].get("loan_emi") or 0.0)
+        committed_cash = cc_total + remaining_emi + upcoming_30
+        free_to_allocate = liquid - budget_reserved - committed_cash
+        est_free_next = (
+            free_to_allocate - next_month_emi + monthly_salary - next_month_budget
+        )
 
         def _cats_payload(
             totals: dict[str, float], kinds: dict[str, str]
@@ -902,8 +1039,6 @@ def simple_dashboard_payload() -> dict[str, Any]:
         categories = categories_full
         cat_max = cat_full_max
 
-        planned = _planned_expenses_summary(wb, today)
-
         return {
             "ok": True,
             "month": today.strftime("%B %Y"),
@@ -918,12 +1053,17 @@ def simple_dashboard_payload() -> dict[str, Any]:
             "month_elapsed_pct": round(month_elapsed_pct, 4),
             "hdfc_cc": round(hdfc_cc, 2),
             "icici_cc": round(icici_cc, 2),
+            "credit_cards": credit_cards,
             "cc_total": round(cc_total, 2),
             "liquid": round(liquid, 2),
             "budget_reserved": round(budget_reserved, 2),
+            "committed_cash": round(committed_cash, 2),
+            "remaining_emi": round(remaining_emi, 2),
+            "upcoming_one_time_30": round(upcoming_30, 2),
             "free_to_allocate": round(free_to_allocate, 2),
             "monthly_salary": round(monthly_salary, 2),
             "next_month_budget": round(next_month_budget, 2),
+            "next_month_emi": round(next_month_emi, 2),
             "est_free_next_month": round(est_free_next, 2),
             "categories": categories,
             "categories_max": round(cat_max, 2),
@@ -1458,7 +1598,8 @@ def update_ledger_row(row: int, raw: dict[str, Any]) -> dict[str, Any]:
 
         _ensure_source_header(led)
         _fill_ledger_row(led, r, entry, preserve_source=preserve)
-        _extend_autofilter(led, last)
+        prefill_end = _ensure_ledger_prefill(led, last)
+        _extend_autofilter(led, prefill_end)
 
         saved = _save_workbook_atomic(wb, path)
         if not saved.get("ok"):
@@ -1531,7 +1672,8 @@ def delete_ledger_row(row: int) -> dict[str, Any]:
             led.cell(rr, 4, f'=IF(A{rr}="","",TEXT(A{rr},"MMMM"))')
             led.cell(rr, 5, f'=IF(A{rr}="","",YEAR(A{rr}))')
 
-        _extend_autofilter(led, max(new_last, 50))
+        prefill_end = _ensure_ledger_prefill(led, new_last)
+        _extend_autofilter(led, prefill_end)
         saved = _save_workbook_atomic(wb, path)
         if not saved.get("ok"):
             return {"ok": False, "error": saved.get("error") or "save failed"}

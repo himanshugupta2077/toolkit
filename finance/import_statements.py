@@ -666,11 +666,16 @@ def write_workbook(entries: list[Entry]) -> dict:
         for c in range(1, 14):
             led.cell(r, c).border = thin
 
-    # Pre-fill formulas for extra empty rows
+    # Pre-fill formulas for extra empty rows (incl. Include in Budget default)
     for r in range(2 + n, 2 + capacity):
         led.cell(r, 3, f'=IF(A{r}="","",TEXT(A{r},"dddd"))')
         led.cell(r, 4, f'=IF(A{r}="","",TEXT(A{r},"MMMM"))')
         led.cell(r, 5, f'=IF(A{r}="","",YEAR(A{r}))')
+        led.cell(
+            r,
+            11,
+            f'=IF(A{r}="","",IF(OR(F{r}="Expense",F{r}="Refund"),TRUE(),FALSE()))',
+        )
         for c in [1, 2, 6, 7, 8, 9, 10, 11, 12, 13]:
             led.cell(r, c).fill = yellow_fill
             led.cell(r, c).border = thin

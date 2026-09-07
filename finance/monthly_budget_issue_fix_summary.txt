@@ -1,0 +1,486 @@
+Monthly Budget — issue #1 fix
+Date: 2026-09-04
+Live file: /home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx
+
+Problem
+-------
+The month-by-month section looked like it ran through December 2029, but
+historical reporting could silently go blank after December 2026 if derived
+columns were not formula-driven for every month row. THIS MONTH / next-month
+budget lookups were also pinned to the last populated row ($A$20:$A$61), so
+adding a later year would not be picked up automatically.
+
+What I found on inspection
+--------------------------
+- Grid already started at July 2026 (row 20) and had month-start dates + Budget
+  values through December 2029 (row 61).
+- Derived columns C–L already had SUMIFS formulas on those 2027–2029 rows.
+- Ledger data currently only exists for 2026-07-25 through 2026-09-03.
+  So October 2026 onward correctly calculates Income/Expenses/etc. as ₹0
+  (Remaining = ₹31,000). That is "no transactions yet", not a dead formula.
+- LibreOffice rewrites Excel structured refs (Table[Column]) back to a frozen
+  A1 range on save, so lookups were kept as a long A1 range instead.
+
+What changed (surgical — no dashboard rebuild)
+----------------------------------------------
+Sheet: Monthly Budget
+- Rewrote derived formulas C–L on existing rows 20–61 (Jul 2026–Dec 2029).
+- Extended the same formulas through December 2032 (new rows 62–97).
+- Converted A19:L97 into Excel table "MonthlyBudget" (no banded rows, so
+  yellow Budget / green formula fills stay).
+- THIS MONTH budget (B6) now INDEX/MATCHes $A$20:$A$200 / $B$20:$B$200.
+- A18 note updated: add a row at the bottom of the table to extend.
+
+Sheet: Simple Dashboard
+- B23 (next month's budget) lookup range widened to $A$20:$A$200 / $B$20:$B$200.
+
+Sheet: Detailed Dashboard
+- E26 (next month's budget) lookup range widened the same way.
+
+Not changed
+- Ledger, Reconciliation, Configuration, Planned Expenses: untouched.
+- Existing Budget amounts (all ₹31,000): not overwritten.
+- Dashboard layout / charts: not rebuilt.
+
+Code (template + phone API, so a future blank build matches)
+- finance/build_workbook.py: month grid is a table; formulas through Dec 2032;
+  lookups use row 200; surgical flag --monthly-budget-grid.
+- finance/sync.py: reads Monthly Budget grid through row 220 (was 80).
+
+LibreOffice check (copy only; live file not round-tripped)
+----------------------------------------------------------
+September 2026 THIS MONTH: Budget 31000, Income 83167, Budget Expenses 26401.04,
+Remaining 4598.96, Investments 20000, Rent 10800.
+July 2026 grid: Budget Expenses 3915.04, Remaining 27084.96.
+August 2026 grid: Income 83167, Budget Expenses 37294.19.
+January 2027, December 2029, January 2030, December 2032: Income 0, Remaining 31000
+(formulas evaluate; Ledger has no rows in those months).
+
+How to extend past December 2032
+--------------------------------
+In LibreOffice, go to the last table row (Dec 2032), add a row at the bottom,
+set Month Start to 1 Jan 2033 (or copy the date pattern), keep/adjust Budget.
+Derived columns should copy with the table. Lookups already scan through row 200.
+
+If the workbook is open in LibreOffice, reload it to see the external write.
+
+
+========================================================================
+Ledger column K — issue #2 fix
+Date: 2026-09-04
+Live file: /home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx
+
+Verdict
+-------
+Real, and worth fixing. Not a dashboard-rebuild item.
+
+The phone/API path was already safe: finance/sync.py writes K as =TRUE() or
+=FALSE() on every append. The silent failure is LibreOffice / typed-in rows
+on the prefilled empty zone.
+
+What I found on inspection
+--------------------------
+- Last transaction: row 157 (03-Sep-2026). K157 = TRUE(). All 156 dated rows
+  already have K as =TRUE() (134) or =FALSE() (22).
+- Rows 158–197: Day/Month/Year formulas present; K blank. Yellow input fill
+  already there, plus a TRUE/FALSE dropdown on K2:K988.
+- Row 198+: even C/D/E stopped. A typed row there would also miss Month/Year,
+  so Monthly Budget SUMIFS would ignore it too.
+- No Excel Table on Ledger.
+- SUMIFS on Monthly Budget use Ledger!$K:$K,TRUE() / FALSE(). A blank K does
+  not match TRUE(), so the transaction is dropped from Budget Expenses.
+
+Why not an Excel Table
+----------------------
+Issue #1 already showed LibreOffice rewriting structured refs back to a frozen
+A1 range. K is also an override column (mixed =TRUE()/=FALSE() on real rows,
+including Expense rows that are intentionally FALSE: flights, medical, laptop,
+education). A table calculated column would fight those overrides. Prefill
+through the same expandable range is the practical fix.
+
+What changed (surgical — no dashboard rebuild)
+----------------------------------------------
+Sheet: Ledger only
+- Existing rows 2–157: untouched (content hash unchanged).
+- Empty rows 158–2000: C/D/E formulas kept/extended; K now
+    =IF(A{row}="","",IF(OR(F{row}="Expense",F{row}="Refund"),TRUE(),FALSE()))
+  Blank until Date is set. Expense/Refund default TRUE; Income, Transfer,
+  Credit Card Payment, Investment, Adjustment default FALSE. Override via the
+  dropdown (or type =FALSE() / =TRUE()) still works — same as today.
+- Autofilter and list validations widened to row 2000.
+- Category-level Typical Budget? is not auto-wired (Rent/EMI/Medical still
+  need a manual K override when they should be out of budget). That is a
+  default, not a second source of truth.
+
+Not changed
+- Simple Dashboard, Detailed Dashboard, Monthly Budget, Reconciliation,
+  Planned Expenses, Configuration.
+- No Ledger data values, types, amounts, or existing K flags.
+
+Code (so a future blank build / phone append cannot recreate the gap)
+- finance/build_workbook.py: template prefills C/D/E/K through row 2000;
+  surgical flag --ledger-prefill.
+- finance/sync.py: after append/update/delete, keep ≥80 formula rows below
+  the last transaction (and at least through row 2000).
+- finance/import_statements.py: extra empty rows also get the K default.
+
+LibreOffice check (copy only; live file not round-tripped)
+----------------------------------------------------------
+On a copy, Date+Type were filled on rows 1800–1806 leaving K as the default
+formula. Calc produced:
+  Expense → TRUE, Refund → TRUE,
+  Income / Transfer / Credit Card Payment / Investment / Adjustment → FALSE,
+  empty rows → blank.
+SUMIFS(..., K:K, TRUE()) matched those formula TRUE values (111+333=444 on
+the test block). Existing row 157 still evaluated TRUE.
+
+How to extend past row 2000
+---------------------------
+Phone append will keep adding formula rows automatically. In LibreOffice,
+copy the last empty formula row downward (C/D/E/K together).
+
+If the workbook is open in LibreOffice, reload it to see the external write.
+
+
+========================================================================
+Free to allocate — issue #3 fix
+Date: 2026-09-04
+Live file: /home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx
+
+Verdict
+-------
+Real, and worth fixing. Not a dashboard-rebuild item.
+
+The old number (liquid − budget remaining) is leftover after the
+discretionary cap, not cash you can move to FD / invest / goals. After
+payday it looked allocatable while CC due, remaining SmartEMI, and
+near-term one-time plans were still claims on the same savings.
+
+What I found on inspection
+--------------------------
+Live (4 Sep 2026), not the reviewer's stale remaining-budget figure:
+
+  Liquid savings                 ₹25,031.25
+  Budget remaining               ₹4,598.96   (₹31,000 − ₹26,401.04 spent)
+  Old free to allocate           ₹20,432.29
+  CC due                         ₹1,030.20
+  Planned recurring this month   ₹63,327     (Loan/EMI ₹38,200 + Lifestyle ₹25,127)
+  Planned one-time (30d)         ₹7,500      (HYD to DEH, Status=Planned)
+
+Rent ₹10,800 (2 Sep) and Family Payment ₹10,000 (1 Sep) are already paid
+from HDFC Savings with Include in Budget = TRUE. They already reduced
+liquid and budget remaining. Subtracting the full Planned Expenses month
+total (₹63,327) on top of budget remaining would double-count them and
+the other budgeted lifestyle rows (electricity, internet, subs).
+
+MacBook SmartEMI ₹38,200 is billed to HDFC CC (first due 12 Sep), not yet
+in this month's Ledger. Category EMIs / Typical Budget? FALSE — it is
+outside the ₹31k cap. The ₹20k FD on 2 Sep is exactly the kind of move
+the old metric would have called "free".
+
+Practical definition (avoids double-counting)
+---------------------------------------------
+  Budget remaining  = unused discretionary cap this month
+  Committed cash    = CC due
+                    + MAX(0, this-month planned Loan/EMI − Ledger EMIs this month)
+                    + Planned one-time next 30 days (Status=Planned)
+  Free to allocate  = liquid − budget remaining − committed cash
+
+When the EMI posts to the card, remaining EMI falls to 0 and CC due
+picks it up — committed stays the same, no double-count.
+
+Not subtracted (would lie the other way):
+  - Full Planned Expenses P6 / Lifestyle N6 (overlaps the budget cap)
+  - Remaining rent/family (inside Include in Budget on this workbook)
+  - Planned investments (that is what free cash is for)
+
+What changed (surgical — no dashboard rebuild)
+----------------------------------------------
+Sheet: Simple Dashboard
+- A14 title: after budget, bills, near-term plans
+- A17/B17 Committed cash (was the old Free line)
+- A18/B18 Free to allocate = liquid − budget reserved − committed
+          (used the previously blank row 18; Planned Expenses block unmoved)
+- Next-month line "− Pay all CC dues" → "− Next month Loan / EMI"
+  (CC is already inside today's free; do not subtract it twice)
+- Est. free next month formula unchanged in shape:
+    free today − next EMI + salary − next budget
+
+Sheet: Detailed Dashboard
+- B22 Free to allocate uses the same subtractions (liquid − budget − CC
+  − remaining EMI − 30d one-time). No extra rows (layout is tight).
+- E24 same next-month EMI swap; E27 still E23−E24+E25−E26
+- Note at A23 updated
+
+Not changed
+- Ledger, Monthly Budget, Reconciliation, Configuration, Planned Expenses
+  data and SUMPRODUCT forecast (issue #5).
+- Dashboard charts / Planned Expenses summary block.
+
+Today's numbers (LibreOffice on a copy; live not round-tripped)
+--------------------------------------------------------------
+  Committed cash                 ₹46,730.20
+    = CC ₹1,030.20 + remaining EMI ₹38,200 + one-time ₹7,500
+  Free to allocate               −₹26,297.91
+  Est. free next month           −₹12,497.91
+    = −26,297.91 − 38,200 + 83,000 − 31,000
+
+Negative is the honest signal: liquid cannot cover remaining Sep EMI +
+flight after the FD, even before October's EMI. Carry the card, break
+the FD, or wait for next salary — the old +₹20,432 hid that.
+
+Phone / template
+----------------
+- finance/sync.py: same committed-cash definition in the dashboard API
+- index.html: Free card shows Committed, then Free
+- finance/build_workbook.py: template Simple/Detailed match; surgical
+  flag --free-to-allocate (idempotent)
+
+How remaining EMI is calculated
+-------------------------------
+Prefers Planned Expenses!M6 (date-aware Kind split). If that SUMPRODUCT
+errors, falls back to SUMIFS on Category=EMIs, Monthly, Active. Set
+Active=FALSE when a loan ends — the fallback is not Start/End bounded.
+
+If you later move rent off the budget (Include in Budget FALSE), remaining
+unpaid rent would need to join committed cash. Say so and we can add it.
+
+If the workbook is open in LibreOffice, reload it to see the external write.
+
+
+========================================================================
+Dashboard account handling — issue #4 fix
+Date: 2026-09-04
+Live file: /home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx
+
+Verdict
+-------
+Real, and worth fixing now (before an investment-sheet merge). Not a
+dashboard-rebuild item.
+
+Liquid savings was Reconciliation!C5+C6+C7+C8. Named CC dues used
+Configuration!C15 / C16 and the strings "HDFC Credit Card" / "ICICI Credit
+Card". Net Worth used C11 (FD), C12 (MF), C9+C10 (cards). Adding a bank,
+card, wallet, or folio would not show up until someone remembered to edit
+those cells.
+
+What I found on inspection
+--------------------------
+Configuration already had Type + Include in Net Worth. Missing:
+  Include in Liquid Cash, Account Group.
+Only two blank rows sat between External (row 21) and CATEGORIES (row 24),
+so a 12th account could not be typed without inserting a row (which would
+desync Reconciliation). Reconciliation stopped at row 15 (External).
+Phone API used a hard-coded liquid_names tuple and hdfc_cc / icici_cc.
+
+Practical architecture (same as the review, without rebuilding dashboards)
+--------------------------------------------------------------------------
+Configuration columns:
+  Account | Type | Opening | Credit Limit | Include in Net Worth |
+  Include in Liquid Cash | Account Group | Notes
+
+Reconciliation H/I/J look those flags up by account name.
+Dashboards SUMIFS Reconciliation calculated balances on the flags.
+
+  Liquid            = Include in Liquid Cash
+  Total CC due      = Account Group = Credit Card
+  Savings & Cash    = same as liquid
+  FD / Investments  = Account Group
+  Total Assets      = Type=Asset AND Include in Net Worth
+  Liabilities       = Type=Liability AND Include in Net Worth
+  NET WORTH         = Total Assets − Liabilities
+
+Named HDFC / ICICI rows remain as labels; outstanding/limit are
+SUMIF / INDEX-MATCH on the label, not a fixed Configuration row.
+Total CC due is the SUMIFS, not B10+B11, so a third card is included
+even before you add a named dashboard row.
+
+Current flag defaults (unchanged economics)
+-------------------------------------------
+  Liquid TRUE:  HDFC Savings, ICICI Savings, Cash, Wallet
+  Liquid FALSE: both CCs, FD, Mutual Fund, virtual counterparties
+  Group: Savings / Cash / Credit Card / FD / Investment / Virtual
+
+What changed (surgical — no dashboard rebuild)
+----------------------------------------------
+Sheet: Configuration
+- Notes moved to column H. Ledger Types moved H → J (dropdown updated).
+- New F Include in Liquid Cash, G Account Group on the 11 named accounts.
+- 10 extra yellow account slots (rows 22–31). CATEGORIES now starts at row 32.
+- Dropdowns: Type (Asset/Liability/Virtual), TRUE/FALSE flags, Account Group.
+- Rule 11: fill the next blank yellow row; do not insert in the middle.
+
+Sheet: Reconciliation
+- Helper columns H/I/J lookup the Configuration flags.
+- Extra formula rows 16–25 mapped to Configuration A22:A31 (blank until named).
+- HOW TO FIX moved down. Existing Actual / Last Reconciled / Notes kept.
+
+Sheet: Simple Dashboard
+- B10/B11 outstanding = SUMIF Reconciliation by the label in A.
+- B12 Total CC due = SUMIFS Group=Credit Card.
+- B15 liquid = SUMIFS Include in Liquid Cash.
+
+Sheet: Detailed Dashboard
+- Named card outstanding/limit looked up by the D12/D16 labels.
+- E20 Total CC due = SUMIFS Group=Credit Card.
+- B20 / E30 liquid = SUMIFS Include in Liquid Cash.
+- E31 FD, E32 Investments = SUMIFS Account Group.
+- E33 Total Assets / E34 Liabilities (was "Credit Card Due") / E35 NET WORTH
+  use Type + Include in Net Worth.
+
+Not changed
+- Ledger transaction rows (including K157).
+- Monthly Budget, Planned Expenses data/formulas (issue #5).
+- Dashboard charts / Planned Expenses blocks / layout.
+- Detailed per-account list is still Reconciliation rows 5–15. Totals
+  still pick up a 12th account; add a list row later if you want it named
+  there.
+
+LibreOffice check (copy only; live file not round-tripped)
+----------------------------------------------------------
+Same numbers as the old hard-coded sums:
+
+  Liquid / Savings & Cash     ₹25,031.25
+  HDFC CC due                    ₹702.16
+  ICICI CC due                   ₹328.04
+  Total CC due / Liabilities   ₹1,030.20
+  FD                            ₹20,000.00
+  Investments                           ₹0
+  Total Assets                 ₹45,031.25
+  NET WORTH                    ₹44,001.05
+
+Proof a new account flows without touching dashboards: on a copy,
+Configuration A22 = "Test Savings", Type=Asset, opening ₹1,000,
+Liquid=TRUE, Group=Savings → liquid became ₹26,031.25. CC due unchanged.
+Phone API listed Test Savings and returned the same liquid.
+
+How to add a savings account / card / folio
+-------------------------------------------
+On Configuration, use the next blank yellow row (22–31). Set Type,
+opening, Include in Net Worth, Include in Liquid Cash, Account Group
+(Savings / Cash / Credit Card / FD / Investment / Loan / Other).
+Do not insert a row between existing accounts.
+
+Phone / template
+----------------
+- finance/sync.py: liquid + credit_cards from Configuration flags
+- index.html: Credit cards card lists whatever the API returns
+- finance/build_workbook.py: template matches; surgical flag
+  --account-classifications (idempotent)
+
+If the workbook is open in LibreOffice, reload it to see the external write.
+
+
+========================================================================
+Planned Expenses formulas — issue #5 fix
+Date: 2026-09-04
+Live file: /home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx
+
+Verdict
+-------
+Real as a maintainability problem, and practical to fix. Not a dashboard
+rebuild. The reported #VALUE! is not what LibreOffice Calc currently does.
+
+What I found on inspection
+--------------------------
+NEXT 6 MONTHS (L6:P11) was 18 SUMPRODUCT formulas, ~670–730 characters each.
+Each one mixed:
+
+  Active TRUE() vs "TRUE", Kind (or blank → infer from Category),
+  Monthly vs Yearly, Start/End overlap, and MONTH()/DATE() on Start.
+
+The yearly half calls MONTH($E$15:$E$64) across the whole block. Rows 28–64
+are empty, so that is MONTH() on blanks inside an array. Calc coerces those
+and the sheet currently calculates. A renderer that does not coerce them
+gets #VALUE! on Monthly Fixed Cost (B5=P6) and the Loan/Lifestyle/Investment
+forecast — which is what the review saw. Issue #3 already wrapped M6 in
+IFERROR for that reason.
+
+LibreOffice on a copy of the live book, before this change:
+
+  Sep 2026  Loan ₹38,200  Lifestyle ₹25,127  Total ₹63,327
+  Oct 2026  Loan ₹38,200  Lifestyle ₹11,127  Total ₹49,327
+  Dec 2026  Loan ₹38,200  Lifestyle ₹12,927  Total ₹51,127
+            (Dec includes himanshu-gupta.com ₹1,800)
+  6-month   Loan ₹2,29,200  Lifestyle ₹82,562  Total ₹3,11,762
+
+Those numbers match the Python due-in-month logic. So Calc was right;
+the formulas were still unauditable and a latent bomb in other engines.
+
+Practical design
+----------------
+Do not keep the date/Kind logic inside the aggregate. Put it on the row,
+then SUMIFS.
+
+Dashboard anchors stay L6:P12 / B5=P6 (Simple + Detailed + committed cash
+already point here). Helpers sit to the right so they cannot collide with
+that table.
+
+  Q  Active?          TRUE/FALSE from G (boolean or "TRUE" text)
+  R  Effective Kind   Kind, or EMIs → Loan / EMI / Investment → Investment
+                      / else Lifestyle
+  S–X  cash due       one column per forecast month L6..L11
+
+Cash-due is nested IF, so MONTH() only runs when Start is non-blank.
+Empty Start = already started; empty End = no end. Inactive → 0.
+
+Skipped separate "Monthly Due?" / "Yearly Due This Month?" booleans: they
+would have to be copied for each of the six months. S–X is Effective
+Monthly Cash for those months.
+
+Forecast:
+
+  M6 = SUMIFS($S$15:$S$64,$R$15:$R$64,M$5)   (Loan / EMI this month)
+  N6 = SUMIFS(..., N$5)                     (Lifestyle)
+  O6 = SUMIFS(..., O$5)                     (Investment)
+  M7 uses column T, M8 uses U, … M11 uses X.
+
+What changed (surgical — no dashboard rebuild)
+----------------------------------------------
+Sheet: Planned Expenses only
+- Recurring rows 15–64 columns A–K: untouched (content hash unchanged).
+- One-time rows 66–97: untouched.
+- Added Q13:X64 helper header + formulas (green). Q65 note.
+- Rewrote M6:O11 from SUMPRODUCT to SUMIFS on R + S–X.
+- L6:L11, P6:P12, B5=P6 unchanged in role.
+- A11 note mentions the helpers.
+
+Not changed
+- Ledger, Monthly Budget, Reconciliation, Configuration.
+- Simple / Detailed dashboard layout and formulas (they still read M6:P12
+  and B5:B10). Remaining EMI still prefers M6, now a SUMIFS.
+- Recurring amounts, dates, Active, Kind, Payment Method, Notes.
+
+LibreOffice check (copy only; live file not round-tripped)
+----------------------------------------------------------
+Same totals as the old SUMPRODUCT:
+
+  B5 / P6                         ₹63,327
+  M6 / N6 / O6           ₹38,200 / ₹25,127 / ₹0
+  P9 (Dec 2026)                   ₹51,127
+  P12 (6-month total)            ₹3,11,762
+
+Per-row helpers (this month → Feb 2027):
+
+  Rent / Electricity / Internet   due Sep only (End 1 Sep)
+  MacBook SmartEMI                ₹38,200 all six months
+  narayanhomestay.com             ₹1,100 in Sep only
+  himanshu-gupta.com              ₹1,800 in Dec only
+  Scooty Insurance                ₹0 (Start Apr 2027)
+  empty row 28                    blank helpers
+
+How to read / extend
+--------------------
+To see why a month's total moved, look at that month's helper column
+(S = this month, T = +1, …). Set Active=FALSE or End to drop a row.
+Blank Kind still infers from Category via Effective Kind — you do not
+edit Q:X.
+
+Template / surgical flag
+------------------------
+- finance/build_workbook.py: blank Planned Expenses sheet writes helpers
+  + SUMIFS; --commitment-forecast does too.
+- --planned-helpers (alias --issue-5) is the live surgical patch
+  (idempotent). Does not recreate dashboards.
+
+If the workbook is open in LibreOffice, reload it to see the external write.

@@ -5,4 +5,9 @@ __pycache__/
 whisper/.venv/
 data/
 heart/results.jsonl
+finance/app/node_modules/
+finance/app/data/
+finance/app/dist/
+finance/app/dist-server/
+finance/Investment_Portfolio_Allocation_Tracker.xlsx
 

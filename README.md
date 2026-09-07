@@ -2,9 +2,9 @@
 
 Personal **phone → laptop** tools on your Tailscale network.
 
-Home screen on the phone: audio notes, finance, food, CFA, AI usage, and a few private apps. Traffic stays on the tailnet. Recordings, ledger writes, and other data stay on this machine under `data/` (gitignored).
+Home screen on the phone: audio notes, finance, food, CFA, AI usage, and a few private apps. Each module has its own path (`/finance`, `/food`, `/cfa`, …). Traffic stays on the tailnet. Recordings, ledger writes, and other data stay on this machine under `data/` (gitignored).
 
-AI working in this repo: start at **[AGENTS.md](./AGENTS.md)**.
+AI working in this repo: start at **[AGENTS.md](./AGENTS.md)**. Multi-file work goes through project workflows (`/toolkit-task`, `/review-changes`, `/verify-change`).
 
 ---
 
@@ -31,7 +31,7 @@ This is **not** a public cloud service. Traffic stays on your Tailscale network.
 ## Features
 
 ### Web app
-- **Home** — two symbol tiles (🎙 notes · ₹ finance)
+- **Home** — tiles (🎙 notes · ₹ `/finance` · 🍛 `/food` · 📖 `/cfa` · …)
 - **Audio Notes** — big record / stop button, timer, level meter
 - **Update ledger** switch on the recorder — after Whisper, DeepSeek fills **one Ledger row**
 - **Finance mic** (header) — opens recorder with Update ledger already on
@@ -60,10 +60,11 @@ Original browser audio is kept even if transcription fails.
 
 ## AI agent rules
 
-See **[AGENTS.md](./AGENTS.md)** — especially finance sheet updates:
+See **[AGENTS.md](./AGENTS.md)** — especially finance sheet updates and project workflows:
 
 - surgical edits only on `/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx`
 - no full dashboard rebuild (`build_workbook.py --patch-live`) unless explicitly requested
+- multi-file work: `/toolkit-task`, `/review-changes`, `/verify-change`
 
 ## Project layout
 
@@ -71,15 +72,19 @@ See **[AGENTS.md](./AGENTS.md)** — especially finance sheet updates:
 toolkit/
 ├── README.md                 ← this file
 ├── AGENTS.md                 ← AI rules (surgical finance sheet updates, etc.)
-├── index.html                ← full web app (UI + recorder + notes + finance)
-├── server.py                 ← FastAPI backend
+├── .grok/workflows/          ← /toolkit-task, /review-changes, /verify-change
+├── index.html                ← home + notes + old-finance + heart + AI
+├── server.py                 ← FastAPI backend (`/finance` proxies the new app)
 ├── app_log.py                ← colored terminal tags + activity JSONL log
 ├── run.sh                    ← start server with whisper venv + env defaults
 ├── finance/
-│   ├── sync.py               ← Ledger append + JSONL (source=manual|ai)
+│   ├── app/                  ← new finance OS at `/finance`
+│   ├── sync.py               ← old xlsx Ledger append + JSONL (`/old-finance`)
 │   ├── ai_parse.py           ← DeepSeek voice/text → entry JSON
 │   ├── ai_docs/              ← model reference (sheet + task + examples)
 │   └── (blank template only; live book is under Documents/Finance/)
+├── food/                     ← `/food`
+├── cfa/                      ← `/cfa`
 ├── data/
 │   ├── audio/                ← original uploads (.webm/…) + converted (.wav)
 │   ├── notes/                ← {id}.json metadata + {id}.txt plain transcript
@@ -128,11 +133,7 @@ Static `http.server` only serves files. It **cannot** accept uploads or run Whis
 
 ### Why Tailscale Serve (HTTPS)?
 Browser microphone APIs require a **secure context** (HTTPS or localhost).  
-`tailscale serve` gives you HTTPS on the tailnet, e.g.:
-
-```text
-https://msi.tailf7a628.ts.net/
-```
+`./run.sh` starts `tailscale serve` for you. HTTPS is on this machine’s current MagicDNS name (whatever `tailscale status` reports — not a hardcoded laptop hostname).
 
 ---
 
@@ -157,9 +158,10 @@ ffmpeg -version
 ### 2. Start the Audio Notes server
 
 ```bash
-cd /home/himanshu/Documents/project-tool-scripts-whatnot/toolkit
-./run.sh
+toolkit
 ```
+
+Same as `./run.sh` in the repo. Works from any directory.
 
 Defaults:
 - Host `0.0.0.0`, port **8000**
@@ -175,28 +177,20 @@ Data directory     → …/data
 Whisper            → medium on cuda
 ```
 
-### 3. Expose over Tailscale (second terminal)
+### 3. Phone URL
 
-```bash
-sudo tailscale serve 8000
-```
-
-Leave both processes running.
-
-Example serve output:
+`./run.sh` starts Tailscale Serve in the same process. It prints this machine’s HTTPS URL, for example:
 
 ```text
-Available within your tailnet:
-https://msi.tailf7a628.ts.net/
-|-- proxy http://127.0.0.1:8000
+Phone            → https://<this-machine>.<tailnet>.ts.net/
 ```
 
-Your hostname may differ (`tailscale status`).
+Ctrl+C stops the app **and** resets Serve. Skip Serve with `TAILSCALE_SERVE=0`.
 
 ### 4. Open on the phone
 
 1. Phone on Tailscale (same account / tailnet)
-2. Browser → `https://<your-machine>.tail….ts.net/`
+2. Browser → the **Phone** URL printed by `./run.sh`
 3. Badge should say **Mobile**
 4. Allow microphone when prompted
 
@@ -279,7 +273,8 @@ Set when starting the server (or export before `./run.sh`):
 | Variable | Default | Meaning |
 |----------|---------|---------|
 | `HOST` | `0.0.0.0` | Bind address |
-| `PORT` | `8000` | HTTP port (must match `tailscale serve`) |
+| `PORT` | `8000` | HTTP port (`./run.sh` points Tailscale Serve at this) |
+| `TAILSCALE_SERVE` | `1` | `0` = do not start/reset Tailscale Serve |
 | `WHISPER_MODEL` | `medium` | Default model if UI doesn’t send one |
 | `WHISPER_DEVICE` | `cuda` | `cuda` or `cpu` |
 | `WHISPER_COMPUTE` | *(auto)* | Pin CTranslate2 compute type; empty = VRAM-safe ladder per model |
@@ -302,9 +297,11 @@ WHISPER_KEEP_ALIVE_SEC=0 ./run.sh
 # Old behavior: keep Whisper on GPU forever
 WHISPER_KEEP_ALIVE_SEC=-1 WHISPER_PRELOAD=1 ./run.sh
 
-# Different port
+# Different port (Serve follows PORT)
 PORT=9000 ./run.sh
-# then: sudo tailscale serve 9000
+
+# App only, no Tailscale Serve
+TAILSCALE_SERVE=0 ./run.sh
 ```
 
 Per-request **model** and **translate** from the UI override the default model / task.  
@@ -573,19 +570,12 @@ cat data/notes/SOMEID.txt
 ## Typical daily workflow
 
 ```bash
-# Terminal 1 — laptop
-cd /home/himanshu/Documents/project-tool-scripts-whatnot/toolkit
-./run.sh
-
-# Terminal 2 — laptop
-sudo tailscale serve 8000
-
-# Phone
-# https://msi.tailf7a628.ts.net/
+toolkit
+# Phone → the URL printed as "Phone" (this machine’s MagicDNS name)
 # Audio Notes → record → upload → read transcript
 ```
 
-Stop: **Ctrl+C** in both terminals (or stop Serve however you prefer).
+Stop: **Ctrl+C** — that stops the app, the finance Node process, and Tailscale Serve.
 
 ---
 

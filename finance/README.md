@@ -1,6 +1,8 @@
 # Finance Tracker
 
-Phone UI → laptop server → **Ledger row** in `/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx` (+ backup log in `data/finance/entries.jsonl`).
+**New app:** `/finance` (Vite/Hono in `finance/app/`, SQLite). Started with toolkit `./run.sh`.
+
+**Previous phone ledger** (xlsx form / voice / receipt) is at `/old-finance`. That path still writes **one Ledger row** in `/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx` (+ backup log in `data/finance/entries.jsonl`).
 
 Open the workbook in **LibreOffice Calc**. After a phone save, **reload** the file in LibreOffice if it was already open (external writes are not live-updated). If save fails with “permission denied”, close the workbook in LibreOffice first.
 
@@ -26,21 +28,21 @@ Configuration
 
 | Sheet | Purpose |
 |---|---|
-| **Simple Dashboard** | Month pace, budget remaining, safe ₹/day, pace check, upcoming CC bills, free-to-allocate (savings − budget remaining), next-month free-to-allocate estimate, **planned expenses summary** |
+| **Simple Dashboard** | Month pace, budget remaining, safe ₹/day, pace check, upcoming CC bills, free-to-allocate (liquid − budget remaining − committed cash), next-month estimate, **planned expenses summary** |
 | **Detailed Dashboard** | Full pace + this month + upcoming CC bills + free-to-allocate + next-month estimate + balances + net worth + 3 charts + **planned expenses summary** |
 | **Ledger** | Universal journal: every income, expense, transfer, CC payment, investment, refund, adjustment |
 | **Monthly Budget** | Per-month Budget (manual) + Income / Spent / Remaining / EMI / Rent / Investments (from Ledger) |
 | **Reconciliation** | Calculated vs Actual; never overwrite calculated — add Ledger rows |
 | **Planned Expenses** | **Planning only**: recurring (monthly/yearly) + upcoming one-time costs. Does **not** create Ledger entries, change balances, or affect Monthly Budget |
-| **Configuration** | Accounts, categories, types, opening balances, credit limits, **default monthly budget**, **monthly salary** |
+| **Configuration** | Accounts, categories, types, opening balances, credit limits, **Include in Net Worth**, **Include in Liquid Cash**, **Account Group**, **default monthly budget**, **monthly salary** |
 
 ### Key dashboard metrics
 
 | Metric | Formula (conceptually) |
 |---|---|
-| **Free to allocate** | Liquid savings (HDFC + ICICI + cash + wallets) − budget remaining this month. Does **not** subtract CC dues. |
-| **Upcoming CC bills** | Outstanding due on HDFC + ICICI credit cards |
-| **Est. free next month** | Free to allocate today − total CC dues + monthly salary − next month's budget |
+| **Free to allocate** | Liquid savings − budget remaining − committed cash. Committed = CC due + remaining Loan/EMI this month + Planned one-time (next 30 days). Rent/family already inside Include in Budget are not subtracted twice. |
+| **Upcoming CC bills** | Outstanding due on every Configuration account with Account Group = Credit Card |
+| **Est. free next month** | Free to allocate today − next month's Loan/EMI + monthly salary − next month's budget. Today's free already nets CC due. |
 | **Monthly fixed cost** | This month's recurring **cash due** (`Planned Expenses!P6`) — Active rows whose Start/End cover this month, split by Kind |
 | **Next 6 months** | Cash due by month: Loan / EMI vs Lifestyle vs Investment (`Planned Expenses!L6:P12`) |
 | **Upcoming one-time (30/90d)** | Sum of Planned one-time expenses with effective date in the window (planning only) |
@@ -114,6 +116,7 @@ curl -s http://127.0.0.1:8000/api/finance/parse \
 - **Liability** (credit cards, as outstanding due): `Opening + From − To`
 - Opening balances live only in **Configuration** (starting point).
 - **Reconciliation**: enter Actual when you check the bank; fix gaps with Ledger rows (or `Adjustment`), never by editing the balance.
+- **To add an account:** fill the next blank yellow row on Configuration (Type, opening, Include in Net Worth, Include in Liquid Cash, Account Group). Liquid / CC due / net worth SUMIFS those flags. Do not insert a row in the middle of the list.
 
 ## Local setup
 
@@ -174,7 +177,8 @@ Independent planning sheet for recurring burn + upcoming one-time costs.
 - **Does not** write Ledger rows, change balances, or affect Monthly Budget / Reconciliation.
 - Summary anchors: `Planned Expenses!B5:B10` (monthly fixed, count, yearly, upcoming 30/90, total one-time).
 - **Kind** (column K on the live book): `Loan / EMI` (must-pay) vs `Lifestyle` (negotiable everyday recurring) vs `Investment` (reserved). Blank Kind infers `EMIs` → Loan / EMI, else Lifestyle.
-- **NEXT 6 MONTHS** table (`L6:P12`): cash due each month, respecting Active + Start/End. Yearly amounts count in the due month only (not yearly÷12). `B5` = this month's total (`P6`).
+- **Helpers** (columns Q:X, formulas): `Active?`, `Effective Kind`, and cash due for each of the next 6 months. Nested IFs so `MONTH()` never runs on a blank Start.
+- **NEXT 6 MONTHS** table (`L6:P12`): `SUMIFS` on those helpers by Effective Kind. Yearly amounts count in the due month only (not yearly÷12). `B5` = this month's total (`P6`).
 - Simple + Detailed dashboards show the summary **and** the 6-month split; phone UI reads the same metrics from `/api/finance/dashboard` → `planned` / `forecast_6m`.
 - Edit yellow cells on **Planned Expenses**. Set **Active=FALSE** to exclude a recurring row. Set **End** so an EMI drops off after the last month.
 
@@ -184,6 +188,10 @@ Surgical create/refresh on the live workbook (does **not** rebuild dashboards wh
 ./whisper/.venv/bin/python finance/build_workbook.py --planned-expenses
 # Kind column + 6-month cash-due table on Planned Expenses and both dashboards
 ./whisper/.venv/bin/python finance/build_workbook.py --commitment-forecast
+# Helper columns Q:X + SUMIFS forecast (replaces giant SUMPRODUCT)
+./whisper/.venv/bin/python finance/build_workbook.py --planned-helpers
+# Configuration flags + dashboard SUMIFS (liquid / CC / net worth)
+./whisper/.venv/bin/python finance/build_workbook.py --account-classifications
 ```
 
 ## Rebuild workbook / dashboards

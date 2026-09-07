@@ -13,7 +13,8 @@ AI / automation policy (see ../AGENTS.md):
 """
 from __future__ import annotations
 
-from datetime import date as ddate
+from copy import copy
+from datetime import date as ddate, datetime
 from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
@@ -24,6 +25,7 @@ from openpyxl.chart.shapes import GraphicalProperties
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.worksheet.table import Table, TableStyleInfo
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "Finance Mng.xlsx"
@@ -55,18 +57,31 @@ thin = Border(
 inr = "₹#,##0.00"
 pct = "0.0%"
 
+# name, type, opening, limit, include_in_net_worth, include_in_liquid_cash, group, notes
 ACCOUNTS = [
-    ("HDFC Savings", "Asset", 3851.96, None, True, "Primary savings (Aug-only start)"),
-    ("ICICI Savings", "Asset", 142.11, None, True, ""),
-    ("Cash", "Asset", 0, None, True, ""),
-    ("Wallet", "Asset", 0, None, True, "UPI wallets etc."),
-    ("HDFC Credit Card", "Liability", 0, 396000, True, "Opening due; Aug-only = this cycle spends"),
-    ("ICICI Credit Card", "Liability", 11723.51, 100000, True, "Opening = due at ledger start"),
-    ("FD", "Asset", 0, None, True, "Fixed deposits"),
-    ("Mutual Fund", "Asset", 0, None, True, "Investments"),
-    ("Employer", "Virtual", 0, None, False, "Counterparty for salary / income"),
-    ("Expense", "Virtual", 0, None, False, "Counterparty for spends"),
-    ("External", "Virtual", 0, None, False, "Outside world / unknown source"),
+    ("HDFC Savings", "Asset", 3851.96, None, True, True, "Savings", "Primary savings (Aug-only start)"),
+    ("ICICI Savings", "Asset", 142.11, None, True, True, "Savings", ""),
+    ("Cash", "Asset", 0, None, True, True, "Cash", ""),
+    ("Wallet", "Asset", 0, None, True, True, "Cash", "UPI wallets etc."),
+    ("HDFC Credit Card", "Liability", 0, 396000, True, False, "Credit Card", "Opening due; Aug-only = this cycle spends"),
+    ("ICICI Credit Card", "Liability", 11723.51, 100000, True, False, "Credit Card", "Opening = due at ledger start"),
+    ("FD", "Asset", 0, None, True, False, "FD", "Fixed deposits"),
+    ("Mutual Fund", "Asset", 0, None, True, False, "Investment", "Investments"),
+    ("Employer", "Virtual", 0, None, False, False, "Virtual", "Counterparty for salary / income"),
+    ("Expense", "Virtual", 0, None, False, False, "Virtual", "Counterparty for spends"),
+    ("External", "Virtual", 0, None, False, False, "Virtual", "Outside world / unknown source"),
+]
+
+ACCOUNT_TYPES = ["Asset", "Liability", "Virtual"]
+ACCOUNT_GROUPS = [
+    "Savings",
+    "Cash",
+    "Credit Card",
+    "FD",
+    "Investment",
+    "Virtual",
+    "Loan",
+    "Other",
 ]
 
 TYPES = [
@@ -225,24 +240,403 @@ def _clear_sheet(ws, max_row: int = 60, max_col: int = 12) -> None:
                 c.number_format = "General"
 
 
-# Shared formula fragments (Configuration account rows: HDFC CC=15, ICICI CC=16)
-_FORM_LIQUID = (
-    "=Reconciliation!C5+Reconciliation!C6+Reconciliation!C7+Reconciliation!C8"
+# Configuration account table: header row 10, first account row 11.
+# Extra yellow slots sit below the named accounts so a new bank/card/folio
+# can be typed without inserting rows (which would desync Reconciliation).
+CFG_ACC_HEADER_ROW = 10
+CFG_ACC_START = 11
+CFG_ACC_EXTRA_ROWS = 10
+CFG_ACC_LOOKUP_LAST = 40
+REC_ACC_START = 5
+REC_ACC_LOOKUP_LAST = 40
+
+_REC_A = f"Reconciliation!$A${REC_ACC_START}:$A${REC_ACC_LOOKUP_LAST}"
+_REC_B = f"Reconciliation!$B${REC_ACC_START}:$B${REC_ACC_LOOKUP_LAST}"
+_REC_C = f"Reconciliation!$C${REC_ACC_START}:$C${REC_ACC_LOOKUP_LAST}"
+_REC_NW = f"Reconciliation!$H${REC_ACC_START}:$H${REC_ACC_LOOKUP_LAST}"
+_REC_LIQ = f"Reconciliation!$I${REC_ACC_START}:$I${REC_ACC_LOOKUP_LAST}"
+_REC_GRP = f"Reconciliation!$J${REC_ACC_START}:$J${REC_ACC_LOOKUP_LAST}"
+_CFG_ACC_NAMES = f"Configuration!$A${CFG_ACC_START}:$A${CFG_ACC_LOOKUP_LAST}"
+_CFG_ACC_LIMITS = f"Configuration!$D${CFG_ACC_START}:$D${CFG_ACC_LOOKUP_LAST}"
+
+
+def _sumifs_true_flag(sum_range: str, flag_range: str, extra: str = "") -> str:
+    """Match both boolean TRUE() and the text TRUE (LibreOffice dropdowns)."""
+    return (
+        f"SUMIFS({sum_range},{flag_range},TRUE(){extra})"
+        f"+SUMIFS({sum_range},{flag_range},\"TRUE\"{extra})"
+    )
+
+
+_FORM_LIQUID = "=" + _sumifs_true_flag(_REC_C, _REC_LIQ)
+_FORM_CC_DUE = f'=SUMIFS({_REC_C},{_REC_GRP},"Credit Card")'
+_FORM_FD = f'=SUMIFS({_REC_C},{_REC_GRP},"FD")'
+_FORM_INVESTMENTS = f'=SUMIFS({_REC_C},{_REC_GRP},"Investment")'
+_FORM_NW_ASSETS = "=" + _sumifs_true_flag(
+    _REC_C, _REC_NW, extra=f',{_REC_B},"Asset"'
 )
-_FORM_HDFC_CC = (
-    '=Configuration!C15+SUMIF(Ledger!$H:$H,"HDFC Credit Card",Ledger!$G:$G)'
-    '-SUMIF(Ledger!$I:$I,"HDFC Credit Card",Ledger!$G:$G)'
+_FORM_NW_LIABILITIES = "=" + _sumifs_true_flag(
+    _REC_C, _REC_NW, extra=f',{_REC_B},"Liability"'
 )
-_FORM_ICICI_CC = (
-    '=Configuration!C16+SUMIF(Ledger!$H:$H,"ICICI Credit Card",Ledger!$G:$G)'
-    '-SUMIF(Ledger!$I:$I,"ICICI Credit Card",Ledger!$G:$G)'
+
+
+def _form_balance_for_label(label_cell: str) -> str:
+    """Outstanding/balance from Reconciliation, keyed by the label cell (not a row #)."""
+    return f'=IF({label_cell}="","",SUMIF({_REC_A},{label_cell},{_REC_C}))'
+
+
+def _form_limit_for_label(label_cell: str) -> str:
+    return (
+        f'=IF({label_cell}="","",IFERROR(INDEX({_CFG_ACC_LIMITS},'
+        f"MATCH({label_cell},{_CFG_ACC_NAMES},0)),0))"
+    )
+
+
+def _default_liquid_and_group(name: str, typ: str) -> tuple[bool, str]:
+    n = (name or "").strip().lower()
+    t = (typ or "").strip()
+    if t == "Virtual" or n in {"employer", "expense", "external"}:
+        return False, "Virtual"
+    if t == "Liability" or "credit card" in n:
+        return False, "Credit Card"
+    if n == "fd" or n.startswith("fd "):
+        return False, "FD"
+    if "mutual fund" in n or n in {"mf", "investment"}:
+        return False, "Investment"
+    if n in {"cash", "wallet"}:
+        return True, "Cash"
+    if t == "Asset":
+        return True, "Savings"
+    return False, "Other"
+# Monthly Budget month-by-month grid (header row 19, data from row 20).
+# Lookups use a long A1 range so LibreOffice can add years without rewriting
+# structured table refs back to a frozen $A$20:$A$61.
+MB_TABLE_NAME = "MonthlyBudget"
+MB_HEADER_ROW = 19
+MB_FIRST_DATA_ROW = 20
+MB_LOOKUP_LAST_ROW = 200
+MB_GRID_END = ddate(2032, 12, 1)
+
+# Ledger empty-row prefill (Day / Month / Year + Include in Budget default).
+# Phone append also extends this if the last data row approaches the end.
+LEDGER_PREFILL_LAST_ROW = 2000
+LEDGER_PREFILL_BUFFER = 80
+
+_FORM_THIS_MONTH_BUDGET = (
+    f"=IFERROR(INDEX($B$20:$B${MB_LOOKUP_LAST_ROW},"
+    f"MATCH(DATE(YEAR(TODAY()),MONTH(TODAY()),1),$A$20:$A${MB_LOOKUP_LAST_ROW},0)),Configuration!B6)"
 )
 # Next month's budget from Monthly Budget grid, else Configuration default
 _FORM_NEXT_MONTH_BUDGET = (
-    "=IFERROR(INDEX('Monthly Budget'!$B$20:$B$67,"
+    f"=IFERROR(INDEX('Monthly Budget'!$B$20:$B${MB_LOOKUP_LAST_ROW},"
     "MATCH(EDATE(DATE(YEAR(TODAY()),MONTH(TODAY()),1),1),"
-    "'Monthly Budget'!$A$20:$A$67,0)),Configuration!B6)"
+    f"'Monthly Budget'!$A$20:$A${MB_LOOKUP_LAST_ROW},0)),Configuration!B6)"
 )
+# Committed cash: CC due + remaining Loan/EMI this month + Planned one-time
+# (30d). Remaining EMI prefers Planned Expenses!M6 (SUMIFS on helper cash-due
+# columns). SUMIFS on Category=EMIs is the fallback if M6 errors — set
+# Active=FALSE when a loan ends. Rent/family stay in budget remaining when
+# Include in Budget is TRUE; do not add them here.
+_FRAG_PLANNED_MONTHLY_EMIS = (
+    "SUMIFS('Planned Expenses'!$D$15:$D$64,'Planned Expenses'!$B$15:$B$64,\"EMIs\","
+    "'Planned Expenses'!$C$15:$C$64,\"Monthly\",'Planned Expenses'!$G$15:$G$64,TRUE())"
+    "+SUMIFS('Planned Expenses'!$D$15:$D$64,'Planned Expenses'!$B$15:$B$64,\"EMIs\","
+    "'Planned Expenses'!$C$15:$C$64,\"Monthly\",'Planned Expenses'!$G$15:$G$64,\"TRUE\")"
+)
+_FRAG_REMAINING_EMI = (
+    f"MAX(0,IFERROR('Planned Expenses'!M6,{_FRAG_PLANNED_MONTHLY_EMIS})"
+    f"-'Monthly Budget'!B12)"
+)
+_FRAG_ONETIME_30 = "IFERROR('Planned Expenses'!B8,0)"
+_FORM_NEXT_MONTH_EMI = f"=IFERROR('Planned Expenses'!M7,{_FRAG_PLANNED_MONTHLY_EMIS})"
+
+
+def _form_committed_cash(cc_cell: str) -> str:
+    return f"={cc_cell}+{_FRAG_REMAINING_EMI}+{_FRAG_ONETIME_30}"
+
+
+def _form_free_less_committed(liquid_cell: str, budget_cell: str, committed_cell: str) -> str:
+    return f"={liquid_cell}-{budget_cell}-{committed_cell}"
+
+
+def _form_free_detailed(*, liquid: str, budget: str, cc: str) -> str:
+    return f"={liquid}-{budget}-{cc}-{_FRAG_REMAINING_EMI}-{_FRAG_ONETIME_30}"
+
+
+def _find_row_by_label(ws, label: str, col: int = 1, max_row: int = 80) -> int | None:
+    want = label.strip().lower()
+    for r in range(1, max_row + 1):
+        v = ws.cell(r, col).value
+        if v is not None and str(v).strip().lower() == want:
+            return r
+    return None
+
+
+def _find_row_containing(ws, needle: str, col: int = 1, max_row: int = 80) -> int | None:
+    want = needle.strip().lower()
+    for r in range(1, max_row + 1):
+        v = ws.cell(r, col).value
+        if v is not None and want in str(v).strip().lower():
+            return r
+    return None
+
+
+def _month_start_value(v) -> ddate | None:
+    if isinstance(v, datetime):
+        return ddate(v.year, v.month, 1)
+    if isinstance(v, ddate):
+        return ddate(v.year, v.month, 1)
+    return None
+
+
+def _add_calendar_months(start: ddate, n: int) -> ddate:
+    m0 = start.month - 1 + n
+    return ddate(start.year + m0 // 12, m0 % 12 + 1, 1)
+
+
+def _ledger_include_in_budget_formula(r: int) -> str:
+    """Default Include in Budget on empty Ledger rows.
+
+    Expense / Refund → TRUE(); other types → FALSE(); blank until Date is set.
+    Existing filled rows keep explicit =TRUE() / =FALSE() overrides.
+    """
+    return (
+        f'=IF(A{r}="","",IF(OR(F{r}="Expense",F{r}="Refund"),TRUE(),FALSE()))'
+    )
+
+
+def _prefill_ledger_empty_row(led, r: int) -> None:
+    """Day/Month/Year + default K, plus yellow input formatting."""
+    led.cell(r, 3, f'=IF(A{r}="","",TEXT(A{r},"dddd"))')
+    led.cell(r, 4, f'=IF(A{r}="","",TEXT(A{r},"MMMM"))')
+    led.cell(r, 5, f'=IF(A{r}="","",YEAR(A{r}))')
+    led.cell(r, 11, _ledger_include_in_budget_formula(r))
+    for c in (1, 2, 6, 7, 8, 9, 10, 11, 12, 13):
+        led.cell(r, c).fill = yellow_fill
+        led.cell(r, c).border = thin
+    led.cell(r, 7).number_format = inr
+    led.cell(r, 1).number_format = "dd/mm/yyyy"
+    led.cell(r, 2).number_format = "HH:mm"
+
+
+def _cfg_bool_text(flag: bool) -> str:
+    return "TRUE" if flag else "FALSE"
+
+
+def _style_config_account_row(cfg, r: int) -> None:
+    for c in range(1, 9):
+        cfg.cell(r, c).fill = yellow_fill
+        cfg.cell(r, c).border = thin
+    cfg.cell(r, 3).number_format = inr
+    cfg.cell(r, 4).number_format = inr
+
+
+def _write_config_account_row(
+    cfg,
+    r: int,
+    *,
+    name: str | None = None,
+    typ: str | None = None,
+    opening=None,
+    limit=None,
+    nw: bool | None = None,
+    liquid: bool | None = None,
+    group: str | None = None,
+    notes: str | None = None,
+) -> None:
+    _style_config_account_row(cfg, r)
+    if name is not None:
+        cfg.cell(r, 1, name)
+    if typ is not None:
+        cfg.cell(r, 2, typ)
+    if opening is not None:
+        money_cell(cfg.cell(r, 3), value=opening, editable=True)
+    if limit is not None:
+        money_cell(cfg.cell(r, 4), value=limit, editable=True)
+    if nw is not None:
+        cfg.cell(r, 5, _cfg_bool_text(nw))
+    if liquid is not None:
+        cfg.cell(r, 6, _cfg_bool_text(liquid))
+    if group is not None:
+        cfg.cell(r, 7, group)
+    if notes is not None:
+        cfg.cell(r, 8, notes)
+
+
+def _rec_lookup_formula(rec_r: int, cfg_col_letter: str) -> str:
+    return (
+        f'=IF(A{rec_r}="","",IFERROR(INDEX(Configuration!${cfg_col_letter}${CFG_ACC_START}:'
+        f"${cfg_col_letter}${CFG_ACC_LOOKUP_LAST},"
+        f"MATCH(A{rec_r},Configuration!$A${CFG_ACC_START}:$A${CFG_ACC_LOOKUP_LAST},0)),\"\"))"
+    )
+
+
+def _apply_rec_class_lookups(rec, rec_r: int) -> None:
+    rec.cell(rec_r, 8, _rec_lookup_formula(rec_r, "E")).fill = calc_fill
+    rec.cell(rec_r, 8).border = thin
+    rec.cell(rec_r, 9, _rec_lookup_formula(rec_r, "F")).fill = calc_fill
+    rec.cell(rec_r, 9).border = thin
+    rec.cell(rec_r, 10, _rec_lookup_formula(rec_r, "G")).fill = calc_fill
+    rec.cell(rec_r, 10).border = thin
+
+
+def _write_reconciliation_account_row(rec, rec_r: int, cfg_r: int, *, overwrite_actual: bool = False) -> None:
+    rec.cell(rec_r, 1, f'=IF(Configuration!A{cfg_r}="","",Configuration!A{cfg_r})').border = thin
+    rec.cell(rec_r, 2, f'=IF(Configuration!B{cfg_r}="","",Configuration!B{cfg_r})').border = thin
+    calc = (
+        f'=IF(A{rec_r}="","",IF(B{rec_r}="Liability",'
+        f"Configuration!C{cfg_r}+SUMIF(Ledger!$H:$H,A{rec_r},Ledger!$G:$G)-SUMIF(Ledger!$I:$I,A{rec_r},Ledger!$G:$G),"
+        f"Configuration!C{cfg_r}+SUMIF(Ledger!$I:$I,A{rec_r},Ledger!$G:$G)-SUMIF(Ledger!$H:$H,A{rec_r},Ledger!$G:$G)))"
+    )
+    money_cell(rec.cell(rec_r, 3), formula=calc)
+    if overwrite_actual or rec.cell(rec_r, 4).value is None:
+        money_cell(rec.cell(rec_r, 4), value=None, editable=True)
+    else:
+        rec.cell(rec_r, 4).number_format = inr
+        rec.cell(rec_r, 4).fill = yellow_fill
+        rec.cell(rec_r, 4).border = thin
+    money_cell(rec.cell(rec_r, 5), formula=f'=IF(D{rec_r}="","",D{rec_r}-C{rec_r})')
+    rec.cell(rec_r, 6).fill = yellow_fill
+    rec.cell(rec_r, 6).border = thin
+    rec.cell(rec_r, 6).number_format = "dd/mm/yyyy"
+    rec.cell(rec_r, 7).fill = yellow_fill
+    rec.cell(rec_r, 7).border = thin
+    _apply_rec_class_lookups(rec, rec_r)
+
+
+def _extend_ledger_validation_refs(led, last_row: int) -> list[str]:
+    """Widen existing Ledger list validations so new prefill rows keep dropdowns."""
+    from openpyxl.utils import range_boundaries
+
+    changed: list[str] = []
+    for dv in led.data_validations.dataValidation:
+        refs = str(dv.sqref or "").split()
+        if not refs:
+            continue
+        new_refs: list[str] = []
+        bumped = False
+        for ref in refs:
+            try:
+                min_col, min_row, max_col, max_row = range_boundaries(ref)
+            except ValueError:
+                new_refs.append(ref)
+                continue
+            if max_row < last_row:
+                ref = (
+                    f"{get_column_letter(min_col)}{min_row}:"
+                    f"{get_column_letter(max_col)}{last_row}"
+                )
+                bumped = True
+            new_refs.append(ref)
+        if bumped:
+            dv.sqref = " ".join(new_refs)
+            changed.extend(new_refs)
+    return changed
+
+
+def _monthly_budget_derived_formulas(r: int) -> dict[int, str]:
+    """Income / spent / remaining formulas for one month-by-month grid row."""
+    L = "Ledger"
+    return {
+        3: (
+            f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$F:$F,"Income")'
+        ),
+        4: (
+            f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$F:$F,"Expense",{L}!$K:$K,TRUE())'
+            f'-SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$F:$F,"Refund",{L}!$K:$K,TRUE())'
+        ),
+        5: f"=B{r}-D{r}",
+        6: (
+            f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$F:$F,"Expense",{L}!$K:$K,FALSE())'
+        ),
+        7: (
+            f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$F:$F,"Investment")'
+        ),
+        8: (
+            f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$J:$J,"EMIs")'
+        ),
+        9: (
+            f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$J:$J,"Rent")'
+        ),
+        10: (
+            f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),'
+            f'{L}!$F:$F,"Credit Card Payment")'
+        ),
+        11: f"=C{r}-D{r}-F{r}-G{r}",
+        12: f'=TEXT(A{r},"MMMM YYYY")',
+    }
+
+
+def _apply_monthly_budget_derived_row(mb, r: int) -> None:
+    for c, formula in _monthly_budget_derived_formulas(r).items():
+        if c == 12:
+            cell = mb.cell(r, c, formula)
+            cell.border = thin
+        else:
+            money_cell(mb.cell(r, c), formula=formula)
+
+
+def _write_monthly_budget_month_row(mb, r: int, month_start: ddate, budget) -> None:
+    mb.cell(r, 1, month_start).number_format = "mmm yyyy"
+    mb.cell(r, 1).border = thin
+    money_cell(mb.cell(r, 2), value=budget, editable=True)
+    _apply_monthly_budget_derived_row(mb, r)
+
+
+def _mb_last_date_row(mb) -> int | None:
+    last = None
+    for r in range(MB_FIRST_DATA_ROW, MB_LOOKUP_LAST_ROW + 1):
+        if _month_start_value(mb.cell(r, 1).value) is None:
+            break
+        last = r
+    return last
+
+
+def _ensure_monthly_budget_table(mb, last_row: int) -> None:
+    ref = f"A{MB_HEADER_ROW}:L{last_row}"
+    if MB_TABLE_NAME in mb.tables:
+        mb.tables[MB_TABLE_NAME].ref = ref
+        return
+    tab = Table(displayName=MB_TABLE_NAME, ref=ref)
+    tab.tableStyleInfo = TableStyleInfo(
+        name="TableStyleMedium2",
+        showFirstColumn=False,
+        showLastColumn=False,
+        showRowStripes=False,
+        showColumnStripes=False,
+    )
+    mb.add_table(tab)
+
+
+def _widen_monthly_budget_lookups(wb) -> list[str]:
+    """Point THIS MONTH / next-month INDEX-MATCH at the long grid range."""
+    replacements = (
+        ("$B$20:$B$61", f"$B$20:$B${MB_LOOKUP_LAST_ROW}"),
+        ("$A$20:$A$61", f"$A$20:$A${MB_LOOKUP_LAST_ROW}"),
+        ("$B$20:$B$67", f"$B$20:$B${MB_LOOKUP_LAST_ROW}"),
+        ("$A$20:$A$67", f"$A$20:$A${MB_LOOKUP_LAST_ROW}"),
+    )
+    changed: list[str] = []
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for cell in row:
+                v = cell.value
+                if not isinstance(v, str):
+                    continue
+                nv = v
+                for old, new in replacements:
+                    nv = nv.replace(old, new)
+                if nv != v:
+                    cell.value = nv
+                    changed.append(f"{ws.title}!{cell.coordinate}")
+    return changed
 
 # Planned Expenses summary anchors (stable cross-sheet refs for dashboards / API docs)
 # Sheet layout: summary B5:B10, recurring rows 15–64, one-time rows 68–97
@@ -316,6 +710,12 @@ PE_KIND_CHOICES = (PE_KIND_LOAN, PE_KIND_LIFESTYLE, PE_KIND_INVESTMENT)
 # NEXT 6 MONTHS cash-due table on Planned Expenses (stable dashboard refs)
 _PE_FORECAST_ORIGIN = "L4"
 _PE_FORECAST_MONTH_ROW0 = 6  # L6:P11 = six months; P6 = this month total
+PE_REC_START = 15
+PE_REC_END = 64
+# Helper columns sit to the right of the L4:P13 forecast so dashboard refs stay.
+PE_HELP_ACTIVE_COL = 17  # Q Active?
+PE_HELP_KIND_COL = 18  # R Effective Kind
+PE_HELP_DUE_COL0 = 19  # S..X cash due for L6..L11
 
 
 def _infer_pe_kind(category: str | None) -> str:
@@ -343,56 +743,119 @@ def _pe_kind_column(ws) -> int:
     return (notes_at + 1) if notes_at else 10
 
 
-def _pe_kind_match_expr(kind_col_letter: str, kind: str) -> str:
-    k = f"${kind_col_letter}$15:${kind_col_letter}$64"
-    b = "$B$15:$B$64"
-    if kind == PE_KIND_LOAN:
-        return f'(({k}="{PE_KIND_LOAN}")+(({k}="")*({b}="EMIs")))'
-    if kind == PE_KIND_INVESTMENT:
-        return f'(({k}="{PE_KIND_INVESTMENT}")+(({k}="")*({b}="Investment")))'
-    return (
-        f'(({k}="{PE_KIND_LIFESTYLE}")'
-        f'+(({k}="")*({b}<>"EMIs")*({b}<>"Investment")))'
-    )
-
-
-def _pe_cash_due_formula(kind_col_letter: str, month_cell: str, kind: str) -> str:
-    """Cash due in month_cell (1st of month) for one Kind. Respects Active + Start/End."""
-    km = _pe_kind_match_expr(kind_col_letter, kind)
+def _pe_cash_due_row_formula(r: int, month_cell: str, active_letter: str) -> str:
+    """Per-row cash due in month_cell. Nested IF so MONTH() never sees a blank Start."""
+    a = active_letter
     m = month_cell
-    monthly = (
-        f"SUMPRODUCT("
-        f"--($A$15:$A$64<>\"\"),"
-        f"--(($G$15:$G$64=TRUE)+($G$15:$G$64=\"TRUE\")),"
-        f"--({km}),"
-        f"--($C$15:$C$64=\"Monthly\"),"
-        f"--(($E$15:$E$64=\"\")+(($E$15:$E$64<>\"\")*($E$15:$E$64<=EOMONTH({m},0)))),"
-        f"--(($F$15:$F$64=\"\")+(($F$15:$F$64<>\"\")*($F$15:$F$64>={m}))),"
-        f"$D$15:$D$64)"
+    return (
+        f'=IF(A{r}="","",'
+        f'IF(OR({a}{r}=TRUE(),{a}{r}="TRUE"),'
+        f'IF(C{r}="Monthly",'
+        f'IF(IF(E{r}="",TRUE,E{r}<=EOMONTH({m},0)),'
+        f'IF(IF(F{r}="",TRUE,F{r}>={m}),D{r},0),0),'
+        f'IF(C{r}="Yearly",'
+        f'IF(E{r}="",0,'
+        f'IF(MONTH(E{r})<>MONTH({m}),0,'
+        f'IF(DATE(YEAR(E{r}),MONTH(E{r}),1)>{m},0,'
+        f'IF(IF(F{r}="",TRUE,F{r}>={m}),D{r},0)))),'
+        f"0)),0))"
     )
-    yearly = (
-        f"SUMPRODUCT("
-        f"--($A$15:$A$64<>\"\"),"
-        f"--(($G$15:$G$64=TRUE)+($G$15:$G$64=\"TRUE\")),"
-        f"--({km}),"
-        f"--($C$15:$C$64=\"Yearly\"),"
-        f"--($E$15:$E$64<>\"\"),"
-        f"--(MONTH($E$15:$E$64)=MONTH({m})),"
-        f"--(DATE(YEAR($E$15:$E$64),MONTH($E$15:$E$64),1)<={m}),"
-        f"--(($F$15:$F$64=\"\")+(($F$15:$F$64<>\"\")*($F$15:$F$64>={m}))),"
-        f"$D$15:$D$64)"
+
+
+def _pe_effective_kind_formula(r: int, kind_letter: str) -> str:
+    k = f"{kind_letter}{r}"
+    return (
+        f'=IF(A{r}="","",'
+        f'IF({k}<>"",{k},'
+        f'IF(B{r}="EMIs","{PE_KIND_LOAN}",'
+        f'IF(B{r}="Investment","{PE_KIND_INVESTMENT}","{PE_KIND_LIFESTYLE}"))))'
     )
-    return f"={monthly}+{yearly}"
+
+
+def _pe_active_formula(r: int) -> str:
+    return (
+        f'=IF(A{r}="","",'
+        f'IF(OR(G{r}=TRUE(),G{r}="TRUE"),TRUE(),FALSE()))'
+    )
+
+
+def _unmerge_if_present(ws, ref: str) -> None:
+    for mr in list(ws.merged_cells.ranges):
+        if str(mr) == ref:
+            ws.unmerge_cells(str(mr))
+            break
+
+
+def _write_pe_helper_columns(ws, kind_col: int) -> None:
+    """
+    Per-row helpers on Q:X (rows 14–64). Used by the 6-month SUMIFS table.
+    Does not touch Expense/Category/Amount/Start/End/Active/Kind values.
+    """
+    kind_letter = get_column_letter(kind_col)
+    active_letter = get_column_letter(PE_HELP_ACTIVE_COL)
+    eff_letter = get_column_letter(PE_HELP_KIND_COL)
+    due0_letter = get_column_letter(PE_HELP_DUE_COL0)
+    due5_letter = get_column_letter(PE_HELP_DUE_COL0 + 5)
+
+    _unmerge_if_present(ws, f"{active_letter}13:{due5_letter}13")
+    _section(
+        ws,
+        f"{active_letter}13",
+        "HELPERS — per-row formulas for NEXT 6 MONTHS (do not edit)",
+        f"{due5_letter}13",
+    )
+
+    ws.cell(14, PE_HELP_ACTIVE_COL, "Active?")
+    ws.cell(14, PE_HELP_KIND_COL, "Effective Kind")
+    for i in range(6):
+        cell = ws.cell(14, PE_HELP_DUE_COL0 + i)
+        cell.value = f'=TEXT(L{6 + i},"MMM-YYYY")'
+    style_header_row(ws, 14, PE_HELP_ACTIVE_COL, PE_HELP_DUE_COL0 + 5)
+
+    for r in range(PE_REC_START, PE_REC_END + 1):
+        active_cell = ws.cell(r, PE_HELP_ACTIVE_COL)
+        active_cell.value = _pe_active_formula(r)
+        active_cell.fill = calc_fill
+        active_cell.border = thin
+        active_cell.alignment = Alignment(horizontal="center")
+        active_cell.number_format = "General"
+
+        kind_cell = ws.cell(r, PE_HELP_KIND_COL)
+        kind_cell.value = _pe_effective_kind_formula(r, kind_letter)
+        kind_cell.fill = calc_fill
+        kind_cell.border = thin
+
+        for i in range(6):
+            month_cell = f"$L${6 + i}"
+            money_cell(
+                ws.cell(r, PE_HELP_DUE_COL0 + i),
+                formula=_pe_cash_due_row_formula(r, month_cell, active_letter),
+                fill=calc_fill,
+            )
+
+    ws.column_dimensions[active_letter].width = 10
+    ws.column_dimensions[eff_letter].width = 14
+    for i in range(6):
+        ws.column_dimensions[get_column_letter(PE_HELP_DUE_COL0 + i)].width = 12
+
+    note_row = PE_REC_END + 1
+    note_cell = ws.cell(note_row, PE_HELP_ACTIVE_COL)
+    _unmerge_if_present(ws, f"{active_letter}{note_row}:{due5_letter}{note_row}")
+    note_cell.value = (
+        "Active? normalizes the TRUE/FALSE dropdown. Effective Kind uses Kind, "
+        "or infers EMIs → Loan / EMI / Investment → Investment / else Lifestyle. "
+        "Cash-due columns are 0 when inactive or outside Start/End. "
+        f"NEXT 6 MONTHS M6:O11 = SUMIFS on {eff_letter} + {due0_letter}:{due5_letter}."
+    )
+    note_cell.font = muted_font
+    ws.merge_cells(f"{active_letter}{note_row}:{due5_letter}{note_row}")
 
 
 def _write_planned_forecast_table(ws, kind_col: int) -> None:
-    """Write NEXT 6 MONTHS cash-due table at L4:P13. Does not touch recurring rows."""
-    kind_letter = get_column_letter(kind_col)
+    """Write helper columns + NEXT 6 MONTHS SUMIFS table at L4:P13. Recurring data untouched."""
+    _write_pe_helper_columns(ws, kind_col)
     for ref in ("L4:P4", "L13:P13"):
-        for mr in list(ws.merged_cells.ranges):
-            if str(mr) == ref:
-                ws.unmerge_cells(str(mr))
-                break
+        _unmerge_if_present(ws, ref)
     _section(ws, "L4", "NEXT 6 MONTHS — cash due (Active + Start/End)", "P4")
     headers = ["Month", PE_KIND_LOAN, PE_KIND_LIFESTYLE, PE_KIND_INVESTMENT, "Total"]
     for c, h in enumerate(headers, 12):
@@ -412,13 +875,17 @@ def _write_planned_forecast_table(ws, kind_col: int) -> None:
         cell.fill = calc_fill
 
     kinds = (PE_KIND_LOAN, PE_KIND_LIFESTYLE, PE_KIND_INVESTMENT)
+    eff = get_column_letter(PE_HELP_KIND_COL)
     for i in range(6):
         r = 6 + i
-        month_cell = f"L{r}"
+        due = get_column_letter(PE_HELP_DUE_COL0 + i)
         for k_i, kind in enumerate(kinds):
+            header_cell = f"{get_column_letter(13 + k_i)}$5"
             money_cell(
                 ws.cell(r, 13 + k_i),
-                formula=_pe_cash_due_formula(kind_letter, month_cell, kind),
+                formula=(
+                    f"=SUMIFS(${due}$15:${due}$64,${eff}$15:${eff}$64,{header_cell})"
+                ),
                 fill=alert_fill if kind == PE_KIND_LOAN else soft_fill,
             )
         money_cell(ws.cell(r, 16), formula=f"=M{r}+N{r}+O{r}", fill=good_fill)
@@ -434,7 +901,8 @@ def _write_planned_forecast_table(ws, kind_col: int) -> None:
     ws["L13"] = (
         "Cash due that month (not yearly÷12). Loan / EMI = must-pay. "
         "Lifestyle = everyday recurring you can cut. Investment is reserved. "
-        "Blank Kind infers EMIs → Loan / EMI, else Lifestyle."
+        "Blank Kind infers EMIs → Loan / EMI, else Lifestyle. "
+        "M6:O11 are SUMIFS on helper columns Q:X — audit a month there."
     )
     ws["L13"].font = muted_font
     ws.merge_cells("L13:P13")
@@ -477,7 +945,7 @@ def _ensure_kind_column(ws) -> int:
 
 def populate_planned_expenses(ws, *, seed: bool = True) -> None:
     """Planning-only sheet: recurring + one-time expected costs. Never touches Ledger."""
-    _clear_sheet(ws, max_row=120, max_col=12)
+    _clear_sheet(ws, max_row=120, max_col=24)
     ws._charts = []
 
     ws["A1"] = "PLANNED EXPENSES"
@@ -542,7 +1010,8 @@ def populate_planned_expenses(ws, *, seed: bool = True) -> None:
     ws["A11"] = (
         "Monthly Fixed Cost = this month's recurring cash due (P6): Active rows whose "
         "Start/End cover this month. Yearly amounts hit their due month, not yearly÷12. "
-        "Kind splits Loan / EMI vs Lifestyle vs Investment. One-time windows use Effective Date."
+        "Kind splits Loan / EMI vs Lifestyle vs Investment. Q:X helpers feed the "
+        "6-month table via SUMIFS. One-time windows use Effective Date."
     )
     ws["A11"].font = muted_font
     ws.merge_cells("A11:K11")
@@ -684,6 +1153,7 @@ def populate_planned_expenses(ws, *, seed: bool = True) -> None:
     ws["A99"] = (
         "Tips: Kind = Loan / EMI (must-pay) vs Lifestyle (negotiable) vs Investment. "
         "Set Active=FALSE to drop a row from cash-due. End date stops EMIs after the last month. "
+        "Do not edit helper columns Q:X. "
         "Mark one-time Status=Completed/Cancelled when done. This sheet never posts to the Ledger."
     )
     ws["A99"].font = muted_font
@@ -700,6 +1170,14 @@ def populate_planned_expenses(ws, *, seed: bool = True) -> None:
         "H": 18,
         "I": 14,
         "J": 14,
+        "Q": 10,
+        "R": 14,
+        "S": 12,
+        "T": 12,
+        "U": 12,
+        "V": 12,
+        "W": 12,
+        "X": 12,
     }
     for col, w in widths.items():
         ws.column_dimensions[col].width = w
@@ -913,93 +1391,104 @@ def populate_simple_dashboard(dash) -> None:
     _section(dash, "A11", "UPCOMING CREDIT CARD BILLS", "D11")
 
     _label(dash["A12"], "HDFC Credit Card")
-    money_cell(dash["B12"], formula=_FORM_HDFC_CC)
+    money_cell(dash["B12"], formula=_form_balance_for_label("A12"))
     dash["C12"] = "outstanding due"
     dash["C12"].font = muted_font
 
     _label(dash["A13"], "ICICI Credit Card")
-    money_cell(dash["B13"], formula=_FORM_ICICI_CC)
+    money_cell(dash["B13"], formula=_form_balance_for_label("A13"))
     dash["C13"] = "outstanding due"
     dash["C13"].font = muted_font
 
     _label(dash["A14"], "Total CC due", bold=True)
-    money_cell(dash["B14"], formula="=B12+B13", fill=alert_fill)
+    money_cell(dash["B14"], formula=_FORM_CC_DUE, fill=alert_fill)
     dash["B14"].font = Font(bold=True, size=12)
+    dash["C14"] = "every Configuration account with Group=Credit Card"
+    dash["C14"].font = muted_font
 
     dash["A15"] = "Pay from savings before treating anything as free to allocate."
     dash["A15"].font = muted_font
     dash.merge_cells("A15:D15")
 
-    # ── FREE TO ALLOCATE (savings − budget still reserved) ─────────────
-    _section(dash, "A17", "FREE TO ALLOCATE — emergency · invest · goals", "D17")
+    # ── FREE TO ALLOCATE (liquid − budget reserved − committed) ────────
+    _section(dash, "A17", "FREE TO ALLOCATE — after budget, bills, near-term plans", "D17")
 
     _label(dash["A18"], "Total liquid savings")
-    # HDFC + ICICI + Cash + Wallet (Reconciliation rows match ACCOUNTS order)
     money_cell(dash["B18"], formula=_FORM_LIQUID)
-    dash["C18"] = "savings + cash + wallets"
+    dash["C18"] = "Configuration Include in Liquid Cash"
     dash["C18"].font = muted_font
 
     _label(dash["A19"], "Budget still reserved")
     money_cell(dash["B19"], formula="=MAX(0,B6)")
-    dash["C19"] = "money still needed for this month's budget"
+    dash["C19"] = "discretionary envelope still unused this month"
     dash["C19"].font = muted_font
 
-    _label(dash["A20"], "Free to allocate", bold=True)
-    money_cell(dash["B20"], formula="=B18-B19", fill=good_fill)
-    dash["B20"].font = Font(name="Calibri", size=16, bold=True, color="1F4E79")
-    dash["C20"] = "total savings − budget remaining"
+    _label(dash["A20"], "Committed cash", bold=True)
+    money_cell(dash["B20"], formula=_form_committed_cash("B14"), fill=alert_fill)
+    dash["B20"].font = Font(bold=True, size=12)
+    dash["C20"] = "CC due + remaining EMI this month + one-time (30d)"
     dash["C20"].font = muted_font
 
-    dash["A21"] = (
-        "This is leftover cash after earmarking what the month still needs. "
-        "Use it for Emergency fund, Investments, or Goals (details coming next). "
-        "It does not subtract CC dues — pay those first if due soon."
+    _label(dash["A21"], "Free to allocate", bold=True)
+    money_cell(
+        dash["B21"],
+        formula=_form_free_less_committed("B18", "B19", "B20"),
+        fill=good_fill,
     )
-    dash["A21"].font = muted_font
-    dash.merge_cells("A21:D21")
-    dash.row_dimensions[21].height = 36
+    dash["B21"].font = Font(name="Calibri", size=16, bold=True, color="1F4E79")
+    dash["C21"] = "liquid − budget reserved − committed"
+    dash["C21"].font = muted_font
+
+    dash["A22"] = (
+        "Budget remaining is the unused discretionary cap. Committed cash is CC due, "
+        "remaining Loan/EMI this month (not in that cap), and Planned one-time in the next 30 days. "
+        "Rent/family already inside Include in Budget are not added again."
+    )
+    dash["A22"].font = muted_font
+    dash.merge_cells("A22:D22")
+    dash.row_dimensions[22].height = 36
 
     # ── NEXT MONTH FREE-TO-ALLOCATE (estimate) ─────────────────────────
-    _section(dash, "A23", "NEXT MONTH FREE-TO-ALLOCATE — estimate", "D23")
+    _section(dash, "A24", "NEXT MONTH FREE-TO-ALLOCATE — estimate", "D24")
 
-    _label(dash["A24"], "Free to allocate (today)")
-    money_cell(dash["B24"], formula="=B20")
-    dash["C24"] = "starting point"
-    dash["C24"].font = muted_font
-
-    _label(dash["A25"], "− Pay all CC dues")
-    money_cell(dash["B25"], formula="=B14")
-    dash["C25"] = "after clearing upcoming bills"
+    _label(dash["A25"], "Free to allocate (today)")
+    money_cell(dash["B25"], formula="=B21")
+    dash["C25"] = "starting point (already nets CC + this month's remaining EMI + 30d)"
     dash["C25"].font = muted_font
 
-    _label(dash["A26"], "+ Monthly salary")
-    money_cell(dash["B26"], formula="=Configuration!B7")
-    dash["C26"] = "from Configuration (edit yellow cell)"
+    _label(dash["A26"], "− Next month Loan / EMI")
+    money_cell(dash["B26"], formula=_FORM_NEXT_MONTH_EMI)
+    dash["C26"] = "outside the monthly budget cap"
     dash["C26"].font = muted_font
 
-    _label(dash["A27"], "− Next month budget")
-    money_cell(dash["B27"], formula=_FORM_NEXT_MONTH_BUDGET)
-    dash["C27"] = "reserved for next month's spend cap"
+    _label(dash["A27"], "+ Monthly salary")
+    money_cell(dash["B27"], formula="=Configuration!B7")
+    dash["C27"] = "from Configuration (edit yellow cell)"
     dash["C27"].font = muted_font
 
-    _label(dash["A28"], "Est. free next month", bold=True)
-    money_cell(dash["B28"], formula="=B24-B25+B26-B27", fill=soft_fill)
-    dash["B28"].font = Font(name="Calibri", size=16, bold=True, color="1F4E79")
-    dash["C28"] = "potential surplus after CC + budget + salary"
+    _label(dash["A28"], "− Next month budget")
+    money_cell(dash["B28"], formula=_FORM_NEXT_MONTH_BUDGET)
+    dash["C28"] = "reserved for next month's spend cap"
     dash["C28"].font = muted_font
 
-    dash["A29"] = (
-        "Estimate = free-to-allocate today − CC dues + monthly salary − next month's budget. "
-        "Assumes you finish this month's remaining budget and pay full CC dues. "
+    _label(dash["A29"], "Est. free next month", bold=True)
+    money_cell(dash["B29"], formula="=B25-B26+B27-B28", fill=soft_fill)
+    dash["B29"].font = Font(name="Calibri", size=16, bold=True, color="1F4E79")
+    dash["C29"] = "after next EMI + salary + next budget"
+    dash["C29"].font = muted_font
+
+    dash["A30"] = (
+        "Estimate = free today − next month's EMI + monthly salary − next month's budget. "
+        "Today's free already reserves CC due, this month's remaining EMI, and 30-day one-time plans. "
         "If this month's salary is already in liquid savings, it is already counted — "
         "use Configuration monthly salary as take-home you expect to receive for the next cycle."
     )
-    dash["A29"].font = muted_font
-    dash.merge_cells("A29:D29")
-    dash.row_dimensions[29].height = 48
+    dash["A30"].font = muted_font
+    dash.merge_cells("A30:D30")
+    dash.row_dimensions[30].height = 48
 
     # ── PLANNED EXPENSES (planning only) ───────────────────────────────
-    pe_end = _add_planned_summary_block(dash, 31, cols="D")
+    pe_end = _add_planned_summary_block(dash, 32, cols="D")
     _add_commitment_forecast_block(dash, pe_end + 2, cols="E")
 
     for col_letter, w in zip(list("ABCD"), [28, 16, 40, 14]):
@@ -1121,9 +1610,9 @@ def populate_detailed_dashboard(dash, n_accounts: int | None = None) -> None:
     dash["D12"] = "HDFC Credit Card"
     dash["D12"].font = Font(bold=True)
     _label(dash["D13"], "Outstanding")
-    money_cell(dash["E13"], formula=_FORM_HDFC_CC)
+    money_cell(dash["E13"], formula=_form_balance_for_label("D12"))
     _label(dash["D14"], "Limit / Available")
-    money_cell(dash["E14"], formula="=Configuration!D15")
+    money_cell(dash["E14"], formula=_form_limit_for_label("D12"))
     money_cell(dash["F14"], formula="=E14-E13")
     _label(dash["D15"], "Utilization")
     dash["E15"] = "=IF(E14=0,0,E13/E14)"
@@ -1134,9 +1623,9 @@ def populate_detailed_dashboard(dash, n_accounts: int | None = None) -> None:
     dash["D16"] = "ICICI Credit Card"
     dash["D16"].font = Font(bold=True)
     _label(dash["D17"], "Outstanding")
-    money_cell(dash["E17"], formula=_FORM_ICICI_CC)
+    money_cell(dash["E17"], formula=_form_balance_for_label("D16"))
     _label(dash["D18"], "Limit / Available")
-    money_cell(dash["E18"], formula="=Configuration!D16")
+    money_cell(dash["E18"], formula=_form_limit_for_label("D16"))
     money_cell(dash["F18"], formula="=E18-E17")
     _label(dash["D19"], "Utilization")
     dash["E19"] = "=IF(E18=0,0,E17/E18)"
@@ -1145,25 +1634,29 @@ def populate_detailed_dashboard(dash, n_accounts: int | None = None) -> None:
     dash["E19"].border = thin
 
     _label(dash["D20"], "Total CC due", bold=True)
-    money_cell(dash["E20"], formula="=E13+E17", fill=alert_fill)
+    money_cell(dash["E20"], formula=_FORM_CC_DUE, fill=alert_fill)
     dash["E20"].font = Font(bold=True, size=12)
 
     # ── FREE TO ALLOCATE ───────────────────────────────────────────────
-    _section(dash, "A19", "FREE TO ALLOCATE — emergency · invest · goals", "B19")
+    _section(dash, "A19", "FREE TO ALLOCATE — after budget, bills, near-term plans", "B19")
     _label(dash["A20"], "Total liquid savings")
     money_cell(dash["B20"], formula=_FORM_LIQUID)
     _label(dash["A21"], "Budget still reserved")
     money_cell(dash["B21"], formula="=MAX(0,D6)")
     _label(dash["A22"], "Free to allocate", bold=True)
-    money_cell(dash["B22"], formula="=B20-B21", fill=good_fill)
+    money_cell(
+        dash["B22"],
+        formula=_form_free_detailed(liquid="B20", budget="B21", cc="E20"),
+        fill=good_fill,
+    )
     dash["B22"].font = Font(name="Calibri", size=14, bold=True, color="1F4E79")
 
     # ── NEXT MONTH FREE-TO-ALLOCATE (estimate) ─────────────────────────
     _section(dash, "D22", "NEXT MONTH FREE-TO-ALLOCATE — estimate", "F22")
     _label(dash["D23"], "Free to allocate (today)")
     money_cell(dash["E23"], formula="=B22")
-    _label(dash["D24"], "− Pay all CC dues")
-    money_cell(dash["E24"], formula="=E20")
+    _label(dash["D24"], "− Next month Loan / EMI")
+    money_cell(dash["E24"], formula=_FORM_NEXT_MONTH_EMI)
     _label(dash["D25"], "+ Monthly salary")
     money_cell(dash["E25"], formula="=Configuration!B7")
     _label(dash["D26"], "− Next month budget")
@@ -1173,9 +1666,10 @@ def populate_detailed_dashboard(dash, n_accounts: int | None = None) -> None:
     dash["E27"].font = Font(name="Calibri", size=14, bold=True, color="1F4E79")
 
     dash["A23"] = (
-        "Free to allocate = liquid − budget remaining (does not subtract CC). "
-        "Next-month estimate = free today − CC dues + salary − next budget. "
-        "Set Monthly Salary on Configuration."
+        "Free to allocate = liquid − budget remaining − CC due − remaining EMI "
+        "this month − Planned one-time (30d). Rent/family inside the budget cap "
+        "are not subtracted twice. Next-month estimate = free today − next EMI "
+        "+ salary − next budget. Set Monthly Salary on Configuration."
     )
     dash["A23"].font = muted_font
     dash.merge_cells("A23:B27")
@@ -1196,24 +1690,17 @@ def populate_detailed_dashboard(dash, n_accounts: int | None = None) -> None:
     bal_end = bal_start + n_accounts - 1
 
     _section(dash, f"D{bal_section}", "NET WORTH", f"F{bal_section}")
-    # Reconciliation rows: 5.. match ACCOUNTS order in template
     _label(dash.cell(bal_section + 1, 4), "Savings & Cash")
     money_cell(dash.cell(bal_section + 1, 5), formula=_FORM_LIQUID)
     _label(dash.cell(bal_section + 2, 4), "FD")
-    money_cell(dash.cell(bal_section + 2, 5), formula="=Reconciliation!C11")
-    _label(dash.cell(bal_section + 3, 4), "Investments (MF)")
-    money_cell(dash.cell(bal_section + 3, 5), formula="=Reconciliation!C12")
+    money_cell(dash.cell(bal_section + 2, 5), formula=_FORM_FD)
+    _label(dash.cell(bal_section + 3, 4), "Investments")
+    money_cell(dash.cell(bal_section + 3, 5), formula=_FORM_INVESTMENTS)
     _label(dash.cell(bal_section + 4, 4), "Total Assets")
-    money_cell(
-        dash.cell(bal_section + 4, 5),
-        formula=f"=E{bal_section + 1}+E{bal_section + 2}+E{bal_section + 3}",
-    )
+    money_cell(dash.cell(bal_section + 4, 5), formula=_FORM_NW_ASSETS)
     dash.cell(bal_section + 4, 5).font = Font(bold=True)
-    _label(dash.cell(bal_section + 5, 4), "Credit Card Due")
-    money_cell(
-        dash.cell(bal_section + 5, 5),
-        formula="=Reconciliation!C9+Reconciliation!C10",
-    )
+    _label(dash.cell(bal_section + 5, 4), "Liabilities")
+    money_cell(dash.cell(bal_section + 5, 5), formula=_FORM_NW_LIABILITIES)
     _label(dash.cell(bal_section + 6, 4), "NET WORTH", bold=True)
     money_cell(
         dash.cell(bal_section + 6, 5),
@@ -1402,7 +1889,7 @@ def build() -> Path:
         "Do not store current balances here — only opening balances and credit limits."
     )
     cfg["A2"].font = muted_font
-    cfg.merge_cells("A2:G2")
+    cfg.merge_cells("A2:H2")
 
     cfg["A4"] = "BUDGET DEFAULT"
     cfg["A4"].font = section_font
@@ -1422,50 +1909,60 @@ def build() -> Path:
     cfg["A8"] = "ACCOUNTS"
     cfg["A8"].font = section_font
     cfg["A8"].fill = section_fill
-    cfg.merge_cells("A8:F8")
+    cfg.merge_cells("A8:H8")
     cfg["A9"] = (
         "Every ledger entry moves money From Account → To Account. "
-        "Opening Balance is the starting point only."
+        "Opening Balance is the starting point only. "
+        "Dashboards SUMIFS Include in Liquid Cash / Include in Net Worth / Account Group."
     )
     cfg["A9"].font = muted_font
-    cfg.merge_cells("A9:F9")
+    cfg.merge_cells("A9:H9")
 
     for i, h in enumerate(
-        ["Account", "Type", "Opening Balance (₹)", "Credit Limit (₹)", "Include in Net Worth", "Notes"],
+        [
+            "Account",
+            "Type",
+            "Opening Balance (₹)",
+            "Credit Limit (₹)",
+            "Include in Net Worth",
+            "Include in Liquid Cash",
+            "Account Group",
+            "Notes",
+        ],
         1,
     ):
-        cfg.cell(10, i, h)
-    style_header_row(cfg, 10, 1, 6)
+        cfg.cell(CFG_ACC_HEADER_ROW, i, h)
+    style_header_row(cfg, CFG_ACC_HEADER_ROW, 1, 8)
 
-    ACC_START = 11
-    for i, (name, typ, opening, limit, nw, notes) in enumerate(ACCOUNTS):
+    ACC_START = CFG_ACC_START
+    for i, (name, typ, opening, limit, nw, liquid, group, notes) in enumerate(ACCOUNTS):
         r = ACC_START + i
-        cfg.cell(r, 1, name).fill = yellow_fill
-        cfg.cell(r, 1).border = thin
-        cfg.cell(r, 2, typ).fill = yellow_fill
-        cfg.cell(r, 2).border = thin
-        money_cell(cfg.cell(r, 3), value=opening, editable=True)
-        if limit is not None:
-            money_cell(cfg.cell(r, 4), value=limit, editable=True)
-        else:
-            cfg.cell(r, 4).fill = yellow_fill
-            cfg.cell(r, 4).border = thin
-            cfg.cell(r, 4).number_format = inr
-        cfg.cell(r, 5, "TRUE" if nw else "FALSE").fill = yellow_fill
-        cfg.cell(r, 5).border = thin
-        cfg.cell(r, 6, notes).fill = yellow_fill
-        cfg.cell(r, 6).border = thin
-    ACC_END = ACC_START + len(ACCOUNTS) - 1
+        _write_config_account_row(
+            cfg,
+            r,
+            name=name,
+            typ=typ,
+            opening=opening,
+            limit=limit,
+            nw=nw,
+            liquid=liquid,
+            group=group,
+            notes=notes,
+        )
+    named_end = ACC_START + len(ACCOUNTS) - 1
+    ACC_END = named_end + CFG_ACC_EXTRA_ROWS
+    for r in range(named_end + 1, ACC_END + 1):
+        _style_config_account_row(cfg, r)
 
-    cfg["H8"] = "LEDGER TYPES"
-    cfg["H8"].font = section_font
-    cfg["H8"].fill = section_fill
-    cfg["H9"] = "Type"
-    cfg["H9"].font = header_font
-    cfg["H9"].fill = header_fill
+    cfg["J8"] = "LEDGER TYPES"
+    cfg["J8"].font = section_font
+    cfg["J8"].fill = section_fill
+    cfg["J9"] = "Type"
+    cfg["J9"].font = header_font
+    cfg["J9"].fill = header_fill
     for i, t in enumerate(TYPES):
-        cfg.cell(10 + i, 8, t).fill = yellow_fill
-        cfg.cell(10 + i, 8).border = thin
+        cfg.cell(10 + i, 10, t).fill = yellow_fill
+        cfg.cell(10 + i, 10).border = thin
     TYPE_END = 10 + len(TYPES) - 1
 
     guides = [
@@ -1477,30 +1974,38 @@ def build() -> Path:
         ("Investment", "From=savings → To=FD / Mutual Fund. Budget=FALSE."),
         ("Adjustment", "Reconciliation catch-up. Keeps ledger as source of truth."),
     ]
-    cfg["I8"] = "TYPE GUIDE"
-    cfg["I8"].font = section_font
-    cfg["I9"] = "Type"
-    cfg["J9"] = "From → To pattern"
-    style_header_row(cfg, 9, 9, 10)
+    cfg["K8"] = "TYPE GUIDE"
+    cfg["K8"].font = section_font
+    cfg["L9"] = "From → To pattern"
+    cfg["K9"] = "Type"
+    style_header_row(cfg, 9, 11, 12)
     for i, (t, g) in enumerate(guides):
-        cfg.cell(10 + i, 9, t).border = thin
-        cfg.cell(10 + i, 10, g).border = thin
+        cfg.cell(10 + i, 11, t).border = thin
+        cfg.cell(10 + i, 12, g).border = thin
 
-    cfg["A24"] = "CATEGORIES"
-    cfg["A24"].font = section_font
-    cfg["A24"].fill = section_fill
-    cfg.merge_cells("A24:C24")
-    cfg["A25"] = (
+    cat_header_row = ACC_END + 3
+    cfg.cell(cat_header_row, 1, "CATEGORIES")
+    cfg.cell(cat_header_row, 1).font = section_font
+    cfg.cell(cat_header_row, 1).fill = section_fill
+    cfg.merge_cells(
+        start_row=cat_header_row, start_column=1, end_row=cat_header_row, end_column=3
+    )
+    cfg.cell(cat_header_row + 1, 1).value = (
         "Add new rows under the list (yellow). Group helps review. "
         "Typical Budget? = default for phone form / new Ledger rows — override per entry."
     )
-    cfg["A25"].font = muted_font
-    cfg.merge_cells("A25:C25")
-    cfg["A26"] = "Category"
-    cfg["B26"] = "Group"
-    cfg["C26"] = "Typical Budget?"
-    style_header_row(cfg, 26, 1, 3)
-    CAT_START = 27
+    cfg.cell(cat_header_row + 1, 1).font = muted_font
+    cfg.merge_cells(
+        start_row=cat_header_row + 1,
+        start_column=1,
+        end_row=cat_header_row + 1,
+        end_column=3,
+    )
+    cfg.cell(cat_header_row + 2, 1, "Category")
+    cfg.cell(cat_header_row + 2, 2, "Group")
+    cfg.cell(cat_header_row + 2, 3, "Typical Budget?")
+    style_header_row(cfg, cat_header_row + 2, 1, 3)
+    CAT_START = cat_header_row + 3
     for i, (cat, group, bud) in enumerate(CATEGORIES):
         r = CAT_START + i
         cfg.cell(r, 1, cat).fill = yellow_fill
@@ -1532,14 +2037,30 @@ def build() -> Path:
         "8. Asset = Opening + To − From. Liability due = Opening + From − To.",
         "9. Prefer a specific category over Other — it makes Dashboard / review much easier.",
         "10. To add a category: type it in the next blank yellow row (Group + Typical Budget?). Phone form reads Configuration.",
+        "11. To add an account: fill the next blank yellow row (Type, opening, Net Worth, Liquid Cash, Account Group). Dashboards SUMIFS those flags — do not insert a row in the middle of the list.",
     ]
     for i, rule in enumerate(rules):
         rr = rules_header + 1 + i
         cfg.cell(rr, 1, rule)
-        cfg.merge_cells(start_row=rr, start_column=1, end_row=rr, end_column=6)
+        cfg.merge_cells(start_row=rr, start_column=1, end_row=rr, end_column=8)
+
+    dv_acc_type = DataValidation(
+        type="list", formula1='"Asset,Liability,Virtual"', allow_blank=True
+    )
+    dv_acc_bool = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
+    dv_acc_group = DataValidation(
+        type="list",
+        formula1='"' + ",".join(ACCOUNT_GROUPS) + '"',
+        allow_blank=True,
+    )
+    for dv in (dv_acc_type, dv_acc_bool, dv_acc_group):
+        cfg.add_data_validation(dv)
+    dv_acc_type.add(f"B{ACC_START}:B{ACC_END}")
+    dv_acc_bool.add(f"E{ACC_START}:F{ACC_END}")
+    dv_acc_group.add(f"G{ACC_START}:G{ACC_END}")
 
     for col, w in zip(
-        list("ABCDEFHIJ"), [28, 16, 16, 18, 18, 36, 22, 22, 70]
+        list("ABCDEFGHJKL"), [28, 14, 18, 18, 20, 22, 16, 36, 22, 22, 70]
     ):
         cfg.column_dimensions[col].width = w
 
@@ -1565,7 +2086,6 @@ def build() -> Path:
     style_header_row(led, 1, 1, 13)
     led.row_dimensions[1].height = 30
     led.freeze_panes = "A2"
-    led.auto_filter.ref = "A1:M1000"
 
     samples = [
         (46240.0, 0.4409722222222222, "Expense", 35.0, "HDFC Savings", "Expense", "Eating outside", True, "Local food stall", "manual"),
@@ -1585,25 +2105,17 @@ def build() -> Path:
         led.cell(r, 8, fr).fill = yellow_fill
         led.cell(r, 9, to).fill = yellow_fill
         led.cell(r, 10, cat).fill = yellow_fill
-        led.cell(r, 11, bud).fill = yellow_fill
+        led.cell(r, 11, "=TRUE()" if bud else "=FALSE()").fill = yellow_fill
         led.cell(r, 12, notes).fill = yellow_fill
         led.cell(r, 13, src).fill = yellow_fill
         for c in range(1, 14):
             led.cell(r, c).border = thin
 
-    for r in range(4, 202):
-        led.cell(r, 3, f'=IF(A{r}="","",TEXT(A{r},"dddd"))')
-        led.cell(r, 4, f'=IF(A{r}="","",TEXT(A{r},"MMMM"))')
-        led.cell(r, 5, f'=IF(A{r}="","",YEAR(A{r}))')
-        for c in [1, 2, 6, 7, 8, 9, 10, 11, 12, 13]:
-            led.cell(r, c).fill = yellow_fill
-            led.cell(r, c).border = thin
-        led.cell(r, 7).number_format = inr
-        led.cell(r, 1).number_format = "dd/mm/yyyy"
-        led.cell(r, 2).number_format = "HH:mm"
+    for r in range(4, LEDGER_PREFILL_LAST_ROW + 1):
+        _prefill_ledger_empty_row(led, r)
 
     dv_type = DataValidation(
-        type="list", formula1=f"Configuration!$H$10:$H${TYPE_END}", allow_blank=True
+        type="list", formula1=f"Configuration!$J$10:$J${TYPE_END}", allow_blank=True
     )
     dv_acc = DataValidation(
         type="list", formula1=f"Configuration!$A${ACC_START}:$A${ACC_END}", allow_blank=True
@@ -1617,12 +2129,14 @@ def build() -> Path:
     dv_source = DataValidation(type="list", formula1='"manual,ai"', allow_blank=True)
     for dv in (dv_type, dv_acc, dv_cat, dv_bool, dv_source):
         led.add_data_validation(dv)
-    dv_type.add("F2:F1000")
-    dv_acc.add("H2:H1000")
-    dv_acc.add("I2:I1000")
-    dv_cat.add("J2:J1000")
-    dv_bool.add("K2:K1000")
-    dv_source.add("M2:M1000")
+    dv_end = LEDGER_PREFILL_LAST_ROW
+    dv_type.add(f"F2:F{dv_end}")
+    dv_acc.add(f"H2:H{dv_end}")
+    dv_acc.add(f"I2:I{dv_end}")
+    dv_cat.add(f"J2:J{dv_end}")
+    dv_bool.add(f"K2:K{dv_end}")
+    dv_source.add(f"M2:M{dv_end}")
+    led.auto_filter.ref = f"A1:M{dv_end}"
 
     for col, w in zip(
         list("ABCDEFGHIJKLM"), [12, 8, 12, 12, 8, 20, 12, 18, 18, 22, 16, 28, 10]
@@ -1650,7 +2164,7 @@ def build() -> Path:
     mb["A6"] = "Budget"
     money_cell(
         mb["B6"],
-        formula='=IFERROR(INDEX($B$20:$B$67,MATCH(DATE(YEAR(TODAY()),MONTH(TODAY()),1),$A$20:$A$67,0)),Configuration!B6)',
+        formula=_FORM_THIS_MONTH_BUDGET,
     )
     rows_snap = [
         (
@@ -1696,7 +2210,10 @@ def build() -> Path:
     mb["B16"].fill = calc_fill
     mb["B16"].border = thin
 
-    mb["A18"] = "MONTH-BY-MONTH — only Budget (col B) is editable"
+    mb["A18"] = (
+        "MONTH-BY-MONTH — only Budget (col B) is editable. "
+        "Derived columns are formulas. Table MonthlyBudget: add a row at the bottom to extend."
+    )
     mb["A18"].font = section_font
     mb["A18"].fill = section_fill
     mb.merge_cells("A18:L18")
@@ -1721,45 +2238,15 @@ def build() -> Path:
     style_header_row(mb, 19, 1, 12)
 
     start = ddate(2026, 1, 1)
-    for i in range(48):
-        r = 20 + i
-        y = start.year + (start.month - 1 + i) // 12
-        m = (start.month - 1 + i) % 12 + 1
-        mb.cell(r, 1, ddate(y, m, 1)).number_format = "mmm yyyy"
-        mb.cell(r, 1).border = thin
-        money_cell(mb.cell(r, 2), value=10000, editable=True)
-        money_cell(
-            mb.cell(r, 3),
-            formula=f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$F:$F,"Income")',
-        )
-        money_cell(
-            mb.cell(r, 4),
-            formula=f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$F:$F,"Expense",{L}!$K:$K,TRUE)'
-            f'-SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$F:$F,"Refund",{L}!$K:$K,TRUE)',
-        )
-        money_cell(mb.cell(r, 5), formula=f"=B{r}-D{r}")
-        money_cell(
-            mb.cell(r, 6),
-            formula=f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$F:$F,"Expense",{L}!$K:$K,FALSE)',
-        )
-        money_cell(
-            mb.cell(r, 7),
-            formula=f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$F:$F,"Investment")',
-        )
-        money_cell(
-            mb.cell(r, 8),
-            formula=f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$J:$J,"EMIs")',
-        )
-        money_cell(
-            mb.cell(r, 9),
-            formula=f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$J:$J,"Rent")',
-        )
-        money_cell(
-            mb.cell(r, 10),
-            formula=f'=SUMIFS({L}!$G:$G,{L}!$D:$D,TEXT(A{r},"MMMM"),{L}!$E:$E,YEAR(A{r}),{L}!$F:$F,"Credit Card Payment")',
-        )
-        money_cell(mb.cell(r, 11), formula=f"=C{r}-D{r}-F{r}-G{r}")
-        mb.cell(r, 12, f'=TEXT(A{r},"MMMM YYYY")').border = thin
+    n_months = (
+        (MB_GRID_END.year - start.year) * 12
+        + (MB_GRID_END.month - start.month)
+        + 1
+    )
+    for i in range(n_months):
+        r = MB_FIRST_DATA_ROW + i
+        _write_monthly_budget_month_row(mb, r, _add_calendar_months(start, i), 10000)
+    _ensure_monthly_budget_table(mb, MB_FIRST_DATA_ROW + n_months - 1)
 
     for col, w in zip(list("ABCDEFGHIJKL"), [12, 12, 12, 15, 12, 14, 12, 10, 10, 12, 12, 14]):
         mb.column_dimensions[col].width = w
@@ -1776,33 +2263,32 @@ def build() -> Path:
     rec["A2"].font = muted_font
     rec.merge_cells("A2:G2")
     for i, h in enumerate(
-        ["Account", "Type", "Calculated", "Actual", "Difference", "Last Reconciled", "Notes"],
+        [
+            "Account",
+            "Type",
+            "Calculated",
+            "Actual",
+            "Difference",
+            "Last Reconciled",
+            "Notes",
+            "Include in Net Worth",
+            "Include in Liquid Cash",
+            "Account Group",
+        ],
         1,
     ):
         rec.cell(4, i, h)
-    style_header_row(rec, 4, 1, 7)
+    style_header_row(rec, 4, 1, 10)
 
-    for i, _acc in enumerate(ACCOUNTS):
-        r = 5 + i
-        cfg_r = ACC_START + i
-        rec.cell(r, 1, f"=Configuration!A{cfg_r}").border = thin
-        rec.cell(r, 2, f"=Configuration!B{cfg_r}").border = thin
-        calc = (
-            f'=IF(B{r}="Liability",'
-            f"Configuration!C{cfg_r}+SUMIF(Ledger!$H:$H,A{r},Ledger!$G:$G)-SUMIF(Ledger!$I:$I,A{r},Ledger!$G:$G),"
-            f"Configuration!C{cfg_r}+SUMIF(Ledger!$I:$I,A{r},Ledger!$G:$G)-SUMIF(Ledger!$H:$H,A{r},Ledger!$G:$G))"
-        )
-        money_cell(rec.cell(r, 3), formula=calc)
-        money_cell(rec.cell(r, 4), value=None, editable=True)
-        money_cell(rec.cell(r, 5), formula=f'=IF(D{r}="","",D{r}-C{r})')
-        rec.cell(r, 6).fill = yellow_fill
-        rec.cell(r, 6).border = thin
-        rec.cell(r, 6).number_format = "dd/mm/yyyy"
-        rec.cell(r, 7).fill = yellow_fill
-        rec.cell(r, 7).border = thin
+    n_acc_slots = len(ACCOUNTS) + CFG_ACC_EXTRA_ROWS
+    for i in range(n_acc_slots):
+        rec_r = REC_ACC_START + i
+        cfg_r = CFG_ACC_START + i
+        _write_reconciliation_account_row(rec, rec_r, cfg_r, overwrite_actual=True)
 
-    rec["A18"] = "HOW TO FIX A DIFFERENCE"
-    rec["A18"].font = section_font
+    how_r = REC_ACC_START + n_acc_slots + 2
+    rec.cell(how_r, 1, "HOW TO FIX A DIFFERENCE")
+    rec.cell(how_r, 1).font = section_font
     for i, line in enumerate(
         [
             "1. Investigate bank statement / UPI history for the gap.",
@@ -1812,9 +2298,11 @@ def build() -> Path:
             '5. Never type over a balance to "make it right" — that destroys history.',
         ]
     ):
-        rec.cell(19 + i, 1, line)
+        rec.cell(how_r + 1 + i, 1, line)
 
-    for col, w in zip(list("ABCDEFG"), [20, 12, 14, 14, 12, 16, 40]):
+    for col, w in zip(
+        list("ABCDEFGHIJ"), [20, 12, 14, 14, 12, 16, 40, 20, 22, 16]
+    ):
         rec.column_dimensions[col].width = w
 
     # ── Planned Expenses (planning only — never Ledger) ──────────────
@@ -1926,7 +2414,7 @@ def patch_live_ledger_category_validation(wb, cat_start: int, cat_dv_end: int) -
         allow_blank=True,
     )
     led.add_data_validation(dv_cat)
-    dv_cat.add("J2:J1000")
+    dv_cat.add(f"J2:J{LEDGER_PREFILL_LAST_ROW}")
 
 
 def _n_accounts_from_wb(wb) -> int:
@@ -2009,8 +2497,9 @@ def patch_live_dashboard(path: Path | None = None) -> Path:
     print(f"Patched Simple + Detailed dashboards + categories on {path}")
     print(f"Categories: {len(CATEGORIES)} (+15 blank slots), validation A{cat_start}:A{cat_dv_end}")
     print(f"Charts on Detailed Dashboard: {len(detailed._charts)}")
-    print("Simple free-to-allocate formula:", simple["B20"].value)
-    print("Simple next-month free formula:", simple["B28"].value)
+    print("Simple free-to-allocate formula:", simple["B21"].value)
+    print("Simple committed-cash formula:", simple["B20"].value)
+    print("Simple next-month free formula:", simple["B29"].value)
     print("Config monthly salary (B7):", wb["Configuration"]["B7"].value)
     return path
 
@@ -2130,7 +2619,8 @@ def ensure_commitment_forecast_live(path: Path | None = None) -> Path:
     """
     Surgical live update (does NOT recreate dashboards):
       - Kind column on Planned Expenses + classify existing rows
-      - NEXT 6 MONTHS cash-due table (L4:P13)
+      - Helper columns Q:X (Active? / Effective Kind / cash due per month)
+      - NEXT 6 MONTHS cash-due table (L4:P13) as SUMIFS on those helpers
       - Monthly Fixed Cost (B5) = this month cash due (P6)
       - Append 6-month table on Simple + Detailed if missing
       - Refresh MacBook SmartEMI notes from the HDFC letter
@@ -2156,7 +2646,8 @@ def ensure_commitment_forecast_live(path: Path | None = None) -> Path:
         "Monthly Fixed Cost = this month's recurring cash due (P6). "
         "Kind splits Loan / EMI vs Lifestyle vs Investment. "
         "Start/End dates include a month if they overlap it. "
-        "Yearly amounts count in the due month only."
+        "Yearly amounts count in the due month only. "
+        "Q:X helpers feed M6:O11 via SUMIFS."
     )
 
     # MacBook SmartEMI — keep amount ₹38,200; document letter details in Notes
@@ -2215,6 +2706,759 @@ def ensure_commitment_forecast_live(path: Path | None = None) -> Path:
     return path
 
 
+def patch_live_monthly_budget_grid(
+    path: Path | None = None, through: ddate | None = None
+) -> Path:
+    """
+    Surgical live update (does NOT recreate dashboards):
+      - rewrite month-by-month derived formulas (C–L) on every existing month row
+      - extend the grid with the same formulas through `through` (default Dec 2032)
+      - convert the grid to Excel table MonthlyBudget
+      - widen THIS MONTH / next-month INDEX-MATCH to $A$20:$A$200
+    Does not change Ledger, Reconciliation, Configuration, or dashboard layout.
+    Does not overwrite existing Budget (col B) values.
+    """
+    path = path or LIVE
+    through = through or MB_GRID_END
+    if not path.exists():
+        raise SystemExit(f"Live workbook not found: {path}")
+    wb = load_workbook(path)
+    if "Monthly Budget" not in wb.sheetnames:
+        raise SystemExit("Workbook has no Monthly Budget sheet")
+
+    mb = wb["Monthly Budget"]
+    last = _mb_last_date_row(mb)
+    if last is None:
+        raise SystemExit("Monthly Budget has no month-start dates from row 20")
+
+    first = _month_start_value(mb.cell(MB_FIRST_DATA_ROW, 1).value)
+    if first is None:
+        raise SystemExit("Monthly Budget A20 is not a month-start date")
+
+    rewritten = 0
+    for r in range(MB_FIRST_DATA_ROW, last + 1):
+        _apply_monthly_budget_derived_row(mb, r)
+        rewritten += 1
+
+    default_budget = 31000
+    if "Configuration" in wb.sheetnames:
+        cfg_b6 = wb["Configuration"]["B6"].value
+        if isinstance(cfg_b6, (int, float)):
+            default_budget = cfg_b6
+    last_budget = mb.cell(last, 2).value
+    if isinstance(last_budget, (int, float)):
+        default_budget = last_budget
+
+    last_month = _month_start_value(mb.cell(last, 1).value)
+    added = 0
+    r = last
+    while last_month is not None and last_month < through:
+        r += 1
+        last_month = _add_calendar_months(last_month, 1)
+        _write_monthly_budget_month_row(mb, r, last_month, default_budget)
+        added += 1
+    last = r
+
+    mb["A18"] = (
+        "MONTH-BY-MONTH — only Budget (col B) is editable. "
+        "Derived columns are formulas. Table MonthlyBudget: add a row at the bottom to extend."
+    )
+    mb["B6"] = _FORM_THIS_MONTH_BUDGET
+    _ensure_monthly_budget_table(mb, last)
+    lookup_cells = _widen_monthly_budget_lookups(wb)
+    _atomic_save_live(wb, path)
+    print(f"Patched Monthly Budget grid on {path}")
+    print(f"  first month: {first.isoformat()} (row {MB_FIRST_DATA_ROW})")
+    print(f"  last month:  {last_month.isoformat()} (row {last})")
+    print(f"  rewritten derived rows: {rewritten}")
+    print(f"  added month rows: {added}")
+    print(f"  table: {MB_TABLE_NAME} A{MB_HEADER_ROW}:L{last}")
+    print(f"  widened lookups: {', '.join(lookup_cells) if lookup_cells else '(none)'}")
+    return path
+
+
+def patch_live_ledger_prefill(path: Path | None = None) -> Path:
+    """
+    Surgical live update (does NOT recreate dashboards):
+      Prefill Ledger Day/Month/Year and Include in Budget on empty rows
+      through LEDGER_PREFILL_LAST_ROW so a typed-in transaction is not
+      silently dropped from SUMIFS(..., K:K, TRUE()).
+    Does not change existing dated Ledger rows.
+    """
+    path = path or LIVE
+    if not path.exists():
+        raise SystemExit(f"Live workbook not found: {path}")
+    wb = load_workbook(path)
+    if "Ledger" not in wb.sheetnames:
+        raise SystemExit("No Ledger sheet")
+
+    led = wb["Ledger"]
+    last_data = 1
+    for r in range(2, (led.max_row or 1) + 1):
+        if led.cell(r, 1).value is not None or led.cell(r, 6).value is not None:
+            last_data = r
+
+    target = max(LEDGER_PREFILL_LAST_ROW, last_data + LEDGER_PREFILL_BUFFER)
+    filled = 0
+    for r in range(last_data + 1, target + 1):
+        if led.cell(r, 1).value is not None or led.cell(r, 6).value is not None:
+            continue
+        _prefill_ledger_empty_row(led, r)
+        filled += 1
+
+    led.auto_filter.ref = f"A1:M{target}"
+    dv_changed = _extend_ledger_validation_refs(led, target)
+    _atomic_save_live(wb, path)
+    print(f"Patched Ledger prefill on {path}")
+    print(f"  last data row: {last_data}")
+    print(f"  prefill through: {target} ({filled} empty rows)")
+    print(f"  autofilter: {led.auto_filter.ref}")
+    print(f"  widened validations: {', '.join(dv_changed) if dv_changed else '(none)'}")
+    return path
+
+
+def patch_live_free_to_allocate(path: Path | None = None) -> Path:
+    """
+    Surgical live update (does NOT recreate dashboards):
+      Redefine Free to allocate as liquid − budget reserved − committed cash.
+      Committed = CC due + remaining EMI this month + Planned one-time (30d).
+      Next-month estimate subtracts next month's EMI instead of CC (CC is
+      already in today's free).
+    Does not change Ledger, Monthly Budget, Reconciliation, Configuration,
+    or Planned Expenses data/formulas.
+    """
+    path = path or LIVE
+    if not path.exists():
+        raise SystemExit(f"Live workbook not found: {path}")
+    wb = load_workbook(path)
+
+    if "Simple Dashboard" in wb.sheetnames:
+        simple = wb["Simple Dashboard"]
+        liq_r = _find_row_by_label(simple, "Total liquid savings")
+        bud_r = _find_row_by_label(simple, "Budget still reserved")
+        committed_r = _find_row_by_label(simple, "Committed cash")
+        free_r = _find_row_by_label(simple, "Free to allocate")
+        cc_total_r = _find_row_by_label(simple, "Total CC due")
+        free_today_r = _find_row_by_label(simple, "Free to allocate (today)")
+        est_r = _find_row_by_label(simple, "Est. free next month")
+        cc_pay_r = _find_row_containing(simple, "pay all cc")
+        hdr_r = _find_row_containing(simple, "free to allocate")
+
+        if liq_r is None or bud_r is None or free_r is None or cc_total_r is None:
+            raise SystemExit("Simple Dashboard is missing liquid/budget/free/CC rows")
+
+        if committed_r is None:
+            # Live sheet has a blank row under Free to allocate — reuse it.
+            committed_r = free_r
+            new_free_r = free_r + 1
+            below = simple.cell(new_free_r, 1).value
+            if below is not None and str(below).strip():
+                raise SystemExit(
+                    f"Simple Dashboard row {new_free_r} is not empty; "
+                    "cannot insert Committed cash without shifting the sheet"
+                )
+            free_r = new_free_r
+
+        cc_cell = f"B{cc_total_r}"
+        _label(simple.cell(committed_r, 1), "Committed cash", bold=True)
+        money_cell(
+            simple.cell(committed_r, 2),
+            formula=_form_committed_cash(cc_cell),
+            fill=alert_fill,
+        )
+        simple.cell(committed_r, 2).font = Font(bold=True, size=12)
+        simple.cell(committed_r, 3).value = (
+            "CC due + remaining EMI this month + one-time (30d)"
+        )
+        simple.cell(committed_r, 3).font = muted_font
+
+        _label(simple.cell(free_r, 1), "Free to allocate", bold=True)
+        money_cell(
+            simple.cell(free_r, 2),
+            formula=_form_free_less_committed(f"B{liq_r}", f"B{bud_r}", f"B{committed_r}"),
+            fill=good_fill,
+        )
+        simple.cell(free_r, 2).font = Font(
+            name="Calibri", size=16, bold=True, color="1F4E79"
+        )
+        simple.cell(free_r, 3).value = "liquid − budget reserved − committed"
+        simple.cell(free_r, 3).font = muted_font
+
+        if bud_r:
+            simple.cell(bud_r, 3).value = "discretionary envelope still unused this month"
+            simple.cell(bud_r, 3).font = muted_font
+
+        if hdr_r and "emergency" in str(simple.cell(hdr_r, 1).value or "").lower():
+            simple.cell(hdr_r, 1).value = (
+                "FREE TO ALLOCATE — after budget, bills, near-term plans"
+            )
+            simple.cell(hdr_r, 1).font = section_font
+            simple.cell(hdr_r, 1).fill = section_fill
+
+        if free_today_r:
+            money_cell(simple.cell(free_today_r, 2), formula=f"=B{free_r}")
+            simple.cell(free_today_r, 3).value = (
+                "starting point (already nets CC + this month's remaining EMI + 30d)"
+            )
+            simple.cell(free_today_r, 3).font = muted_font
+
+        next_emi_r = _find_row_containing(simple, "next month loan")
+        if next_emi_r is None:
+            next_emi_r = cc_pay_r
+        if next_emi_r is None:
+            raise SystemExit("Simple Dashboard is missing the next-month CC/EMI row")
+        _label(simple.cell(next_emi_r, 1), "− Next month Loan / EMI")
+        money_cell(simple.cell(next_emi_r, 2), formula=_FORM_NEXT_MONTH_EMI)
+        simple.cell(next_emi_r, 3).value = "outside the monthly budget cap"
+        simple.cell(next_emi_r, 3).font = muted_font
+
+        if est_r:
+            simple.cell(est_r, 3).value = "after next EMI + salary + next budget"
+            simple.cell(est_r, 3).font = muted_font
+
+        note_r = _find_row_containing(simple, "estimate = free-to-allocate")
+        if note_r is None:
+            note_r = _find_row_containing(simple, "assumes you finish this month")
+        if note_r is not None:
+            simple.cell(note_r, 1).value = (
+                "Estimate = free today − next month's EMI + monthly salary − next month's budget. "
+                "Today's free already reserves CC due, this month's remaining EMI, and 30-day one-time plans. "
+                "If this month's salary is already in liquid savings, it is already counted — "
+                "use Configuration monthly salary as take-home you expect to receive for the next cycle."
+            )
+            simple.cell(note_r, 1).font = muted_font
+
+        print(
+            f"Simple Dashboard: committed B{committed_r}={simple.cell(committed_r, 2).value}"
+        )
+        print(f"Simple Dashboard: free B{free_r}={simple.cell(free_r, 2).value}")
+        print(f"Simple Dashboard: next EMI B{next_emi_r}={simple.cell(next_emi_r, 2).value}")
+
+    if "Detailed Dashboard" in wb.sheetnames:
+        detailed = wb["Detailed Dashboard"]
+        liq_r = _find_row_by_label(detailed, "Total liquid savings")
+        bud_r = _find_row_by_label(detailed, "Budget still reserved")
+        free_r = _find_row_by_label(detailed, "Free to allocate")
+        cc_total_r = _find_row_by_label(detailed, "Total CC due", col=4)
+        if cc_total_r is None:
+            cc_total_r = _find_row_by_label(detailed, "Total CC due")
+        cc_pay_r = _find_row_containing(detailed, "pay all cc", col=4)
+        if cc_pay_r is None:
+            cc_pay_r = _find_row_containing(detailed, "pay all cc")
+        next_emi_r = _find_row_containing(detailed, "next month loan", col=4)
+        if next_emi_r is None:
+            next_emi_r = _find_row_containing(detailed, "next month loan")
+        hdr_r = _find_row_containing(detailed, "free to allocate")
+
+        if liq_r is None or bud_r is None or free_r is None or cc_total_r is None:
+            raise SystemExit("Detailed Dashboard is missing liquid/budget/free/CC rows")
+
+        cc_col = 5  # E
+        money_cell(
+            detailed.cell(free_r, 2),
+            formula=_form_free_detailed(
+                liquid=f"B{liq_r}",
+                budget=f"B{bud_r}",
+                cc=f"{get_column_letter(cc_col)}{cc_total_r}",
+            ),
+            fill=good_fill,
+        )
+        detailed.cell(free_r, 2).font = Font(
+            name="Calibri", size=14, bold=True, color="1F4E79"
+        )
+
+        if hdr_r and "emergency" in str(detailed.cell(hdr_r, 1).value or "").lower():
+            detailed.cell(hdr_r, 1).value = (
+                "FREE TO ALLOCATE — after budget, bills, near-term plans"
+            )
+            detailed.cell(hdr_r, 1).font = section_font
+            detailed.cell(hdr_r, 1).fill = section_fill
+
+        if next_emi_r is None:
+            next_emi_r = cc_pay_r
+        if next_emi_r is not None:
+            _label(detailed.cell(next_emi_r, 4), "− Next month Loan / EMI")
+            money_cell(detailed.cell(next_emi_r, 5), formula=_FORM_NEXT_MONTH_EMI)
+
+        note_r = _find_row_containing(detailed, "does not subtract cc")
+        if note_r is None:
+            note_r = _find_row_containing(detailed, "free to allocate = liquid")
+        if note_r is not None:
+            detailed.cell(note_r, 1).value = (
+                "Free to allocate = liquid − budget remaining − CC due − remaining EMI "
+                "this month − Planned one-time (30d). Rent/family inside the budget cap "
+                "are not subtracted twice. Next-month estimate = free today − next EMI "
+                "+ salary − next budget. Set Monthly Salary on Configuration."
+            )
+            detailed.cell(note_r, 1).font = muted_font
+
+        print(f"Detailed Dashboard: free B{free_r}={detailed.cell(free_r, 2).value}")
+        if next_emi_r:
+            print(
+                f"Detailed Dashboard: next EMI E{next_emi_r}="
+                f"{detailed.cell(next_emi_r, 5).value}"
+            )
+
+    _atomic_save_live(wb, path)
+    print(f"Patched free-to-allocate definition on {path}")
+    return path
+
+
+def _copy_cells(ws, src_rows: range, src_cols: range, dest_row: int, dest_col: int) -> None:
+    for r in src_rows:
+        for c in src_cols:
+            src = ws.cell(r, c)
+            dest = ws.cell(dest_row + (r - src_rows.start), dest_col + (c - src_cols.start))
+            dest.value = src.value
+            dest.font = copy(src.font)
+            dest.fill = copy(src.fill)
+            dest.border = copy(src.border)
+            dest.alignment = copy(src.alignment)
+            dest.number_format = src.number_format
+
+
+def _clear_cells(ws, rows: range, cols: range) -> None:
+    for r in rows:
+        for c in cols:
+            cell = ws.cell(r, c)
+            cell.value = None
+            cell.fill = PatternFill()
+            cell.font = Font()
+            cell.border = Border()
+
+
+def _replace_merge(ws, old: str, new: str) -> None:
+    try:
+        ws.unmerge_cells(old)
+    except Exception:
+        pass
+    already = any(str(m) == new for m in ws.merged_cells.ranges)
+    if not already:
+        ws.merge_cells(new)
+
+
+def _header_is(cfg, col: int, *needles: str) -> bool:
+    v = str(cfg.cell(CFG_ACC_HEADER_ROW, col).value or "").strip().lower()
+    return any(n in v for n in needles)
+
+
+def _ensure_config_classification_columns(cfg) -> bool:
+    """Add Include in Liquid Cash + Account Group; move Notes to H; types to J.
+
+    Returns True if columns were migrated this run.
+    """
+    if _header_is(cfg, 6, "liquid") and _header_is(cfg, 7, "account group"):
+        return False
+
+    types_in_h = "ledger type" in str(cfg.cell(8, 8).value or "").strip().lower()
+    if types_in_h:
+        # Guide first (I:J → K:L), then types (H → J), then free H for Notes.
+        _copy_cells(cfg, range(8, 17), range(9, 11), 8, 11)
+        _copy_cells(cfg, range(8, 17), range(8, 9), 8, 10)
+        _clear_cells(cfg, range(8, 17), range(8, 10))
+
+    if _header_is(cfg, 6, "note"):
+        for r in range(CFG_ACC_START, CFG_ACC_START + 40):
+            name_s = str(cfg.cell(r, 1).value or "").strip()
+            if name_s.upper() in {"CATEGORIES", "CATEGORY", "RULES"}:
+                break
+            notes = cfg.cell(r, 6).value
+            if notes not in (None, "") and cfg.cell(r, 8).value in (None, ""):
+                cfg.cell(r, 8).value = notes
+                cfg.cell(r, 8).fill = yellow_fill
+                cfg.cell(r, 8).border = thin
+            # F was Notes; free it for Include in Liquid Cash.
+            cfg.cell(r, 6).value = None
+            cfg.cell(r, 6).fill = yellow_fill
+            cfg.cell(r, 6).border = thin
+            cfg.cell(r, 7).fill = yellow_fill
+            cfg.cell(r, 7).border = thin
+
+    cfg.cell(CFG_ACC_HEADER_ROW, 6, "Include in Liquid Cash")
+    cfg.cell(CFG_ACC_HEADER_ROW, 7, "Account Group")
+    cfg.cell(CFG_ACC_HEADER_ROW, 8, "Notes")
+    style_header_row(cfg, CFG_ACC_HEADER_ROW, 1, 8)
+
+    _replace_merge(cfg, "A2:G2", "A2:H2")
+    _replace_merge(cfg, "A8:F8", "A8:H8")
+    _replace_merge(cfg, "A9:F9", "A9:H9")
+    cfg["A9"] = (
+        "Every ledger entry moves money From Account → To Account. "
+        "Opening Balance is the starting point only. "
+        "Dashboards SUMIFS Include in Liquid Cash / Include in Net Worth / Account Group."
+    )
+    cfg["A9"].font = muted_font
+
+    cfg["J8"] = "LEDGER TYPES"
+    cfg["J8"].font = section_font
+    cfg["J8"].fill = section_fill
+    if cfg["J9"].value is None:
+        cfg["J9"] = "Type"
+        cfg["J9"].font = header_font
+        cfg["J9"].fill = header_fill
+
+    for col, w in zip(
+        list("ABCDEFGHJKL"), [28, 14, 18, 18, 20, 22, 16, 36, 22, 22, 70]
+    ):
+        cfg.column_dimensions[col].width = w
+    return True
+
+
+def _fill_named_account_flags(cfg) -> int:
+    filled = 0
+    for r in range(CFG_ACC_START, CFG_ACC_LOOKUP_LAST + 1):
+        name = cfg.cell(r, 1).value
+        if name is None:
+            continue
+        name_s = str(name).strip()
+        if name_s.upper() in {"CATEGORIES", "CATEGORY", "RULES"}:
+            break
+        typ = str(cfg.cell(r, 2).value or "").strip()
+        liquid, group = _default_liquid_and_group(name_s, typ)
+        _style_config_account_row(cfg, r)
+        if cfg.cell(r, 6).value in (None, ""):
+            cfg.cell(r, 6, _cfg_bool_text(liquid))
+            filled += 1
+        if cfg.cell(r, 7).value in (None, ""):
+            cfg.cell(r, 7, group)
+        if cfg.cell(r, 5).value in (None, ""):
+            nw_default = typ != "Virtual"
+            cfg.cell(r, 5, _cfg_bool_text(nw_default))
+    return filled
+
+
+def _ensure_config_account_slots(cfg, extra: int = CFG_ACC_EXTRA_ROWS) -> int:
+    """Insert blank yellow account rows before CATEGORIES. Returns last slot row."""
+    cat_r = None
+    for r in range(CFG_ACC_START, 80):
+        if str(cfg.cell(r, 1).value or "").strip().upper() == "CATEGORIES":
+            cat_r = r
+            break
+    if cat_r is None:
+        return CFG_ACC_START + len(ACCOUNTS) + extra - 1
+
+    last_named = CFG_ACC_START - 1
+    for r in range(CFG_ACC_START, cat_r):
+        if cfg.cell(r, 1).value:
+            last_named = r
+
+    blanks_before_cat = cat_r - last_named - 1
+    need = extra - blanks_before_cat
+    if need > 0:
+        cfg.insert_rows(last_named + 1, need)
+        cat_r += need
+    last_slot = cat_r - 1
+    for r in range(last_named + 1, last_slot + 1):
+        _style_config_account_row(cfg, r)
+    return last_slot
+
+
+def _ensure_config_account_validations(cfg, last_slot: int) -> None:
+    keep = []
+    for dv in list(cfg.data_validations.dataValidation):
+        sq = str(dv.sqref or "")
+        if any(col in sq for col in ("B11", "E11", "F11", "G11", "B$11", "G$11")):
+            continue
+        # Drop previous account-flag validators we own
+        formula = str(dv.formula1 or "")
+        if "Asset,Liability,Virtual" in formula or ",".join(ACCOUNT_GROUPS) in formula:
+            continue
+        keep.append(dv)
+    cfg.data_validations.dataValidation = keep
+    dv_acc_type = DataValidation(
+        type="list", formula1='"Asset,Liability,Virtual"', allow_blank=True
+    )
+    dv_acc_bool = DataValidation(type="list", formula1='"TRUE,FALSE"', allow_blank=True)
+    dv_acc_group = DataValidation(
+        type="list",
+        formula1='"' + ",".join(ACCOUNT_GROUPS) + '"',
+        allow_blank=True,
+    )
+    for dv in (dv_acc_type, dv_acc_bool, dv_acc_group):
+        cfg.add_data_validation(dv)
+    dv_acc_type.add(f"B{CFG_ACC_START}:B{last_slot}")
+    dv_acc_bool.add(f"E{CFG_ACC_START}:F{last_slot}")
+    dv_acc_group.add(f"G{CFG_ACC_START}:G{last_slot}")
+
+
+def _add_config_account_rule(cfg) -> None:
+    needle = "to add an account:"
+    for r in range(1, 130):
+        v = str(cfg.cell(r, 1).value or "").strip().lower()
+        if needle in v:
+            return
+        if v == "rules":
+            # append after existing numbered rules
+            last = r
+            for rr in range(r + 1, r + 20):
+                txt = str(cfg.cell(rr, 1).value or "").strip()
+                if not txt:
+                    cfg.cell(rr, 1).value = (
+                        "11. To add an account: fill the next blank yellow row "
+                        "(Type, opening, Net Worth, Liquid Cash, Account Group). "
+                        "Dashboards SUMIFS those flags — do not insert a row in the middle of the list."
+                    )
+                    try:
+                        cfg.merge_cells(
+                            start_row=rr, start_column=1, end_row=rr, end_column=8
+                        )
+                    except Exception:
+                        pass
+                    return
+                last = rr
+            return
+
+
+def _find_category_dv_range(cfg) -> tuple[int, int] | None:
+    cat_start = None
+    for r in range(1, 140):
+        if str(cfg.cell(r, 1).value or "").strip() == "Category" and str(
+            cfg.cell(r, 2).value or ""
+        ).strip() in {"Group", "Typical Budget?"}:
+            cat_start = r + 1
+            break
+    if cat_start is None:
+        return None
+    last = cat_start
+    for r in range(cat_start, cat_start + 130):
+        v = str(cfg.cell(r, 1).value or "").strip()
+        if v.upper() == "RULES":
+            break
+        last = r
+    return cat_start, last
+
+
+def _update_ledger_account_validations(led, last_slot: int, cat_range: tuple[int, int] | None) -> None:
+    for dv in led.data_validations.dataValidation:
+        f1 = str(dv.formula1 or "")
+        sq = str(dv.sqref or "")
+        if "Configuration!$H$10" in f1 or f1.startswith("Configuration!$J$10"):
+            dv.formula1 = "Configuration!$J$10:$J$16"
+        elif ("H2" in sq or "I2" in sq) and "J2" not in sq and "Configuration!$A$" in f1:
+            dv.formula1 = f"Configuration!$A${CFG_ACC_START}:$A${last_slot}"
+        elif cat_range and "J2" in sq and "H2" not in sq and "Configuration!$A$" in f1:
+            c0, c1 = cat_range
+            dv.formula1 = f"Configuration!$A${c0}:$A${c1}"
+
+
+def _ensure_reconciliation_slots(rec, n_slots: int) -> int:
+    last_rec = REC_ACC_START + n_slots - 1
+    how_r = _find_row_containing(rec, "how to fix a difference")
+    if how_r is not None and how_r <= last_rec + 1:
+        need = last_rec + 2 - how_r
+        if need > 0:
+            rec.insert_rows(how_r, need)
+
+    headers = [
+        "Account",
+        "Type",
+        "Calculated",
+        "Actual",
+        "Difference",
+        "Last Reconciled",
+        "Notes",
+        "Include in Net Worth",
+        "Include in Liquid Cash",
+        "Account Group",
+    ]
+    for i, h in enumerate(headers, 1):
+        rec.cell(4, i, h)
+    style_header_row(rec, 4, 1, 10)
+
+    for i in range(n_slots):
+        rec_r = REC_ACC_START + i
+        cfg_r = CFG_ACC_START + i
+        existing = rec.cell(rec_r, 3).value
+        if existing:
+            _apply_rec_class_lookups(rec, rec_r)
+        else:
+            _write_reconciliation_account_row(rec, rec_r, cfg_r, overwrite_actual=False)
+
+    for col, w in zip(
+        list("ABCDEFGHIJ"), [20, 12, 14, 14, 12, 16, 40, 20, 22, 16]
+    ):
+        rec.column_dimensions[col].width = w
+    return last_rec
+
+
+def _patch_named_cc_block(ws, name: str, label_col: int, amount_col: int) -> int | None:
+    r = _find_row_by_label(ws, name, col=label_col, max_row=50)
+    if r is None:
+        return None
+    label_cell = f"{get_column_letter(label_col)}{r}"
+    amt_row = r
+    if ws.cell(r, amount_col).value is None:
+        for rr in range(r + 1, r + 4):
+            lab = str(ws.cell(rr, label_col).value or "").strip().lower()
+            if lab == "outstanding":
+                amt_row = rr
+                break
+    money_cell(ws.cell(amt_row, amount_col), formula=_form_balance_for_label(label_cell))
+    for rr in range(r, r + 6):
+        lab = str(ws.cell(rr, label_col).value or "").strip().lower()
+        if lab.startswith("limit"):
+            money_cell(ws.cell(rr, amount_col), formula=_form_limit_for_label(label_cell))
+            break
+    return r
+
+
+def _patch_dashboard_account_formulas(wb) -> list[str]:
+    changed: list[str] = []
+    if "Simple Dashboard" in wb.sheetnames:
+        simple = wb["Simple Dashboard"]
+        for name in ("HDFC Credit Card", "ICICI Credit Card"):
+            r = _patch_named_cc_block(simple, name, 1, 2)
+            if r:
+                changed.append(f"Simple B{r} lookup {name}")
+        cc_total_r = _find_row_by_label(simple, "Total CC due")
+        if cc_total_r:
+            money_cell(simple.cell(cc_total_r, 2), formula=_FORM_CC_DUE, fill=alert_fill)
+            simple.cell(cc_total_r, 2).font = Font(bold=True, size=12)
+            simple.cell(cc_total_r, 3).value = (
+                "every Configuration account with Group=Credit Card"
+            )
+            simple.cell(cc_total_r, 3).font = muted_font
+            changed.append(f"Simple B{cc_total_r} Total CC due SUMIFS")
+        liq_r = _find_row_by_label(simple, "Total liquid savings")
+        if liq_r:
+            money_cell(simple.cell(liq_r, 2), formula=_FORM_LIQUID)
+            simple.cell(liq_r, 3).value = "Configuration Include in Liquid Cash"
+            simple.cell(liq_r, 3).font = muted_font
+            changed.append(f"Simple B{liq_r} liquid SUMIFS")
+
+    if "Detailed Dashboard" in wb.sheetnames:
+        detailed = wb["Detailed Dashboard"]
+        for name in ("HDFC Credit Card", "ICICI Credit Card"):
+            r = _patch_named_cc_block(detailed, name, 4, 5)
+            if r:
+                changed.append(f"Detailed E lookup {name} (label row {r})")
+        cc_total_r = _find_row_by_label(detailed, "Total CC due", col=4)
+        if cc_total_r is None:
+            cc_total_r = _find_row_by_label(detailed, "Total CC due")
+        if cc_total_r:
+            money_cell(detailed.cell(cc_total_r, 5), formula=_FORM_CC_DUE, fill=alert_fill)
+            detailed.cell(cc_total_r, 5).font = Font(bold=True, size=12)
+            changed.append(f"Detailed E{cc_total_r} Total CC due SUMIFS")
+        liq_r = _find_row_by_label(detailed, "Total liquid savings")
+        if liq_r:
+            money_cell(detailed.cell(liq_r, 2), formula=_FORM_LIQUID)
+            changed.append(f"Detailed B{liq_r} liquid SUMIFS")
+        sav_r = _find_row_by_label(detailed, "Savings & Cash", col=4)
+        if sav_r:
+            money_cell(detailed.cell(sav_r, 5), formula=_FORM_LIQUID)
+            changed.append(f"Detailed E{sav_r} Savings & Cash SUMIFS")
+        fd_r = _find_row_by_label(detailed, "FD", col=4)
+        if fd_r:
+            money_cell(detailed.cell(fd_r, 5), formula=_FORM_FD)
+            changed.append(f"Detailed E{fd_r} FD SUMIFS")
+        inv_r = _find_row_by_label(detailed, "Investments (MF)", col=4)
+        if inv_r is None:
+            inv_r = _find_row_by_label(detailed, "Investments", col=4)
+        if inv_r:
+            detailed.cell(inv_r, 4).value = "Investments"
+            money_cell(detailed.cell(inv_r, 5), formula=_FORM_INVESTMENTS)
+            changed.append(f"Detailed E{inv_r} Investments SUMIFS")
+        ast_r = _find_row_by_label(detailed, "Total Assets", col=4)
+        if ast_r:
+            money_cell(detailed.cell(ast_r, 5), formula=_FORM_NW_ASSETS)
+            detailed.cell(ast_r, 5).font = Font(bold=True)
+            changed.append(f"Detailed E{ast_r} Total Assets SUMIFS")
+        liab_r = _find_row_by_label(detailed, "Credit Card Due", col=4)
+        if liab_r is None:
+            liab_r = _find_row_by_label(detailed, "Liabilities", col=4)
+        if liab_r:
+            detailed.cell(liab_r, 4).value = "Liabilities"
+            money_cell(detailed.cell(liab_r, 5), formula=_FORM_NW_LIABILITIES)
+            changed.append(f"Detailed E{liab_r} Liabilities SUMIFS")
+    return changed
+
+
+def patch_live_account_classifications(path: Path | None = None) -> Path:
+    """
+    Surgical live update (does NOT recreate dashboards):
+      Configuration: Include in Liquid Cash + Account Group.
+      Reconciliation: lookup columns + extra account slots.
+      Dashboards: liquid / CC due / net worth via SUMIFS on those flags.
+    Does not change Ledger transaction rows.
+    """
+    path = path or LIVE
+    if not path.exists():
+        raise SystemExit(f"Live workbook not found: {path}")
+    wb = load_workbook(path)
+    if "Configuration" not in wb.sheetnames:
+        raise SystemExit("No Configuration sheet")
+    if "Reconciliation" not in wb.sheetnames:
+        raise SystemExit("No Reconciliation sheet")
+
+    cfg = wb["Configuration"]
+    migrated = _ensure_config_classification_columns(cfg)
+    filled = _fill_named_account_flags(cfg)
+    last_slot = _ensure_config_account_slots(cfg)
+    _ensure_config_account_validations(cfg, last_slot)
+    _add_config_account_rule(cfg)
+
+    n_slots = last_slot - CFG_ACC_START + 1
+    rec = wb["Reconciliation"]
+    last_rec = _ensure_reconciliation_slots(rec, n_slots)
+
+    if "Ledger" in wb.sheetnames:
+        cat_range = _find_category_dv_range(cfg)
+        _update_ledger_account_validations(wb["Ledger"], last_slot, cat_range)
+
+    dash_changed = _patch_dashboard_account_formulas(wb)
+    _atomic_save_live(wb, path)
+    print(f"Patched account classifications on {path}")
+    print(f"  config columns migrated: {migrated}")
+    print(f"  named-account flags filled: {filled}")
+    print(f"  config account slots: rows {CFG_ACC_START}-{last_slot} ({n_slots})")
+    print(f"  reconciliation rows: {REC_ACC_START}-{last_rec}")
+    print(f"  dashboard cells: {', '.join(dash_changed) if dash_changed else '(none)'}")
+    return path
+
+
+def patch_live_planned_helpers(path: Path | None = None) -> Path:
+    """
+    Surgical live update (does NOT recreate dashboards):
+      Add Planned Expenses helper columns Q:X and rewrite the 6-month
+      forecast from SUMPRODUCT to SUMIFS on those helpers.
+    Does not change recurring/one-time data values, Ledger, Monthly Budget,
+    Reconciliation, Configuration, or dashboard layout.
+    """
+    path = path or LIVE
+    if not path.exists():
+        raise SystemExit(f"Live workbook not found: {path}")
+    wb = load_workbook(path)
+    if "Planned Expenses" not in wb.sheetnames:
+        raise SystemExit("No Planned Expenses sheet — run --planned-expenses first")
+
+    pe = wb["Planned Expenses"]
+    kind_col = _pe_kind_column(pe)
+    header = pe.cell(14, kind_col).value
+    if not header or str(header).strip().lower() != "kind":
+        kind_col = _ensure_kind_column(pe)
+    _write_planned_forecast_table(pe, kind_col)
+
+    pe["B5"] = "=P6"
+    pe["B5"].font = big_num_font
+    pe["B5"].fill = soft_fill
+    pe["B5"].number_format = inr
+    pe["A11"] = (
+        "Monthly Fixed Cost = this month's recurring cash due (P6). "
+        "Kind splits Loan / EMI vs Lifestyle vs Investment. "
+        "Start/End dates include a month if they overlap it. "
+        "Yearly amounts count in the due month only. "
+        "Q:X helpers feed M6:O11 via SUMIFS."
+    )
+    pe["A11"].font = muted_font
+
+    _atomic_save_live(wb, path)
+    print(f"Patched Planned Expenses helpers + SUMIFS forecast on {path}")
+    print(f"  Kind column: {get_column_letter(kind_col)}")
+    print(f"  helpers: Q{PE_REC_START}:X{PE_REC_END}")
+    print(f"  M6: {pe['M6'].value}")
+    return path
+
+
 if __name__ == "__main__":
     import sys
 
@@ -2232,5 +3476,31 @@ if __name__ == "__main__":
         "forecast",
     }:
         ensure_commitment_forecast_live()
+    elif len(sys.argv) > 1 and sys.argv[1] in {
+        "--monthly-budget-grid",
+        "--mb-grid",
+    }:
+        patch_live_monthly_budget_grid()
+    elif len(sys.argv) > 1 and sys.argv[1] in {
+        "--ledger-prefill",
+        "--ledger-k",
+    }:
+        patch_live_ledger_prefill()
+    elif len(sys.argv) > 1 and sys.argv[1] in {
+        "--free-to-allocate",
+        "--fta",
+    }:
+        patch_live_free_to_allocate()
+    elif len(sys.argv) > 1 and sys.argv[1] in {
+        "--account-classifications",
+        "--account-flags",
+        "--issue-4",
+    }:
+        patch_live_account_classifications()
+    elif len(sys.argv) > 1 and sys.argv[1] in {
+        "--planned-helpers",
+        "--issue-5",
+    }:
+        patch_live_planned_helpers()
     else:
         build()

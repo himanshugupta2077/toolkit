@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0f14" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Toolkit" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <title>Toolkit</title>
   <style>
@@ -5242,6 +5245,10 @@
           loadFinanceDashboard();
           return;
         }
+        if (isOldFinancePath()) {
+          window.location.href = "/";
+          return;
+        }
         showView("home");
       } else if (name === "ai") {
         showView("home");
@@ -5259,13 +5266,7 @@
     });
 
     document.getElementById("openFinance").addEventListener("click", () => {
-      financeFormFromTx = false;
-      financeEditingRow = null;
-      setFinanceFormOpen(false);
-      setFinanceTxOpen(false);
-      setFinanceReceiptOpen(false);
-      setFinanceVoiceOpen(false);
-      showView("finance");
+      window.location.href = "/finance";
     });
 
     document.getElementById("openAi").addEventListener("click", () => {
@@ -5506,8 +5507,29 @@
     document.getElementById("openNotesBtn").addEventListener("click", openNotesList);
     document.getElementById("refreshList").addEventListener("click", loadNotes);
 
-    // Start on home
-    showView("home");
+    function isOldFinancePath() {
+      return (
+        location.pathname === "/old-finance" ||
+        location.pathname === "/old-finance/"
+      );
+    }
+
+    function openOldFinanceView() {
+      financeFormFromTx = false;
+      financeEditingRow = null;
+      setFinanceFormOpen(false);
+      setFinanceTxOpen(false);
+      setFinanceReceiptOpen(false);
+      setFinanceVoiceOpen(false);
+      showView("finance");
+    }
+
+    // Start on home, unless this page was opened as /old-finance
+    if (isOldFinancePath()) {
+      openOldFinanceView();
+    } else {
+      showView("home");
+    }
 
     /* ------------------------------------------------------------------ */
     /* ChatGPT queue alerts (sound + vibrate + Android heads-up)            */
@@ -7260,8 +7282,21 @@
 
         `<div class="fd-card">` +
           `<div class="fd-card-title">Credit cards</div>` +
-          `<div class="fd-row"><span class="k">HDFC</span><span class="v">${formatRupee(d.hdfc_cc)}</span></div>` +
-          `<div class="fd-row"><span class="k">ICICI</span><span class="v">${formatRupee(d.icici_cc)}</span></div>` +
+          (Array.isArray(d.credit_cards) && d.credit_cards.length
+            ? d.credit_cards
+            : [
+                { name: "HDFC Credit Card", due: d.hdfc_cc },
+                { name: "ICICI Credit Card", due: d.icici_cc },
+              ]
+          ).map(function (c) {
+            return (
+              '<div class="fd-row"><span class="k">' +
+              escapeHtml(ACC_LABELS[c.name] || c.name) +
+              '</span><span class="v">' +
+              formatRupee(c.due) +
+              "</span></div>"
+            );
+          }).join("") +
           `<div class="fd-row total"><span class="k">Total due</span><span class="v">${formatRupee(d.cc_total)}</span></div>` +
         `</div>` +
 
@@ -7269,7 +7304,9 @@
           `<div class="fd-card-title">Free to allocate</div>` +
           `<div class="fd-row"><span class="k">Liquid</span><span class="v">${formatRupee(d.liquid)}</span></div>` +
           `<div class="fd-row"><span class="k">Budget reserved</span><span class="v">${formatRupee(d.budget_reserved)}</span></div>` +
+          `<div class="fd-row"><span class="k">Committed</span><span class="v">${formatRupee(d.committed_cash)}</span></div>` +
           `<div class="fd-row hl"><span class="k">Free</span><span class="v ${freeCls}">${formatRupee(d.free_to_allocate)}</span></div>` +
+          `<div class="fd-hint">Committed = CC due + remaining EMI this month + one-time (30d). Rent/family already in the budget cap are not added again.</div>` +
         `</div>` +
 
         `<div class="fd-card">` +

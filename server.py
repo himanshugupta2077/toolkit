@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import atexit
 import json
+import mimetypes
 import os
 import queue as waitqueue
 import re
+import shutil
 import signal
 import subprocess
 import sys
@@ -22,8 +24,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 # Finance tracker (phone form → JSONL + local xlsx Ledger)
@@ -121,6 +123,17 @@ PUSH_SUBS_PATH = DATA / "push-subs.json"
 VAPID_MAILTO = os.environ.get("VAPID_MAILTO", "mailto:himanshu@localhost")
 
 AI_DIR = DATA / "ai"
+
+# New finance app (Vite/Hono) — Node on loopback, UI at /finance
+FINANCE_OS_DIR = ROOT / "finance" / "app"
+FINANCE_OS_DIST = FINANCE_OS_DIR / "dist"
+FINANCE_OS_ENTRY = FINANCE_OS_DIR / "dist-server" / "server" / "index.js"
+FINANCE_OS_HOST = "127.0.0.1"
+try:
+    FINANCE_OS_PORT = int(os.environ.get("FINANCE_OS_PORT", "8787"))
+except ValueError:
+    FINANCE_OS_PORT = 8787
+_finance_os_proc: subprocess.Popen | None = None
 
 for d in (
     AUDIO_DIR,
@@ -334,6 +347,7 @@ def _cleanup_models_best_effort() -> None:
 
 def _hard_exit_now(code: int = 130) -> None:
     """Immediate process exit — required when CTranslate2 blocks Python threads."""
+    _stop_finance_os()
     _cleanup_models_best_effort()
     # os._exit skips finally/atexit waiters that may themselves hang on native code
     os._exit(code)
@@ -370,12 +384,172 @@ def _request_shutdown(reason: str) -> None:
         return
     _shutdown_started = True
     log("server", f"shutting down ({reason})...")
+    _stop_finance_os()
     srv = _uvicorn_server
     if srv is not None:
         srv.should_exit = True
         # force_exit tells uvicorn not to wait forever on open connections
         srv.force_exit = True
     _schedule_hard_exit(130 if reason == "SIGINT" else 143)
+
+
+def _finance_os_health_url() -> str:
+    return f"http://{FINANCE_OS_HOST}:{FINANCE_OS_PORT}/api/health"
+
+
+def _finance_os_healthy(timeout: float = 0.4) -> bool:
+    try:
+        with urllib.request.urlopen(_finance_os_health_url(), timeout=timeout) as resp:
+            return 200 <= resp.status < 300
+    except Exception:
+        return False
+
+
+def _stop_finance_os() -> None:
+    global _finance_os_proc
+    proc = _finance_os_proc
+    _finance_os_proc = None
+    if proc is None or proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=2.5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        try:
+            proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            pass
+
+
+def _start_finance_os() -> None:
+    """Spawn the Node finance API on loopback if it is not already up."""
+    global _finance_os_proc
+    if os.environ.get("FINANCE_OS", "1").strip().lower() in {"0", "false", "off", "no"}:
+        log("server", "Finance OS         → disabled (FINANCE_OS=0)")
+        return
+    if _finance_os_healthy():
+        log(
+            "server",
+            f"Finance OS         → already running on {FINANCE_OS_HOST}:{FINANCE_OS_PORT}",
+        )
+        return
+    if not FINANCE_OS_ENTRY.is_file():
+        log(
+            "server",
+            f"Finance OS         → missing {FINANCE_OS_ENTRY}; /finance will 503",
+            level="warn",
+        )
+        return
+    node = shutil.which("node")
+    if not node:
+        log("server", "Finance OS         → node not on PATH; /finance will 503", level="warn")
+        return
+    env = os.environ.copy()
+    env["HOST"] = FINANCE_OS_HOST
+    env["PORT"] = str(FINANCE_OS_PORT)
+    env["FINANCE_ALLOW_UNAUTH"] = "1"
+    env.pop("FINANCE_REQUIRE_TAILSCALE", None)
+    try:
+        _finance_os_proc = subprocess.Popen(
+            [node, str(FINANCE_OS_ENTRY)],
+            cwd=str(FINANCE_OS_DIR),
+            env=env,
+        )
+    except OSError as e:
+        log("server", f"Finance OS         → failed to start: {e}", level="error")
+        _finance_os_proc = None
+        return
+    deadline = time.time() + 8.0
+    while time.time() < deadline:
+        if _finance_os_proc.poll() is not None:
+            log(
+                "server",
+                f"Finance OS         → exited {(_finance_os_proc.returncode)} before ready",
+                level="error",
+            )
+            _finance_os_proc = None
+            return
+        if _finance_os_healthy():
+            log(
+                "server",
+                f"Finance OS         → http://{FINANCE_OS_HOST}:{FINANCE_OS_PORT}  (UI /finance)",
+            )
+            return
+        time.sleep(0.15)
+    log("server", "Finance OS         → started but /api/health not ready yet", level="warn")
+
+
+_FINANCE_OS_HOP = {
+    "host",
+    "content-length",
+    "connection",
+    "keep-alive",
+    "proxy-connection",
+    "transfer-encoding",
+    "te",
+    "trailer",
+    "upgrade",
+    "accept-encoding",
+}
+
+
+def _proxy_finance_os_api(method: str, api_path: str, query: str, body: bytes, headers: list[tuple[str, str]]) -> Response:
+    url = f"http://{FINANCE_OS_HOST}:{FINANCE_OS_PORT}/api/{api_path}"
+    if query:
+        url += f"?{query}"
+    req_headers = {
+        k: v
+        for k, v in headers
+        if k.lower() not in _FINANCE_OS_HOP
+    }
+    data = None if method in {"GET", "HEAD"} else body
+    req = urllib.request.Request(url, data=data, method=method, headers=req_headers)
+    try:
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            out = {
+                k: v
+                for k, v in resp.headers.items()
+                if k.lower() not in _FINANCE_OS_HOP and k.lower() != "content-encoding"
+            }
+            return Response(content=resp.read(), status_code=resp.status, headers=out)
+    except urllib.error.HTTPError as e:
+        out = {
+            k: v
+            for k, v in e.headers.items()
+            if k.lower() not in _FINANCE_OS_HOP and k.lower() != "content-encoding"
+        }
+        return Response(content=e.read(), status_code=e.code, headers=out)
+    except urllib.error.URLError:
+        return JSONResponse(
+            {"ok": False, "error": "Finance app is not running"},
+            status_code=503,
+        )
+
+
+def _finance_os_file(rel: str) -> FileResponse | None:
+    dist = FINANCE_OS_DIST.resolve()
+    target = (FINANCE_OS_DIST / rel).resolve()
+    if target != dist and dist not in target.parents:
+        return None
+    if not target.is_file():
+        return None
+    media = None
+    if target.suffix == ".webmanifest":
+        media = "application/manifest+json"
+    elif target.suffix == ".js":
+        media = "application/javascript"
+    elif target.suffix == ".svg":
+        media = "image/svg+xml"
+    else:
+        guessed, _ = mimetypes.guess_type(str(target))
+        media = guessed
+    headers = {}
+    if target.name in {"sw.js", "manifest.webmanifest", "index.html"}:
+        headers["Cache-Control"] = "no-cache"
+        if target.name == "sw.js":
+            headers["Service-Worker-Allowed"] = "/finance/"
+    return FileResponse(target, media_type=media, headers=headers)
 
 
 def _handle_sigint(signum: int, frame) -> None:  # noqa: ARG001
@@ -2296,7 +2470,7 @@ def api_food_plan_delete(plan_id: str):
     return result
 
 
-# Static frontend
+# Static frontend — each toolkit module has its own page path
 @app.get("/")
 def index():
     return FileResponse(ROOT / "index.html")
@@ -2312,6 +2486,47 @@ def cfa_index():
 @app.get("/food/")
 def food_index():
     return FileResponse(ROOT / "food" / "index.html")
+
+
+@app.get("/old-finance")
+@app.get("/old-finance/")
+def old_finance_index():
+    return FileResponse(ROOT / "index.html")
+
+
+@app.api_route(
+    "/finance/api/{path:path}",
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS", "HEAD"],
+)
+async def finance_os_api(path: str, request: Request):
+    body = await request.body()
+    return _proxy_finance_os_api(
+        request.method,
+        path,
+        request.url.query,
+        body,
+        list(request.headers.items()),
+    )
+
+
+@app.get("/finance")
+@app.get("/finance/")
+def finance_os_index():
+    page = _finance_os_file("index.html")
+    if page is None:
+        raise HTTPException(status_code=503, detail="Finance app is not built")
+    return page
+
+
+@app.get("/finance/{path:path}")
+def finance_os_spa(path: str):
+    page = _finance_os_file(path)
+    if page is not None:
+        return page
+    fallback = _finance_os_file("index.html")
+    if fallback is None:
+        raise HTTPException(status_code=503, detail="Finance app is not built")
+    return fallback
 
 
 @app.get("/sw.js")
@@ -2335,6 +2550,15 @@ def web_manifest():
     )
 
 
+@app.get("/favicon.svg")
+def favicon():
+    return FileResponse(ROOT / "favicon.svg", media_type="image/svg+xml")
+
+
+ICONS_DIR = ROOT / "icons"
+if ICONS_DIR.is_dir():
+    app.mount("/icons", StaticFiles(directory=str(ICONS_DIR)), name="icons")
+
 # Optional: mount /static if you add CSS/JS files later
 if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
@@ -2347,7 +2571,12 @@ def main():
     host = os.environ.get("HOST", "0.0.0.0")
     port = int(os.environ.get("PORT", "8000"))
     log("server", f"Audio Notes server → http://{host}:{port}")
+    public = os.environ.get("TOOLKIT_PUBLIC_URL", "").strip().rstrip("/")
+    if public:
+        log("server", f"Phone              → {public}/")
     log("server", f"Data directory     → {DATA}")
+    atexit.register(_stop_finance_os)
+    _start_finance_os()
     log("server", f"Whisper            → {WHISPER_MODEL} on {WHISPER_DEVICE}")
     if WHISPER_DEVICE == "cuda":
         if "libcublas.so.12" in _cuda_libs_preloaded:
@@ -2404,6 +2633,7 @@ def main():
     except KeyboardInterrupt:
         log("server", "KeyboardInterrupt — exiting")
     finally:
+        _stop_finance_os()
         _cleanup_models_best_effort()
         log("server", "bye")
 
