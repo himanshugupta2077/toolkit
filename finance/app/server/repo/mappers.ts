@@ -188,6 +188,10 @@ export function mapOneTimePlan(row: typeof oneTimePlans.$inferSelect): OneTimePl
     amount: row.amount,
     priority: oneOf(row.priority, PLAN_PRIORITIES, "plan priority") as PlanPriority,
     status: oneOf(row.status, ONE_TIME_STATUSES, "one-time status") as OneTimeStatus,
+    kind:
+      row.kind == null
+        ? null
+        : (oneOf(row.kind, RECURRING_KINDS, "one-time kind") as RecurringKind),
     payFromAccountId: row.payFromAccountId,
     notes: textOrEmpty(row.notes),
     linkedLedgerEntryId: row.linkedEntryId,

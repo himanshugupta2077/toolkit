@@ -1,5 +1,5 @@
 export const TABS = [
-  { to: "/home", label: "Home" },
+  { to: "/home", label: "Dashboard" },
   { to: "/wealth", label: "Wealth" },
   { to: "/wealth/invest", label: "Invest" },
   { to: "/wealth/goals", label: "Goals" },
@@ -9,7 +9,9 @@ export const TABS = [
 export type TabTo = (typeof TABS)[number]["to"];
 
 export function isTabActive(pathname: string, to: string): boolean {
-  if (to === "/home") return pathname === "/" || pathname === "/home";
+  if (to === "/home") {
+    return pathname === "/" || pathname === "/home" || pathname.startsWith("/home/");
+  }
   if (to === "/wealth/invest") {
     return pathname === "/wealth/invest" || pathname.startsWith("/wealth/invest/");
   }
@@ -19,12 +21,16 @@ export function isTabActive(pathname: string, to: string): boolean {
   if (to === "/wealth") {
     if (pathname === "/wealth/invest" || pathname.startsWith("/wealth/invest/")) return false;
     if (pathname === "/wealth/goals" || pathname.startsWith("/wealth/goals/")) return false;
+    if (pathname === "/wealth/emergency" || pathname.startsWith("/wealth/emergency/")) return false;
     return pathname === "/wealth" || pathname.startsWith("/wealth/");
   }
   if (to === "/more") {
     if (pathname === "/more" || pathname.startsWith("/more/")) return true;
     if (pathname === "/plan" || pathname.startsWith("/plan/")) return true;
     if (pathname === "/ledger" || pathname.startsWith("/ledger/")) return true;
+    if (pathname === "/emergency" || pathname.startsWith("/emergency/")) return true;
+    if (pathname === "/wealth/emergency" || pathname.startsWith("/wealth/emergency/")) return true;
+    if (pathname === "/debt" || pathname.startsWith("/debt/")) return true;
     return false;
   }
   return pathname === to || pathname.startsWith(`${to}/`);

@@ -56,6 +56,12 @@ export FINANCE_OS_PORT="${FINANCE_OS_PORT:-8787}"
 # export DEEPSEEK_API_KEY='sk-...'
 # export DEEPSEEK_MODEL='deepseek-v4-flash'   # default
 # export DEEPSEEK_BASE_URL='https://api.deepseek.com'
+#
+# Speech: local Faster Whisper and/or OpenAI whisper-1 (cloud).
+# VPS: TOOLKIT_PROFILE=vps  (cloud only). Laptop: leave local and pick in the UI.
+# export TOOLKIT_PROFILE=local
+# export TOOLKIT_STT=local
+# export OPENAI_API_KEY='sk-...'
 
 # Tailscale Serve (phone HTTPS). Disable: TAILSCALE_SERVE=0
 # export TAILSCALE_SERVE=1
@@ -74,12 +80,20 @@ FINANCE_APP="./finance/app"
 if [[ "${FINANCE_OS:-1}" != "0" && -d "$FINANCE_APP" ]]; then
   if ! command -v node >/dev/null 2>&1; then
     echo "Warning: node not on PATH — /finance will not start"
-  elif [[ ! -f "$FINANCE_APP/dist-server/server/index.js" || ! -f "$FINANCE_APP/dist/index.html" ]]; then
-    echo "Building Finance OS…"
-    if [[ ! -d "$FINANCE_APP/node_modules" ]]; then
-      (cd "$FINANCE_APP" && npm install)
+  else
+    need_finance_build=0
+    if [[ ! -f "$FINANCE_APP/dist-server/server/index.js" || ! -f "$FINANCE_APP/dist/index.html" ]]; then
+      need_finance_build=1
+    elif [[ -n "$(find "$FINANCE_APP/src" "$FINANCE_APP/server" "$FINANCE_APP/index.html" -newer "$FINANCE_APP/dist/index.html" -print -quit 2>/dev/null)" ]]; then
+      need_finance_build=1
     fi
-    (cd "$FINANCE_APP" && npm run build)
+    if [[ "$need_finance_build" == "1" ]]; then
+      echo "Building Finance OS…"
+      if [[ ! -d "$FINANCE_APP/node_modules" ]]; then
+        (cd "$FINANCE_APP" && npm install)
+      fi
+      (cd "$FINANCE_APP" && npm run build)
+    fi
   fi
 fi
 
@@ -138,7 +152,9 @@ cleanup() {
   fi
   CLEANING=1
   if [[ -n "$APP_PID" ]] && kill -0 "$APP_PID" 2>/dev/null; then
-    echo "Stopping Toolkit…"
+    if [[ "$STOP_COUNT" -eq 0 ]]; then
+      echo "Stopping Toolkit…"
+    fi
     stop_app INT
     local i
     for i in $(seq 1 20); do
@@ -185,7 +201,7 @@ echo "Starting Toolkit on ${HOST}:${PORT}"
 echo "  /finance      new finance app"
 echo "  /old-finance  previous phone ledger → xlsx"
 echo "  /food         kitchen"
-echo "  /cfa          CFA tracker"
+echo "  /cfa          CFA tracker (installable PWA)"
 echo "Finance xlsx Ledger → /home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx"
 if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
   echo "Finance AI → DeepSeek ${DEEPSEEK_MODEL:-deepseek-v4-flash} (thinking off)"
@@ -193,6 +209,16 @@ if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
 else
   echo "Finance AI → disabled (set DEEPSEEK_API_KEY for Update ledger /old-finance)"
   echo "Food AI → disabled (set DEEPSEEK_API_KEY to profile new meals)"
+fi
+if [[ "${TOOLKIT_PROFILE:-local}" == "vps" ]]; then
+  echo "Speech → cloud only (OpenAI whisper-1)"
+else
+  echo "Speech → local Whisper or cloud (UI picker; default ${TOOLKIT_STT:-local})"
+fi
+if [[ -n "${OPENAI_API_KEY:-}" ]]; then
+  echo "Cloud STT → OpenAI ${OPENAI_STT_MODEL:-whisper-1}"
+else
+  echo "Cloud STT → disabled (set OPENAI_API_KEY in .env)"
 fi
 
 PHONE_URL=""
@@ -223,7 +249,7 @@ if [[ -n "$PHONE_URL" ]]; then
   echo "  Finance          ${PHONE_URL}/finance"
   echo "  Old finance      ${PHONE_URL}/old-finance"
   echo "  Food             ${PHONE_URL}/food"
-  echo "  CFA              ${PHONE_URL}/cfa"
+  echo "  CFA              ${PHONE_URL}/cfa/"
 fi
 
 # New session so the terminal Ctrl+C hits this script once; we then signal Python.

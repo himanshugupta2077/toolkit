@@ -16,41 +16,26 @@ One FastAPI process (`server.py` / `./run.sh`) serves a phone-sized PWA (`index.
 | App | Where | What it does |
 |---|---|---|
 | Home | `index.html` tiles | Launcher |
-| Audio notes | `index.html` + `/api/notes` | Record → ffmpeg → Faster Whisper → `data/notes/` |
-| Finance | `/finance` + `finance/app/` | New finance OS (Vite/Hono, SQLite). Spawned by `server.py` |
+| Voice | `/voice` + `index.html` + `/api/notes` | Record → local Faster Whisper **or** OpenAI `whisper-1` → `data/notes/` |
+| Finance | `/finance` + `finance/app/` | New finance OS (Vite/Hono, SQLite). Quick Add: form, typed text → DeepSeek, or Speak → Voice STT → DeepSeek. Spawned by `server.py` |
 | Old finance | `/old-finance` + `index.html` | Previous phone form / voice / receipt → **one** xlsx Ledger row |
 | Food | `/food` + `food/` | Kitchen items, logs, meal plans |
-| CFA | `/cfa` + `cfa/` | Study tracker (state in `data/cfa/`) |
-| AI usage | `index.html` + `ai_usage.py` | Token/cost log in `data/ai/` |
-| Heart | `index.html` + `heart/` | Private locked module — leave the lock alone unless the user is changing that flow |
+| CFA | `/cfa/` + `cfa/` | Study tracker PWA (state in `data/cfa/`) |
+| AI | `/ai` + `ai/` + `ai_usage.py` | Spend, editable prompts, per-use-case on/off. Log in `data/ai/` |
+| Heart | `/heart` + `heart/` | Private locked media catalog. Bookmarks in `data/heart/`. Leave the lock alone unless the user is changing that flow |
+| Pact | `/pact` + `pact/` | Override inbox: pending unlock requests from the Android app. Reviewer passkey in `data/pact/reviewer.json`; requests in `data/pact/requests.json` |
 | Queue alerts | `/api/queue/*` | Push/SSE alerts for a local ChatGPT queue on `:3847` |
 
 Python env: `whisper/.venv`. Start with `./run.sh` (uses that interpreter by **relative path** so a moved checkout still works).
 
 ---
 
-## How work runs (workflows)
-
-Implementation, review, and verification in this repo go through **project workflows** in `.grok/workflows/`. Use them instead of one-shotting a multi-file change in a single agent.
-
-| Workflow | Invoke | Use for |
-|---|---|---|
-| `toolkit-task` | `/toolkit-task` or `/workflow toolkit-task` | Feature, fix, or finance phase. Pass `args.objective`. Optional `args.paths`. |
-| `review-changes` | `/review-changes` | Review a diff, branch, or path. Pass `args.target`. Optional `args.since`. |
-| `verify-change` | `/verify-change` | Tests, AGENTS.md rules, sibling UI/state. After implementation or before commit. |
-
-Watch a run in `/workflows`. Tiny single-line copy/typo fixes can skip the orchestrator. Everything else should run as a workflow so scoping, parallel specialists, and adversarial checks actually happen.
-
-These workflows must still obey the non-negotiables below.
-
----
-
 ## Non-negotiables
 
 1. **Change only what was asked.** Minimal diffs. No drive-by refactors, no “while I’m here” dashboard rebuilds.
-2. **Personal data stays off git.** `data/`, `whisper/.venv/`, `.env`, `heart/results.jsonl` are gitignored. Do not force-add them. Do not commit API keys, VAPID private keys, push subscriptions, receipts, audio, or notes.
+2. **Personal data stays off git.** `data/`, `whisper/.venv/`, `.env`, `heart/results.jsonl`, and `heart/media/` are gitignored. Do not force-add them. Do not commit API keys, VAPID private keys, push subscriptions, receipts, audio, or notes.
 3. **Live finance workbook is outside this repo:** `/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx`. Surgical edits only (rules below). LibreOffice may have it open — say so if a write can fail.
-4. **Do not leave a long-running server** for the user unless they asked. Prefer `./run.sh` as the command they run. Default port **8000**.
+4. **Do not leave a long-running server** for the user unless they asked. Prefer `./run.sh` as the command they run. Default port **8000**. The VPS uses `toolkit.service` (see `vps/`).
 5. **Do not invent a full dashboard recreate** (`--patch-live`) for a small sheet/UI request.
 6. Prefer existing modules (`finance/sync.py`, `food/store.py`, `cfa/store.py`) over new parallel write paths.
 
@@ -61,12 +46,17 @@ These workflows must still obey the non-negotiables below.
 ```
 toolkit/
 ├── AGENTS.md                 ← this file (AI rules)
-├── .grok/workflows/          ← toolkit-task, review-changes, verify-change
 ├── README.md                 ← human setup
-├── index.html                ← main PWA (home + notes + old-finance + heart + AI)
+├── index.html                ← main PWA (home + `/voice` + old-finance)
+├── ai/                       ← `/ai` spend + prompts + per-use-case toggles
+├── voice/                    ← Voice PWA (manifest, icons, SW) at `/voice/`
 ├── server.py                 ← FastAPI: static UI + all /api/* + /finance proxy
+├── stt.py                    ← local Faster Whisper vs OpenAI whisper-1
+├── env.sample                ← copy to gitignored .env
+├── paths.py                  ← data dir (TOOLKIT_DATA on VPS)
+├── vps/                      ← droplet: systemd, Serve, env sample, checks
 ├── app_log.py                ← colored tags + data/logs/activity.jsonl
-├── ai_usage.py               ← DeepSeek usage log
+├── ai_usage.py               ← shared LLM/STT usage log (`data/ai/usage.jsonl`)
 ├── run.sh                    ← start with whisper/.venv + env defaults
 ├── manifest.webmanifest      ← PWA name: Toolkit
 ├── sw.js                     ← web push / lock-screen notifications
@@ -78,8 +68,9 @@ toolkit/
 │   ├── build_workbook.py     ← blank template, or --patch-live if asked
 │   └── import_statements.py  ← bulk bank import (user-driven)
 ├── food/                     ← /food UI + store + meal AI
-├── cfa/                      ← /cfa UI + store
-├── heart/                    ← private media catalog (results.jsonl gitignored)
+├── cfa/                      ← /cfa/ readings tracker PWA (manifest, icons, SW)
+├── heart/                    ← `/heart` UI + bookmarks store (media + results.jsonl gitignored)
+├── pact/                     ← `/pact` override inbox (requests in `data/pact/`)
 ├── data/                     ← runtime only (gitignored)
 └── whisper/
     ├── transcribe.py         ← standalone CLI (web app does not call this)
@@ -101,7 +92,7 @@ Same as `./run.sh` in the repo. Works from any directory (`~/.local/bin/toolkit`
 Defaults: `HOST=0.0.0.0`, `PORT=8000`, `WHISPER_MODEL=medium`, `WHISPER_DEVICE=cuda`.  
 `./run.sh` starts Tailscale Serve on this machine’s current MagicDNS name and tears it down on Ctrl+C. Skip Serve with `TAILSCALE_SERVE=0`.
 
-Local `.env` is sourced by `run.sh` if present (gitignored). Needed for finance/food AI: `DEEPSEEK_API_KEY`. Optional: `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_RECEIPT_MODE`, `FINANCE_WORKBOOK`, `WHISPER_*`.
+Local `.env` is sourced by `run.sh` if present (gitignored). Sample: `env.sample`. Needed for finance/food AI and optional Voice note titles: `DEEPSEEK_API_KEY`. Cloud notes: `OPENAI_API_KEY` (whisper-1). VPS: `TOOLKIT_PROFILE=vps` (cloud STT only). Optional: `TOOLKIT_STT`, `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_RECEIPT_MODE`, `FINANCE_WORKBOOK`, `WHISPER_*`.
 
 Python for one-off scripts:
 
@@ -121,15 +112,15 @@ Do **not** use system Python. `run.sh` exists because `source whisper/.venv/bin/
 | Transaction history | **Ledger** in `/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx` (+ `data/finance/entries.jsonl`) |
 | Current dashboard layout / copy / charts | **Live xlsx** (until the user asks to sync Python) |
 | Blank finance template / intentional full rebuild | `finance/build_workbook.py` |
-| Notes, audio, receipts, food, CFA, usage | `data/` on disk (not git) |
-| Heart catalog | `heart/` on disk |
+| Notes, audio, receipts, food, CFA, usage, Heart bookmarks | `data/` on disk (not git) |
+| Heart catalog | `heart/` on disk (`results.jsonl` + `media/`, gitignored). VPS copy: `bash vps/push-heart.sh` → `/opt/toolkit/heart` (not git, not `toolkit-deploy`) |
 
 ---
 
 ## Code change habits
 
 - Match surrounding style. Short factual comments only when the constraint is non-obvious.
-- Phone UI is one large `index.html` (plus `food/index.html`, `cfa/index.html`). Surgical DOM/JS edits; don’t rewrite the file for a one-line fix.
+- Phone UI is one large `index.html` (plus `food/index.html`, `cfa/index.html`, `heart/index.html`). Surgical DOM/JS edits; don’t rewrite the file for a one-line fix.
 - After UI/layout/state changes, verify the flow the user would use (and sibling views that share that state). If you cannot open a browser, say so and use the closest substitute (`curl` against a server the user already has running — do not start one just to screenshot).
 - New API routes live in `server.py` next to the existing `/api/...` handlers.
 - If LibreOffice has the finance xlsx open, an external write can fail or look stale until reload.
@@ -203,11 +194,13 @@ Default `build_workbook.py` (no flag) writes the **blank template** `finance/Fin
 
 ## Finance pipelines (already implemented)
 
-**Voice:** Finance tab 🎙 → Whisper → DeepSeek `deepseek-v4-flash` (thinking **disabled**) → JSON → `sync.add_entry` with `Source=ai`. Success: this month’s transactions, new row highlighted. Form entries: `Source=manual`. Audio Notes is transcript-only (no ledger write).
+**New app (`/finance`):** Quick Add Form posts SQLite via `POST /finance/api/ledger` (`source=manual`). Type is `POST /api/finance-os/parse` (DeepSeek, `finance/os_parse.py`, docs in `finance/os_docs/`) then the same ledger POST (`source=ai`). Speak is `POST /api/finance-os/voice`: Voice STT, save note under `data/notes/` (`kind=finance`), then the same parse. Never writes the xlsx.
 
-**Receipt photo:** Finance 📷 → `POST /api/finance/receipt` → vision or OCR fallback → **exactly one** Ledger row (`Source=ai`).
+**Old `/old-finance` voice:** Finance tab 🎙 → Whisper → DeepSeek → `sync.add_entry` with `Source=ai` (xlsx). Form entries: `Source=manual`.
 
-- Prompt docs: `finance/ai_docs/` (`SHEET_OVERVIEW.md`, `PARSE_TASK.md`, `EXAMPLES.md`, `IMAGE_PARSE.md`, `IMAGE_EXAMPLES.md`). They hot-reload when mtimes change.
+**Receipt photo:** old-finance 📷 → `POST /api/finance/receipt` → vision or OCR fallback → **exactly one** xlsx Ledger row (`Source=ai`).
+
+- OS prompt docs: `finance/os_docs/`. Excel prompt docs: `finance/ai_docs/`. They hot-reload when mtimes change.
 - Env: `DEEPSEEK_API_KEY`; optional `DEEPSEEK_MODEL`, `DEEPSEEK_BASE_URL`, `DEEPSEEK_RECEIPT_MODE=auto|vision|ocr`.
 
 Never rebuild dashboards from these paths.
@@ -218,10 +211,11 @@ Never rebuild dashboards from these paths.
 
 | Area | Append / store | Notes |
 |---|---|---|
-| Notes | `data/notes/{id}.json` + `.txt`, audio under `data/audio/` | Don’t rewrite history the user didn’t ask to change |
+| Voice / notes | `data/notes/{id}.json` + `.txt`, audio under `data/audio/` | Don’t rewrite history the user didn’t ask to change |
 | Food | `food/store.py` → `data/food/` | AI meal profile uses the same DeepSeek key |
 | CFA | `cfa/store.py` → `data/cfa/state.json` | |
-| AI usage | `ai_usage.py` → `data/ai/usage.jsonl` | |
+| Heart bookmarks | `heart/store.py` → `data/heart/bookmarks.json` | Comment + custom tags per post |
+| AI usage | `ai_usage.py` → `data/ai/usage.jsonl`; flags in `data/ai/config.json`; prompt edits in `data/ai/prompts/` | `/ai` app |
 | Activity log | `app_log.py` → `data/logs/activity.jsonl` | |
 
 ---

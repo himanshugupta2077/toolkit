@@ -103,6 +103,12 @@ describe("recurring sections", () => {
     expect(endedRows).toEqual([]);
   });
 
+  it("Bill chip is only stored kind bill, not lifestyle", () => {
+    const rent = rec({ id: "rec_rent_bill", name: "Rent", kind: "bill" });
+    const { live } = recurringSections([...plans, rent], "bill", TODAY, categories);
+    expect(live.map((row) => row.id)).toEqual(["rec_rent_bill"]);
+  });
+
   it("Inactive chip is only the off switch, not ended", () => {
     const { live, ended: endedRows } = recurringSections(plans, "inactive", TODAY, categories);
     expect(live.map((row) => row.id)).toEqual(["rec_gym"]);
@@ -126,6 +132,7 @@ describe("one-time and inflows lists", () => {
         amount: 1,
         priority: "low",
         status: "planned",
+        kind: null,
         payFromAccountId: null,
         notes: "",
         linkedLedgerEntryId: null,
@@ -138,6 +145,7 @@ describe("one-time and inflows lists", () => {
         amount: 1,
         priority: "high",
         status: "planned",
+        kind: "bill",
         payFromAccountId: null,
         notes: "",
         linkedLedgerEntryId: null,
@@ -150,6 +158,7 @@ describe("one-time and inflows lists", () => {
         amount: 1,
         priority: "medium",
         status: "completed",
+        kind: null,
         payFromAccountId: null,
         notes: "",
         linkedLedgerEntryId: null,

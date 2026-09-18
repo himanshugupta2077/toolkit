@@ -11,6 +11,7 @@ import {
 import {
   activeThemeTierId,
   automationSip,
+  moveAsset,
   sipForDraft,
   sipPct,
   themeTierCaption,
@@ -64,6 +65,17 @@ describe("invest editor helpers", () => {
     expect(automationSip(sipForDraft(plan, rupeesToPaise(25_000)))).toBeGreaterThan(0);
     expect(activeThemeTierId(plan, rupeesToPaise(10_000))).toBe("below_threshold");
     expect(activeThemeTierId(plan, rupeesToPaise(25_000))).toBe("at_or_above_threshold");
+  });
+
+  it("reorders assets in the list immediately", () => {
+    const plan = seedDefaultInvestPlan();
+    const first = plan.assets[0]?.id;
+    const second = plan.assets[1]?.id;
+    expect(first && second).toBeTruthy();
+    const down = moveAsset(plan, first!, 1);
+    expect(down.assets[0]?.id).toBe(second);
+    expect(down.assets[1]?.id).toBe(first);
+    expect(moveAsset(plan, first!, -1)).toBe(plan);
   });
 
   it("labels the default theme tiers", () => {

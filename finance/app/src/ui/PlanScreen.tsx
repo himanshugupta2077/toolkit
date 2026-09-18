@@ -4,6 +4,9 @@ import { Link, useOutletContext, useSearchParams } from "react-router-dom";
 import { apiErrorText } from "./copy.ts";
 import { FetchError } from "./FetchError.tsx";
 import {
+  deleteInflow,
+  deleteOneTime,
+  deleteRecurring,
   getPlan,
   patchInflow,
   patchOneTime,
@@ -171,6 +174,21 @@ export function PlanScreen() {
     }
   }
 
+  async function onDeleteRecurring() {
+    if (!recurringEdit || recurringEdit === "new") return;
+    setSaving(true);
+    try {
+      const res = await deleteRecurring(recurringEdit.id);
+      const name = recurringEdit.name;
+      setRecurringEdit(null);
+      await afterWrite(res, `${name} deleted`);
+    } catch (err) {
+      onToast(apiErrorText(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function onToggleRecurring(plan: RecurringPlan, active: boolean) {
     try {
       const res = await patchRecurring(plan.id, { active });
@@ -196,10 +214,25 @@ export function PlanScreen() {
     }
   }
 
+  async function onDeleteOneTime() {
+    if (!oneTimeEdit || oneTimeEdit === "new") return;
+    setSaving(true);
+    try {
+      const res = await deleteOneTime(oneTimeEdit.id);
+      const name = oneTimeEdit.name;
+      setOneTimeEdit(null);
+      await afterWrite(res, `${name} deleted`);
+    } catch (err) {
+      onToast(apiErrorText(err));
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function onCompleteOneTime(plan: OneTimePlan) {
     try {
       const res = await patchOneTime(plan.id, { status: "completed" });
-      await afterWrite(res, `${plan.name} completed — no ledger row`);
+      await afterWrite(res, `${plan.name} completed: no ledger row`);
     } catch (err) {
       onToast(apiErrorText(err));
     }
@@ -211,6 +244,21 @@ export function PlanScreen() {
       await afterWrite(res, `${plan.name} cancelled`);
     } catch (err) {
       onToast(apiErrorText(err));
+    }
+  }
+
+  async function onDeleteInflow() {
+    if (!inflowEdit || inflowEdit === "new") return;
+    setSaving(true);
+    try {
+      const res = await deleteInflow(inflowEdit.id);
+      const name = inflowEdit.name;
+      setInflowEdit(null);
+      await afterWrite(res, `${name} deleted`);
+    } catch (err) {
+      onToast(apiErrorText(err));
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -238,16 +286,16 @@ export function PlanScreen() {
   }, [data, forecastKind]);
 
   return (
-    <section className="px-5 pb-8">
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">Plan</h1>
+    <section className="page">
+      <h1 className="page-title">Budget</h1>
       <p className="mt-1 text-sm text-muted">Planning never posts to the ledger.</p>
 
-      <div className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1">
+      <div className="tab-row">
         {PLAN_TABS.map((id) => (
           <button
             key={id}
             type="button"
-            className={chipClass(tab === id)}
+            className={`tab ${tab === id ? "tab-on" : "tab-off"}`}
             onClick={() => write({ tab: id })}
           >
             {PLAN_TAB_LABELS[id]}
@@ -256,7 +304,7 @@ export function PlanScreen() {
       </div>
 
       {planQ.isPending ? (
-        <p className="py-8 text-sm text-muted">Loading Plan…</p>
+        <p className="py-8 text-sm text-muted">Loading Budget…</p>
       ) : planQ.error ? (
         <FetchError error={planQ.error} onRetry={() => void planQ.refetch()} />
       ) : data ? (
@@ -311,7 +359,7 @@ export function PlanScreen() {
         </>
       ) : null}
 
-      <BottomSheet open={capOpen} title="Budget cap" tall onClose={() => setCapOpen(false)}>
+      <BottomSheet open={capOpen} title="Budget cap" onClose={() => setCapOpen(false)}>
         {data ? (
           <BudgetCapSheet cap={data.pace.cap} saving={saving} onSave={onSaveCap} />
         ) : null}
@@ -320,7 +368,6 @@ export function PlanScreen() {
       <BottomSheet
         open={recurringEdit != null}
         title={recurringEdit === "new" ? "Add recurring" : "Edit recurring"}
-        tall
         onClose={() => setRecurringEdit(null)}
       >
         {data ? (
@@ -333,6 +380,7 @@ export function PlanScreen() {
             today={data.today}
             saving={saving}
             onSave={onSaveRecurring}
+            onDelete={recurringEdit && recurringEdit !== "new" ? onDeleteRecurring : undefined}
           />
         ) : null}
       </BottomSheet>
@@ -340,7 +388,6 @@ export function PlanScreen() {
       <BottomSheet
         open={oneTimeEdit != null}
         title={oneTimeEdit === "new" ? "Add one-time" : "Edit one-time"}
-        tall
         onClose={() => setOneTimeEdit(null)}
       >
         {data ? (
@@ -353,6 +400,7 @@ export function PlanScreen() {
             today={data.today}
             saving={saving}
             onSave={onSaveOneTime}
+            onDelete={oneTimeEdit && oneTimeEdit !== "new" ? onDeleteOneTime : undefined}
           />
         ) : null}
       </BottomSheet>
@@ -360,7 +408,6 @@ export function PlanScreen() {
       <BottomSheet
         open={inflowEdit != null}
         title={inflowEdit === "new" ? "Add inflow" : "Edit inflow"}
-        tall
         onClose={() => setInflowEdit(null)}
       >
         {data ? (
@@ -372,6 +419,7 @@ export function PlanScreen() {
             today={data.today}
             saving={saving}
             onSave={onSaveInflow}
+            onDelete={inflowEdit && inflowEdit !== "new" ? onDeleteInflow : undefined}
           />
         ) : null}
       </BottomSheet>
@@ -445,7 +493,8 @@ function BudgetPanel({
         </button>
       </div>
 
-      <div className="mt-3 card p-4">
+      <div className="desk-dash mt-3">
+      <div className="card p-4 desk:col-span-5 desk:p-5">
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="kicker">Cap</p>
@@ -469,7 +518,8 @@ function BudgetPanel({
         <PaceBar usedPct={data.pace.usedPct} elapsedPct={data.pace.elapsedPct} band={data.pace.band} />
       </div>
 
-      <h3 className="mt-5 text-sm font-semibold text-ink">Spend by category</h3>
+      <div className="desk:col-span-7">
+      <h3 className="text-sm font-semibold text-ink">Spend by category</h3>
       {data.paceByCategory.length === 0 ? (
         <p className="mt-2 text-sm text-muted">No in-budget spend this month.</p>
       ) : (
@@ -499,9 +549,11 @@ function BudgetPanel({
           ))}
         </ul>
       )}
+      </div>
 
-      <h3 className="mt-5 text-sm font-semibold text-ink">Months</h3>
-      <ul className="mt-2 divide-y divide-line">
+      <div className="desk:col-span-12">
+      <h3 className="text-sm font-semibold text-ink">Months</h3>
+      <ul className="mt-2 divide-y divide-line desk:grid desk:grid-cols-3 desk:gap-x-6 desk:divide-y-0">
         {data.budgetMonths.map((row) => (
           <li key={row.month}>
             <button
@@ -529,6 +581,8 @@ function BudgetPanel({
           </li>
         ))}
       </ul>
+      </div>
+      </div>
     </div>
   );
 }
@@ -565,7 +619,7 @@ function RecurringPanel({
         </p>
       </div>
 
-      <div className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1">
+      <div className="chip-row">
         {RECURRING_FILTERS.map((id) => (
           <button
             key={id}
@@ -581,7 +635,7 @@ function RecurringPanel({
       <button
         type="button"
         onClick={onAdd}
-        className="mt-3 btn-secondary w-full text-sm"
+        className="mt-3 btn-secondary w-full text-sm desk:w-auto"
       >
         + Add recurring
       </button>
@@ -589,7 +643,7 @@ function RecurringPanel({
       {sections.live.length === 0 && sections.ended.length === 0 ? (
         <p className="mt-4 text-sm text-muted">No recurring plans in this filter.</p>
       ) : (
-        <ul className="mt-3 divide-y divide-line">
+        <ul className="mt-3 divide-y divide-line desk:grid desk:grid-cols-2 desk:gap-x-10 desk:divide-y-0">
           {sections.live.map((plan) => (
             <li key={plan.id} className="py-3">
               <RecurringCard
@@ -692,7 +746,7 @@ function OneTimePanel({
           {formatInr(data.oneTimeHeader.totalPlanned)}
         </p>
       </div>
-      <div className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1">
+      <div className="chip-row">
         {(["planned", "completed", "cancelled"] as const).map((id) => (
           <button
             key={id}
@@ -707,14 +761,14 @@ function OneTimePanel({
       <button
         type="button"
         onClick={onAdd}
-        className="mt-3 btn-secondary w-full text-sm"
+        className="mt-3 btn-secondary w-full text-sm desk:w-auto"
       >
         + Add one-time
       </button>
       {rows.length === 0 ? (
         <p className="mt-4 text-sm text-muted">Nothing in {ONE_TIME_STATUS_LABELS[status]}.</p>
       ) : (
-        <ul className="mt-3 divide-y divide-line">
+        <ul className="mt-3 divide-y divide-line desk:grid desk:grid-cols-2 desk:gap-x-10 desk:divide-y-0">
           {rows.map((plan) => {
             const pay = accountName(plan.payFromAccountId, data.accounts);
             return (
@@ -725,6 +779,7 @@ function OneTimePanel({
                       <span className="block truncate text-base text-ink">{plan.name}</span>
                       <span className="mt-0.5 block text-[13px] text-muted">
                         {plan.expectedDate} · {PRIORITY_LABELS[plan.priority]}
+                        {plan.kind === "bill" ? ` · ${RECURRING_KIND_LABELS.bill}` : ""}
                         {pay ? ` · ${pay}` : ""}
                       </span>
                     </span>
@@ -787,7 +842,7 @@ function InflowsPanel({
           Free to allocate ignores these until they land in the ledger.
         </p>
       </div>
-      <div className="-mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1">
+      <div className="chip-row">
         {(["expected", "received", "dropped"] as const).map((id) => (
           <button
             key={id}
@@ -802,7 +857,7 @@ function InflowsPanel({
       <button
         type="button"
         onClick={onAdd}
-        className="mt-3 btn-secondary w-full text-sm"
+        className="mt-3 btn-secondary w-full text-sm desk:w-auto"
       >
         + Add inflow
       </button>
@@ -811,7 +866,7 @@ function InflowsPanel({
           {status === "expected" ? "None expected. That's fine." : `Nothing ${status}.`}
         </p>
       ) : (
-        <ul className="mt-3 divide-y divide-line">
+        <ul className="mt-3 divide-y divide-line desk:grid desk:grid-cols-2 desk:gap-x-10 desk:divide-y-0">
           {rows.map((row) => (
             <li key={row.id}>
               <button
@@ -868,7 +923,7 @@ function ForecastPanel({
         <div className="mt-3 flex items-end justify-between gap-1">
           {bars.map((bar) => (
             <div key={bar.month} className="flex min-w-0 flex-1 flex-col items-center gap-1">
-              <div className="flex h-20 w-7 flex-col justify-end overflow-hidden rounded-md bg-card-2">
+              <div className="flex h-20 w-7 flex-col justify-end overflow-hidden rounded-md bg-card-2 desk:h-48 desk:w-14">
                 <div
                   className="flex w-full flex-col justify-end"
                   style={{ height: `${Math.round(bar.height * 100)}%` }}
@@ -907,7 +962,7 @@ function ForecastPanel({
         </p>
       </div>
 
-      <ul className="mt-3 space-y-2">
+      <ul className="mt-3 space-y-2 desk:grid desk:grid-cols-3 desk:gap-4 desk:space-y-0">
         {data.forecast.months.map((row) => (
           <ForecastCard key={row.month} row={row} onKind={onKind} />
         ))}

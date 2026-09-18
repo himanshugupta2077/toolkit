@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-Toolkit server — phone-to-laptop apps over Tailscale: notes, finance, food, CFA.
+Toolkit server — phone-to-laptop apps over Tailscale: voice, finance, food, CFA, AI, heart, pact.
 """
 
 from __future__ import annotations
 
 import atexit
 import json
+import logging
 import mimetypes
 import os
 import queue as waitqueue
@@ -25,19 +26,37 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    JSONResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 
 # Finance tracker (phone form → JSONL + local xlsx Ledger)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from finance import sync as finance_sync  # noqa: E402
 from finance import ai_parse as finance_ai  # noqa: E402
+from finance import os_parse as finance_os  # noqa: E402
 from cfa import store as cfa_store  # noqa: E402
 from food import store as food_store  # noqa: E402
 from food import ai as food_ai  # noqa: E402
+from heart import store as heart_store  # noqa: E402
+from pact import auth as pact_auth  # noqa: E402
+from pact import store as pact_store  # noqa: E402
 import ai_usage  # noqa: E402
+from ai import catalog as ai_catalog  # noqa: E402
+from ai import features as ai_features  # noqa: E402
+from ai import fx as ai_fx  # noqa: E402
+from ai import prompts as ai_prompts  # noqa: E402
 import app_log  # noqa: E402
+import notes_ai  # noqa: E402
+import stt as stt_engine  # noqa: E402
 from app_log import log, log_finance  # noqa: E402
+from paths import data_root  # noqa: E402
 
 
 def _nvidia_cuda_lib_dirs() -> list[Path]:
@@ -97,14 +116,20 @@ def _preload_nvidia_cuda_libs() -> list[str]:
     return loaded
 
 
-_cuda_libs_preloaded = _preload_nvidia_cuda_libs()
+_cuda_libs_preloaded: list[str] = []
+if (os.environ.get("TOOLKIT_PROFILE") or "local").strip().lower() not in {
+    "vps",
+    "cloud-only",
+    "server",
+}:
+    _cuda_libs_preloaded = _preload_nvidia_cuda_libs()
 
 # ---------------------------------------------------------------------------
 # Paths
 # ---------------------------------------------------------------------------
 
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
+DATA = data_root()
 AUDIO_DIR = DATA / "audio"
 NOTES_DIR = DATA / "notes"
 FINANCE_DIR = DATA / "finance"
@@ -113,8 +138,13 @@ STATIC_DIR = ROOT / "static"
 HEART_DIR = ROOT / "heart"
 HEART_MEDIA_DIR = HEART_DIR / "media"
 HEART_RESULTS = HEART_DIR / "results.jsonl"
+VOICE_DIR = ROOT / "voice"
+CFA_UI_DIR = ROOT / "cfa"
+AI_UI_DIR = ROOT / "ai"
 CFA_DIR = DATA / "cfa"
 FOOD_DIR = DATA / "food"
+HEART_DATA_DIR = DATA / "heart"
+PACT_DIR = DATA / "pact"
 QUEUE_ALERTS_PATH = DATA / "queue-alerts.jsonl"
 QUEUE_BATCH_URL = os.environ.get("QUEUE_BATCH_URL", "http://127.0.0.1:3847").rstrip("/")
 QUEUE_ALERTS_MAX = 80
@@ -144,6 +174,8 @@ for d in (
     AI_DIR,
     CFA_DIR,
     FOOD_DIR,
+    HEART_DATA_DIR,
+    PACT_DIR,
     app_log.LOG_DIR,
 ):
     d.mkdir(parents=True, exist_ok=True)
@@ -385,10 +417,11 @@ def _request_shutdown(reason: str) -> None:
     _shutdown_started = True
     log("server", f"shutting down ({reason})...")
     _stop_finance_os()
+    _wake_sse_clients()
     srv = _uvicorn_server
     if srv is not None:
         srv.should_exit = True
-        # force_exit tells uvicorn not to wait forever on open connections
+        # force_exit: do not wait for the phone EventSource (or other keep-alives)
         srv.force_exit = True
     _schedule_hard_exit(130 if reason == "SIGINT" else 143)
 
@@ -741,6 +774,172 @@ def list_notes() -> list[dict[str, Any]]:
     return notes
 
 
+def default_note_title(created: str) -> str:
+    return notes_ai.default_title(created)
+
+
+def note_txt_body(note: dict[str, Any]) -> str:
+    title = note.get("title") or note.get("id") or "Note"
+    created = note.get("created_at", "")
+    if note.get("status") == "error" and note.get("error"):
+        return f"{title}\n\n[transcription failed]\n{note['error']}\n"
+    transcript = note.get("transcript") or ""
+    extra = ""
+    finance_result = note.get("finance")
+    if isinstance(finance_result, dict):
+        if finance_result.get("ok"):
+            n = len(finance_result.get("entries") or [])
+            extra = f"\n\n[ledger] saved {n} entr{'y' if n == 1 else 'ies'} (source=ai)\n"
+        else:
+            extra = f"\n\n[ledger] not saved: {finance_result.get('error')}\n"
+    return f"{title}\n{created}\n\n{transcript}{extra}\n"
+
+
+def save_note(note: dict[str, Any]) -> None:
+    note_id = str(note.get("id") or "")
+    if not note_id:
+        raise ValueError("note id required")
+    json_path = NOTES_DIR / f"{note_id}.json"
+    txt_path = NOTES_DIR / f"{note_id}.txt"
+    atomic_write_text(json_path, json.dumps(note, indent=2))
+    atomic_write_text(txt_path, note_txt_body(note))
+
+
+def apply_note_title(note: dict[str, Any], *, user_title: str = "") -> None:
+    """User title wins. Else DeepSeek if the key is set. Else auto 'Note <time>'."""
+    title, source = notes_ai.resolve_title(
+        user_title=user_title,
+        existing_title=str(note.get("title") or ""),
+        existing_source=note.get("title_source"),
+        transcript=str(note.get("transcript") or ""),
+        created=str(note.get("created_at") or utc_now_iso()),
+    )
+    note["title"] = title
+    note["title_source"] = source
+
+
+def _audio_ext(filename: str, content_type: str) -> str:
+    ext = Path(filename or "").suffix.lower()
+    if ext in {".webm", ".ogg", ".mp3", ".wav", ".m4a", ".mp4", ".aac"}:
+        return ext
+    ctype = (content_type or "").lower()
+    if "ogg" in ctype:
+        return ".ogg"
+    if "mp4" in ctype or "m4a" in ctype:
+        return ".m4a"
+    if "mpeg" in ctype or "mp3" in ctype:
+        return ".mp3"
+    if "wav" in ctype:
+        return ".wav"
+    return ".webm"
+
+
+def ingest_audio_note(
+    raw: bytes,
+    *,
+    filename: str,
+    content_type: str,
+    title: str = "",
+    client_id: str = "",
+    model: str = "",
+    translate: bool = False,
+    stt: str = "",
+    extra: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Save audio, transcribe with the Voice STT path, write note JSON+txt."""
+    if not raw:
+        raise HTTPException(status_code=400, detail="Empty audio upload")
+    if len(raw) > 200 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio larger than 200MB")
+
+    note_id = uuid.uuid4().hex[:12]
+    created = utc_now_iso()
+    try:
+        stt_mode = stt_engine.resolve_stt(stt)
+    except stt_engine.STTError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e)) from e
+    chosen_model = (
+        stt_engine.cloud_model() if stt_mode == "cloud" else local_model_name(model)
+    )
+    ext = _audio_ext(filename, content_type)
+    audio_name = f"{note_id}{ext}"
+    audio_path = AUDIO_DIR / audio_name
+    atomic_write_bytes(audio_path, raw)
+    log("upload", f"saved {audio_path} ({len(raw)} bytes)")
+
+    user_title = (title or "").strip()
+    display_title = user_title or default_note_title(created)
+    extra_fields = dict(extra or {})
+
+    try:
+        result = run_transcribe(
+            audio_path,
+            stt=stt_mode,
+            model_name=model,
+            translate=translate,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        note = {
+            "id": note_id,
+            "title": display_title,
+            "title_source": "user" if user_title else "auto",
+            "created_at": created,
+            "status": "error",
+            "error": str(e),
+            "audio_file": audio_name,
+            "audio_bytes": len(raw),
+            "transcript": "",
+            "model": chosen_model,
+            "stt": stt_mode,
+            "translate": translate,
+            "client_id": client_id or None,
+            **extra_fields,
+        }
+        save_note(note)
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}") from e
+
+    note = {
+        "id": note_id,
+        "title": display_title,
+        "title_source": "user" if user_title else "auto",
+        "created_at": created,
+        "status": "ready",
+        "audio_file": audio_name,
+        "wav_file": result.get("wav_file"),
+        "audio_bytes": len(raw),
+        "transcript": result["transcript"],
+        "language": result["language"],
+        "language_probability": result["language_probability"],
+        "segments": result["segments"],
+        "processing_seconds": result["processing_seconds"],
+        "duration": result.get("duration"),
+        "model": result["model"],
+        "stt": result.get("stt") or stt_mode,
+        "device": result["device"],
+        "task": result.get("task"),
+        "translate": result.get("translate", False),
+        "client_id": client_id or None,
+        **extra_fields,
+    }
+    apply_note_title(note, user_title=user_title)
+    save_note(note)
+    log(
+        "note",
+        f"{note_id} ready — {len(result['transcript'])} chars "
+        f"in {result['processing_seconds']}s lang={result['language']} "
+        f"task={result.get('task')} stt={result.get('stt')} model={result['model']}"
+        f" title={note.get('title_source')}",
+        extra={"note_id": note_id, "chars": len(result["transcript"])},
+    )
+    log("note", f"audio: {audio_path}")
+    log("note", f"text:  {NOTES_DIR / f'{note_id}.txt'}")
+    if result.get("wav_file"):
+        log("note", f"wav:   {AUDIO_DIR / result['wav_file']}")
+    return note
+
+
 def convert_to_whisper_wav(src: Path, dest: Path) -> Path:
     """
     Browser .webm/.m4a is a bad direct input for Whisper:
@@ -984,6 +1183,7 @@ def transcribe_file(
             "translate": translate,
             "wav_file": wav_path.name,
             "duration": round(float(info.duration), 2) if getattr(info, "duration", None) else None,
+            "stt": "local",
         }
     finally:
         with _model_lock:
@@ -992,6 +1192,42 @@ def transcribe_file(
         # Free GPU after idle keep-alive (or immediately if KEEP_ALIVE=0)
         if not still_busy:
             schedule_idle_unload()
+
+
+def local_model_name(model: str | None) -> str:
+    n = (model or "").strip().lower()
+    if not n or n == "whisper-1":
+        return normalize_model_name(None)
+    return normalize_model_name(model)
+
+
+def run_transcribe(
+    audio_path: Path,
+    *,
+    stt: str | None,
+    model_name: str | None,
+    translate: bool,
+) -> dict[str, Any]:
+    try:
+        mode = stt_engine.resolve_stt(stt)
+    except stt_engine.STTError as e:
+        raise HTTPException(status_code=e.http_status, detail=str(e)) from e
+    if mode == "cloud":
+        try:
+            return stt_engine.transcribe_cloud(
+                audio_path,
+                translate=translate,
+                language=WHISPER_LANGUAGE,
+            )
+        except stt_engine.STTError as e:
+            raise HTTPException(status_code=e.http_status, detail=str(e)) from e
+    result = transcribe_file(
+        audio_path,
+        model_name=local_model_name(model_name),
+        translate=translate,
+    )
+    result["stt"] = "local"
+    return result
 
 
 app = FastAPI(title="Toolkit", version="1.1.0")
@@ -1025,6 +1261,7 @@ def health():
         "available_models": AVAILABLE_MODELS,
         "notes_count": len(list(NOTES_DIR.glob("*.json"))),
         "queue_batch_url": QUEUE_BATCH_URL,
+        "stt": stt_engine.options(),
     }
 
 
@@ -1035,7 +1272,26 @@ def health():
 _queue_lock = threading.Lock()
 _sse_lock = threading.Lock()
 _sse_clients: list[waitqueue.Queue] = []
+_SSE_SHUTDOWN = object()
 _vapid_cache: dict[str, str] | None = None
+
+
+def _wake_sse_clients() -> None:
+    """Unblock /api/queue/stream generators so Ctrl+C is not stuck on q.get()."""
+    with _sse_lock:
+        clients = list(_sse_clients)
+    for q in clients:
+        try:
+            q.put_nowait(_SSE_SHUTDOWN)
+        except waitqueue.Full:
+            try:
+                q.get_nowait()
+            except waitqueue.Empty:
+                pass
+            try:
+                q.put_nowait(_SSE_SHUTDOWN)
+            except waitqueue.Full:
+                pass
 
 
 def _read_queue_alerts() -> list[dict[str, Any]]:
@@ -1291,12 +1547,20 @@ def api_queue_stream():
     def gen():
         try:
             yield "event: hello\ndata: {}\n\n"
-            while True:
+            idle = 0.0
+            while not _shutdown_started:
                 try:
-                    item = q.get(timeout=25)
-                    yield f"event: alert\ndata: {json.dumps(item)}\n\n"
+                    item = q.get(timeout=0.5)
                 except waitqueue.Empty:
-                    yield ": keepalive\n\n"
+                    idle += 0.5
+                    if idle >= 25:
+                        idle = 0.0
+                        yield ": keepalive\n\n"
+                    continue
+                if item is _SSE_SHUTDOWN or _shutdown_started:
+                    break
+                idle = 0.0
+                yield f"event: alert\ndata: {json.dumps(item)}\n\n"
         finally:
             with _sse_lock:
                 if q in _sse_clients:
@@ -1440,11 +1704,112 @@ def api_finance_ai_status():
 @app.get("/api/ai/usage")
 def api_ai_usage(limit: int = 100):
     """
-    All AI API calls + estimated spend (DeepSeek pricing).
-    Shared across modules (finance today; more later).
+    All AI API calls + estimated spend (DeepSeek + whisper-1).
+    Shared across modules.
     """
     lim = max(1, min(int(limit or 100), 500))
     return ai_usage.usage_summary(limit=lim)
+
+
+@app.get("/api/ai/overview")
+def api_ai_overview(limit: int = 120):
+    """Catalog + spend + keys for the /ai app (no secrets)."""
+    lim = max(1, min(int(limit or 120), 500))
+    return ai_catalog.overview(limit=lim)
+
+
+@app.get("/api/ai/modules/{module_id}")
+def api_ai_module(module_id: str, limit: int = 80):
+    page = ai_catalog.module_page(module_id, limit=max(1, min(int(limit or 80), 500)))
+    if not page:
+        raise HTTPException(status_code=404, detail="Unknown module")
+    return page
+
+
+@app.get("/api/ai/use/{use_id}")
+def api_ai_use(use_id: str, limit: int = 40):
+    page = ai_catalog.detail(use_id, limit=max(1, min(int(limit or 40), 200)))
+    if not page:
+        raise HTTPException(status_code=404, detail="Unknown AI use-case")
+    return page
+
+
+@app.put("/api/ai/use/{use_id}/prompt")
+def api_ai_save_prompt(use_id: str, body: dict[str, Any] = Body(...)):
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected JSON object")
+    field = str(body.get("field") or "").strip()
+    text = body.get("text")
+    if not isinstance(text, str):
+        raise HTTPException(status_code=400, detail="text is required")
+    name = body.get("name")
+    try:
+        ai_prompts.save_field(
+            use_id,
+            field=field,
+            text=text,
+            name=str(name) if name else None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    page = ai_catalog.detail(use_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Unknown AI use-case")
+    return page
+
+
+@app.post("/api/ai/use/{use_id}/prompt/reset")
+def api_ai_reset_prompt(use_id: str, body: dict[str, Any] | None = Body(None)):
+    payload = body if isinstance(body, dict) else {}
+    field = str(payload.get("field") or "all").strip() or "all"
+    name = payload.get("name")
+    try:
+        ai_prompts.reset_field(
+            use_id,
+            field=field,
+            name=str(name) if name else None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    page = ai_catalog.detail(use_id)
+    if not page:
+        raise HTTPException(status_code=404, detail="Unknown AI use-case")
+    return page
+
+
+@app.put("/api/ai/features")
+def api_ai_set_feature(body: dict[str, Any] = Body(...)):
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected JSON object")
+    use_id = str(body.get("id") or "").strip()
+    if not use_id:
+        raise HTTPException(status_code=400, detail="id is required")
+    if "enabled" not in body:
+        raise HTTPException(status_code=400, detail="enabled is required")
+    try:
+        result = ai_features.set_on(use_id, parse_bool(body.get("enabled"), False))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": True, **result}
+
+
+@app.put("/api/ai/fx")
+def api_ai_set_fx(body: dict[str, Any] = Body(...)):
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected JSON object")
+    raw = body.get("usd_inr")
+    if raw is None or raw == "":
+        ai_features.set_usd_inr_override(None)
+    else:
+        try:
+            rate = float(raw)
+        except (TypeError, ValueError) as e:
+            raise HTTPException(status_code=400, detail="usd_inr must be a number") from e
+        try:
+            ai_features.set_usd_inr_override(rate)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    return {"ok": True, "fx": ai_fx.get_rate()}
 
 
 @app.get("/api/activity")
@@ -1513,6 +1878,138 @@ async def api_finance_parse(body: dict[str, Any] = Body(...)):
     return result
 
 
+def _finance_os_http_error(exc: finance_ai.AIParseError) -> HTTPException:
+    code = 400 if exc.status in {"empty", "config", "validation"} else 502
+    return HTTPException(status_code=code, detail=str(exc))
+
+
+@app.post("/api/finance-os/parse")
+async def api_finance_os_parse(body: dict[str, Any] = Body(...)):
+    """
+    Typed (or already-transcribed) text → Finance OS ledger payloads.
+
+    Body: { "text": "...", "catalog": { today, timezone, accounts, categories } }
+    Does not write SQLite or Excel. The /finance app posts the rows.
+    """
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="Expected JSON object")
+    text = str(body.get("text") or body.get("transcript") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="text is required")
+    catalog = body.get("catalog") if isinstance(body.get("catalog"), dict) else {}
+    try:
+        result = finance_os.parse_os_transcript(text, catalog=catalog)
+    except finance_ai.AIParseError as e:
+        raise _finance_os_http_error(e) from e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"AI parse failed: {e}") from e
+
+    if result.get("ok") and result.get("entries"):
+        for entry in result["entries"]:
+            if not isinstance(entry, dict):
+                continue
+            log_finance(
+                f"os parse {entry.get('type')} ₹{entry.get('amount', 0) / 100:.2f} "
+                f"{entry.get('categoryName')} "
+                f"{entry.get('fromAccountName', '?')}→{entry.get('toAccountName', '?')}",
+                source="ai",
+            )
+    return result
+
+
+@app.post("/api/finance-os/voice")
+async def api_finance_os_voice(
+    audio: UploadFile = File(...),
+    catalog: str = Form("{}"),
+    title: str = Form(""),
+    client_id: str = Form(""),
+    model: str = Form(""),
+    translate: str = Form("false"),
+    stt: str = Form(""),
+):
+    """
+    Finance Speak: save a Voice note, transcribe, then parse like Type.
+
+    Multipart: audio + catalog JSON (accounts/categories) + Voice STT fields.
+    Does not write the SQLite ledger; the /finance app posts the rows.
+    """
+    raw = await audio.read()
+    note = ingest_audio_note(
+        raw,
+        filename=audio.filename or "finance-voice.webm",
+        content_type=audio.content_type or "",
+        title=title,
+        client_id=client_id,
+        model=model,
+        translate=parse_bool(translate, False),
+        stt=stt,
+        extra={"kind": "finance", "purpose": "ledger"},
+    )
+    transcript = str(note.get("transcript") or "").strip()
+    try:
+        catalog_obj = json.loads(catalog) if catalog else {}
+    except json.JSONDecodeError:
+        catalog_obj = {}
+    if not isinstance(catalog_obj, dict):
+        catalog_obj = {}
+
+    if not transcript:
+        return {
+            "ok": False,
+            "status": "no_transcript",
+            "error": "Empty transcript; nothing to add to ledger",
+            "entries": [],
+            "transcript": "",
+            "note": note,
+            "note_id": note.get("id"),
+        }
+
+    try:
+        result = finance_os.parse_os_transcript(transcript, catalog=catalog_obj)
+    except finance_ai.AIParseError as e:
+        payload = {
+            "ok": False,
+            "status": e.status,
+            "error": str(e),
+            "entries": [],
+            "transcript": transcript,
+            "note": note,
+            "note_id": note.get("id"),
+        }
+        note["finance_os"] = {"ok": False, "error": str(e), "status": e.status}
+        save_note(note)
+        if e.status in {"empty", "config", "validation"}:
+            return payload
+        raise HTTPException(status_code=502, detail=str(e)) from e
+    except Exception as e:
+        note["finance_os"] = {"ok": False, "error": str(e), "status": "error"}
+        save_note(note)
+        raise HTTPException(status_code=500, detail=f"AI parse failed: {e}") from e
+
+    result = dict(result)
+    result["note"] = note
+    result["note_id"] = note.get("id")
+    result["transcript"] = transcript
+    note["finance_os"] = {
+        "ok": bool(result.get("ok")),
+        "status": result.get("status"),
+        "error": result.get("error"),
+        "n": len(result.get("entries") or []),
+    }
+    save_note(note)
+    if result.get("ok") and result.get("entries"):
+        for entry in result["entries"]:
+            if not isinstance(entry, dict):
+                continue
+            log_finance(
+                f"os voice note {note.get('id')} → {entry.get('type')} "
+                f"₹{entry.get('amount', 0) / 100:.2f} {entry.get('categoryName')}",
+                source="ai",
+                extra={"note_id": note.get("id")},
+            )
+    return result
+
+
 @app.post("/api/finance/receipt")
 async def api_finance_receipt(
     images: list[UploadFile] = File(default=[]),
@@ -1520,6 +2017,7 @@ async def api_finance_receipt(
     audio: UploadFile | None = File(None),
     model: str = Form(""),
     translate: str = Form("false"),
+    stt: str = Form(""),
     save: str = Form("true"),
 ):
     """
@@ -1528,9 +2026,10 @@ async def api_finance_receipt(
     Multipart form:
       images   — one or more image files (required)
       note     — optional typed note
-      audio    — optional voice note (Whisper → text, merged into note)
-      model    — Whisper model when audio is sent
+      audio    — optional voice note (local Whisper or cloud whisper-1)
+      model    — local Whisper model when audio is sent
       translate— Whisper translate flag
+      stt      — local | cloud (VPS forces cloud)
       save     — true (default) append Ledger; false parse-only
     """
     # FastAPI may deliver a single file when only one is uploaded
@@ -1619,11 +2118,11 @@ async def api_finance_receipt(
             atomic_write_bytes(audio_path, raw_audio)
             log("upload", f"receipt {receipt_id} voice ({len(raw_audio)} bytes)")
             try:
-                chosen_model = normalize_model_name(model or None)
                 do_translate = parse_bool(translate, False)
-                tr = transcribe_file(
+                tr = run_transcribe(
                     audio_path,
-                    model_name=chosen_model,
+                    stt=stt,
+                    model_name=model or None,
                     translate=do_translate,
                 )
                 voice_transcript = (tr.get("transcript") or "").strip()
@@ -1813,6 +2312,8 @@ def api_options():
         ],
         "default_model": WHISPER_MODEL,
         "default_translate": False,
+        "stt": stt_engine.options(),
+        "note_titles": notes_ai.status_payload(),
     }
 
 
@@ -1846,18 +2347,9 @@ async def api_update_note(note_id: str, body: dict[str, Any] = Body(...)):
         raise HTTPException(status_code=400, detail="Title too long (max 120)")
 
     note["title"] = new_title
+    note["title_source"] = "user"
     note["updated_at"] = utc_now_iso()
-
-    json_path = NOTES_DIR / f"{note_id}.json"
-    txt_path = NOTES_DIR / f"{note_id}.txt"
-    atomic_write_text(json_path, json.dumps(note, indent=2))
-
-    transcript = note.get("transcript") or ""
-    if note.get("status") == "error" and note.get("error"):
-        txt_body = f"{new_title}\n\n[transcription failed]\n{note['error']}\n"
-    else:
-        txt_body = f"{new_title}\n{note.get('created_at', '')}\n\n{transcript}\n"
-    atomic_write_text(txt_path, txt_body)
+    save_note(note)
 
     log("note", f"{note_id} title updated → {new_title!r}")
     return note
@@ -1870,109 +2362,40 @@ async def api_create_note(
     client_id: str = Form(""),
     model: str = Form(""),
     translate: str = Form("false"),
+    stt: str = Form(""),
     update_ledger: str = Form("false"),
 ):
     """
     Accept a recorded audio blob, save it to disk, transcribe, save note JSON.
 
     Form fields from the web app:
-      model          — tiny|base|small|medium|large-v3
+      model          — tiny|base|small|medium|large-v3 (local only)
+      stt            — local | cloud (VPS forces cloud; cloud uses OpenAI whisper-1)
       translate      — true → English translation; false → as-spoken transcript
-      update_ledger  — true → after Whisper, parse with DeepSeek and append Ledger
-                       row(s) (source=ai). Surgical append only; never rebuilds sheets.
+      update_ledger  — true → after Whisper, parse with DeepSeek and append Excel
+                       Ledger row(s) (source=ai). Old-finance path only.
     """
-    note_id = uuid.uuid4().hex[:12]
-    created = utc_now_iso()
     do_translate = parse_bool(translate, False)
     do_ledger = parse_bool(update_ledger, False)
-    chosen_model = normalize_model_name(model or None)
-
-    # Detect extension from content-type / filename
-    filename = audio.filename or "recording.webm"
-    ext = Path(filename).suffix.lower()
-    if ext not in {".webm", ".ogg", ".mp3", ".wav", ".m4a", ".mp4", ".aac"}:
-        ctype = (audio.content_type or "").lower()
-        if "ogg" in ctype:
-            ext = ".ogg"
-        elif "mp4" in ctype or "m4a" in ctype:
-            ext = ".m4a"
-        elif "mpeg" in ctype or "mp3" in ctype:
-            ext = ".mp3"
-        elif "wav" in ctype:
-            ext = ".wav"
-        else:
-            ext = ".webm"
-
     raw = await audio.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="Empty audio upload")
-    if len(raw) > 200 * 1024 * 1024:
-        raise HTTPException(status_code=413, detail="Audio larger than 200MB")
+    note = ingest_audio_note(
+        raw,
+        filename=audio.filename or "recording.webm",
+        content_type=audio.content_type or "",
+        title=title,
+        client_id=client_id,
+        model=model,
+        translate=do_translate,
+        stt=stt,
+        extra={"update_ledger": do_ledger},
+    )
+    note_id = str(note.get("id") or "")
+    user_title = (title or "").strip()
 
-    audio_name = f"{note_id}{ext}"
-    audio_path = AUDIO_DIR / audio_name
-
-    # 1) Persist audio first (before any heavy work)
-    atomic_write_bytes(audio_path, raw)
-    log("upload", f"saved {audio_path} ({len(raw)} bytes)")
-
-    display_title = (title or "").strip() or f"Note {created[:16].replace('T', ' ')}"
-
-    # 2) Convert + transcribe (never feed raw .webm to Whisper)
-    try:
-        result = transcribe_file(
-            audio_path,
-            model_name=chosen_model,
-            translate=do_translate,
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        # Keep the audio even if transcription fails
-        note = {
-            "id": note_id,
-            "title": display_title,
-            "created_at": created,
-            "status": "error",
-            "error": str(e),
-            "audio_file": audio_name,
-            "audio_bytes": len(raw),
-            "transcript": "",
-            "model": chosen_model,
-            "translate": do_translate,
-            "client_id": client_id or None,
-        }
-        atomic_write_text(NOTES_DIR / f"{note_id}.json", json.dumps(note, indent=2))
-        # Also drop a plain .txt so you can open notes easily
-        atomic_write_text(NOTES_DIR / f"{note_id}.txt", f"{display_title}\n\n[transcription failed]\n{e}\n")
-        raise HTTPException(status_code=500, detail=f"Transcription failed: {e}") from e
-
-    note = {
-        "id": note_id,
-        "title": display_title,
-        "created_at": created,
-        "status": "ready",
-        "audio_file": audio_name,
-        "wav_file": result.get("wav_file"),
-        "audio_bytes": len(raw),
-        "transcript": result["transcript"],
-        "language": result["language"],
-        "language_probability": result["language_probability"],
-        "segments": result["segments"],
-        "processing_seconds": result["processing_seconds"],
-        "duration": result.get("duration"),
-        "model": result["model"],
-        "device": result["device"],
-        "task": result.get("task"),
-        "translate": result.get("translate", False),
-        "client_id": client_id or None,
-        "update_ledger": do_ledger,
-    }
-
-    # Optional: transcript → DeepSeek JSON → surgical Ledger append (source=ai)
+    # Optional: transcript → DeepSeek JSON → surgical Excel Ledger append (source=ai)
     finance_result: dict[str, Any] | None = None
     if do_ledger:
-        transcript_text = (result.get("transcript") or "").strip()
+        transcript_text = str(note.get("transcript") or "").strip()
         if not transcript_text:
             finance_result = {
                 "ok": False,
@@ -2032,32 +2455,15 @@ async def api_create_note(
                 extra={"note_id": note_id},
             )
 
-    json_path = NOTES_DIR / f"{note_id}.json"
-    txt_path = NOTES_DIR / f"{note_id}.txt"
-    atomic_write_text(json_path, json.dumps(note, indent=2))
-    txt_extra = ""
-    if do_ledger and finance_result is not None:
-        if finance_result.get("ok"):
-            n = len(finance_result.get("entries") or [])
-            txt_extra = f"\n\n[ledger] saved {n} entr{'y' if n == 1 else 'ies'} (source=ai)\n"
-        else:
-            txt_extra = f"\n\n[ledger] not saved: {finance_result.get('error')}\n"
-    atomic_write_text(
-        txt_path,
-        f"{display_title}\n{created}\n\n{result['transcript']}{txt_extra}\n",
-    )
-    log(
-        "note",
-        f"{note_id} ready — {len(result['transcript'])} chars "
-        f"in {result['processing_seconds']}s lang={result['language']} "
-        f"task={result.get('task')} model={result['model']}"
-        f"{' ledger=on' if do_ledger else ''}",
-        extra={"note_id": note_id, "chars": len(result["transcript"])},
-    )
-    log("note", f"audio: {audio_path}")
-    log("note", f"text:  {txt_path}")
-    if result.get("wav_file"):
-        log("note", f"wav:   {AUDIO_DIR / result['wav_file']}")
+    apply_note_title(note, user_title=user_title)
+    save_note(note)
+    if do_ledger:
+        log(
+            "note",
+            f"{note_id} excel ledger={'on' if finance_result and finance_result.get('ok') else 'skip'}"
+            f" title={note.get('title_source')}",
+            extra={"note_id": note_id},
+        )
 
     return note
 
@@ -2067,6 +2473,7 @@ async def api_retranscribe(
     note_id: str,
     model: str = Form(""),
     translate: str = Form("false"),
+    stt: str = Form(""),
 ):
     """Re-run convert+whisper on an existing saved audio (no re-record needed)."""
     note = load_note(note_id)
@@ -2080,12 +2487,13 @@ async def api_retranscribe(
         raise HTTPException(status_code=404, detail=f"Audio missing: {audio_name}")
 
     do_translate = parse_bool(translate, False)
-    chosen_model = normalize_model_name(model or note.get("model") or None)
+    stt_mode = (stt or "").strip() or note.get("stt") or ""
 
     try:
-        result = transcribe_file(
+        result = run_transcribe(
             audio_path,
-            model_name=chosen_model,
+            stt=stt_mode,
+            model_name=model or note.get("model"),
             translate=do_translate,
         )
     except HTTPException:
@@ -2105,28 +2513,24 @@ async def api_retranscribe(
             "processing_seconds": result["processing_seconds"],
             "duration": result.get("duration"),
             "model": result["model"],
+            "stt": result.get("stt") or stt_mode,
             "device": result["device"],
             "task": result.get("task"),
             "translate": result.get("translate", False),
             "retranscribed_at": utc_now_iso(),
         }
     )
-    json_path = NOTES_DIR / f"{note_id}.json"
-    txt_path = NOTES_DIR / f"{note_id}.txt"
-    atomic_write_text(json_path, json.dumps(note, indent=2))
-    atomic_write_text(
-        txt_path,
-        f"{note.get('title', note_id)}\n{note.get('created_at', '')}\n\n{result['transcript']}\n",
-    )
+    save_note(note)
     log(
         "note",
         f"{note_id} retranscribed — {len(result['transcript'])} chars "
         f"in {result['processing_seconds']}s lang={result['language']} "
-        f"task={result.get('task')} model={result['model']}",
+        f"task={result.get('task')} stt={result.get('stt')} model={result['model']}"
+        f" title={note.get('title_source')}",
         extra={"note_id": note_id, "chars": len(result["transcript"])},
     )
     log("note", f"audio: {audio_path}")
-    log("note", f"text:  {txt_path}")
+    log("note", f"text:  {NOTES_DIR / f'{note_id}.txt'}")
     if result.get("wav_file"):
         log("note", f"wav:   {AUDIO_DIR / result['wav_file']}")
     return note
@@ -2352,6 +2756,33 @@ def api_heart_media(post_id: str, filename: str):
     return FileResponse(path)
 
 
+@app.get("/api/heart/bookmarks")
+def api_heart_bookmarks():
+    return heart_store.list_bookmarks()
+
+
+@app.put("/api/heart/bookmarks")
+def api_heart_bookmark_put(body: dict[str, Any] = Body(...)):
+    try:
+        item = heart_store.upsert_bookmark(body)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    log("heart", f"bookmark {item['postId']}")
+    return item
+
+
+@app.delete("/api/heart/bookmarks/{post_id}")
+def api_heart_bookmark_delete(post_id: str):
+    try:
+        result = heart_store.delete_bookmark(post_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except KeyError as e:
+        raise HTTPException(status_code=404, detail="Bookmark not found") from e
+    log("heart", f"unbookmark {post_id}")
+    return result
+
+
 @app.get("/api/cfa")
 def api_cfa_get():
     return cfa_store.get_state()
@@ -2360,6 +2791,21 @@ def api_cfa_get():
 @app.put("/api/cfa")
 def api_cfa_put(body: dict[str, Any] = Body(...)):
     return cfa_store.save_state(body)
+
+
+@app.get("/api/cfa/pace-preview")
+def api_cfa_pace_preview(
+    pagesPerHour: float | None = None,
+    weekdayHours: float | None = None,
+    weekendHours: float | None = None,
+):
+    return cfa_store.preview_pace(
+        {
+            "pagesPerHour": pagesPerHour,
+            "weekdayHours": weekdayHours,
+            "weekendHours": weekendHours,
+        }
+    )
 
 
 def _food_commit_log(body: dict[str, Any], *, replace_id: str | None = None) -> dict[str, Any]:
@@ -2470,16 +2916,282 @@ def api_food_plan_delete(plan_id: str):
     return result
 
 
+def _pact_http(exc: pact_store.PactError) -> HTTPException:
+    return HTTPException(status_code=exc.status, detail=exc.detail())
+
+
+def _pact_origin(request: Request) -> tuple[str, str]:
+    host = request.headers.get("host")
+    return (
+        pact_auth.rp_id(host),
+        pact_auth.origin(
+            host,
+            request.url.scheme,
+            request.headers.get("x-forwarded-proto"),
+        ),
+    )
+
+
+def _pact_set_session(request: Request, token: str, payload: dict[str, Any]) -> JSONResponse:
+    resp = JSONResponse(payload)
+    params = pact_auth.cookie_params(
+        request.headers.get("host"),
+        request.url.scheme,
+        request.headers.get("x-forwarded-proto"),
+    )
+    resp.set_cookie(value=token, **params)
+    return resp
+
+
+@app.get("/api/pact/auth")
+def api_pact_auth(request: Request):
+    return pact_auth.status(request.cookies.get(pact_auth.COOKIE))
+
+
+@app.post("/api/pact/auth/register/options")
+def api_pact_register_options(request: Request):
+    try:
+        pact_auth.require_iphone(request.headers.get("user-agent"))
+        rp, origin = _pact_origin(request)
+        return pact_auth.begin_register(rp, origin)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+
+
+@app.post("/api/pact/auth/register")
+def api_pact_register(request: Request, body: dict[str, Any] = Body(...)):
+    try:
+        pact_auth.require_iphone(request.headers.get("user-agent"))
+        rp, origin = _pact_origin(request)
+        token = pact_auth.finish_register(body, rp, origin)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+    log("pact", "reviewer bound")
+    return _pact_set_session(
+        request,
+        token,
+        {"ok": True, "bound": True, "unlocked": True},
+    )
+
+
+@app.post("/api/pact/auth/assert/options")
+def api_pact_assert_options(request: Request):
+    try:
+        rp, _origin = _pact_origin(request)
+        return pact_auth.begin_assert(rp)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+
+
+@app.post("/api/pact/auth/assert")
+def api_pact_assert(request: Request, body: dict[str, Any] = Body(...)):
+    try:
+        rp, origin = _pact_origin(request)
+        token = pact_auth.finish_assert(body, rp, origin)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+    log("pact", "reviewer unlocked")
+    return _pact_set_session(
+        request,
+        token,
+        {"ok": True, "bound": True, "unlocked": True},
+    )
+
+
+@app.get("/api/pact")
+def api_pact_bootstrap(request: Request):
+    try:
+        pact_auth.require_session(request.cookies.get(pact_auth.COOKIE))
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+    return pact_store.bootstrap()
+
+
+@app.post("/api/pact/requests")
+def api_pact_create(body: dict[str, Any] = Body(...)):
+    try:
+        result = pact_store.create_request(body)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+    log(
+        "pact",
+        f"request {result.get('kind')} {result.get('app_label')} "
+        f"{result.get('minutes')}m {result.get('id')}",
+    )
+    return {"ok": True, "request": result}
+
+
+@app.get("/api/pact/requests/{request_id}")
+def api_pact_get(request_id: str):
+    try:
+        result = pact_store.get_request(request_id)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+    return {"ok": True, "request": result}
+
+
+@app.post("/api/pact/requests/{request_id}/approve")
+def api_pact_approve(
+    request: Request,
+    request_id: str,
+    body: dict[str, Any] | None = Body(default=None),
+):
+    try:
+        pact_auth.require_session(request.cookies.get(pact_auth.COOKIE))
+        result = pact_store.approve(request_id, body)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+    log(
+        "pact",
+        f"approve {result.get('kind')} {result.get('app_label')} "
+        f"{result.get('minutes')}m {result.get('id')}",
+    )
+    return {"ok": True, "request": result}
+
+
+@app.post("/api/pact/requests/{request_id}/deny")
+def api_pact_deny(request: Request, request_id: str):
+    try:
+        pact_auth.require_session(request.cookies.get(pact_auth.COOKIE))
+        result = pact_store.deny(request_id)
+    except pact_store.PactError as e:
+        raise _pact_http(e) from e
+    log("pact", f"deny {result.get('app_label')} {result.get('id')}")
+    return {"ok": True, "request": result}
+
+
 # Static frontend — each toolkit module has its own page path
 @app.get("/")
 def index():
     return FileResponse(ROOT / "index.html")
 
 
+_CFA_STATIC_TYPES = {
+    "manifest.webmanifest": "application/manifest+json",
+    "sw.js": "application/javascript",
+    "favicon.svg": "image/svg+xml",
+}
+
+
+def _cfa_page() -> FileResponse:
+    return FileResponse(
+        CFA_UI_DIR / "index.html",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+def _cfa_static(rest: str) -> FileResponse | None:
+    rel = rest.strip("/")
+    if not rel or ".." in rel:
+        return None
+    media = _CFA_STATIC_TYPES.get(rel)
+    if media is None and rel.startswith("icons/"):
+        name = rel[len("icons/") :]
+        if "/" in name or not name:
+            return None
+        if name.endswith(".png"):
+            media = "image/png"
+        elif name.endswith(".svg"):
+            media = "image/svg+xml"
+    if media is None:
+        return None
+    path = (CFA_UI_DIR / rel).resolve()
+    root = CFA_UI_DIR.resolve()
+    if path != root and root not in path.parents:
+        return None
+    if not path.is_file():
+        return None
+    headers = {"Cache-Control": "no-cache"} if rel in {"sw.js", "manifest.webmanifest"} else None
+    extra = {}
+    if rel == "sw.js":
+        extra["Service-Worker-Allowed"] = "/cfa/"
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={**(headers or {}), **extra} or None,
+    )
+
+
 @app.get("/cfa")
+def cfa_redirect():
+    return RedirectResponse(url="/cfa/", status_code=307)
+
+
 @app.get("/cfa/")
 def cfa_index():
-    return FileResponse(ROOT / "cfa" / "index.html")
+    return _cfa_page()
+
+
+@app.get("/cfa/{rest:path}")
+def cfa_spa(rest: str):
+    static = _cfa_static(rest)
+    if static is not None:
+        return static
+    return _cfa_page()
+
+
+_AI_STATIC_TYPES = {
+    "manifest.webmanifest": "application/manifest+json",
+    "sw.js": "application/javascript",
+    "favicon.svg": "image/svg+xml",
+}
+
+
+def _ai_page() -> FileResponse:
+    return FileResponse(
+        AI_UI_DIR / "index.html",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
+def _ai_static(rest: str) -> FileResponse | None:
+    rel = rest.strip("/")
+    if not rel or ".." in rel:
+        return None
+    media = _AI_STATIC_TYPES.get(rel)
+    if media is None and rel.startswith("icons/"):
+        name = rel[len("icons/") :]
+        if "/" in name or not name:
+            return None
+        if name.endswith(".png"):
+            media = "image/png"
+        elif name.endswith(".svg"):
+            media = "image/svg+xml"
+    if media is None:
+        return None
+    path = (AI_UI_DIR / rel).resolve()
+    root = AI_UI_DIR.resolve()
+    if path != root and root not in path.parents:
+        return None
+    if not path.is_file():
+        return None
+    headers = {"Cache-Control": "no-cache"} if rel in {"sw.js", "manifest.webmanifest"} else None
+    extra: dict[str, str] = {}
+    if rel == "sw.js":
+        extra["Service-Worker-Allowed"] = "/ai/"
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={**(headers or {}), **extra} or None,
+    )
+
+
+@app.get("/ai")
+def ai_redirect():
+    return RedirectResponse(url="/ai/", status_code=307)
+
+
+@app.get("/ai/")
+def ai_index():
+    return _ai_page()
+
+
+@app.get("/ai/{rest:path}")
+def ai_spa(rest: str):
+    static = _ai_static(rest)
+    if static is not None:
+        return static
+    return _ai_page()
 
 
 @app.get("/food")
@@ -2488,10 +3200,116 @@ def food_index():
     return FileResponse(ROOT / "food" / "index.html")
 
 
+@app.get("/heart")
+@app.get("/heart/")
+def heart_index():
+    return FileResponse(ROOT / "heart" / "index.html")
+
+
+@app.get("/pact")
+@app.get("/pact/")
+def pact_index():
+    return FileResponse(
+        ROOT / "pact" / "index.html",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @app.get("/old-finance")
 @app.get("/old-finance/")
 def old_finance_index():
     return FileResponse(ROOT / "index.html")
+
+
+_VOICE_STATIC_TYPES = {
+    "manifest.webmanifest": "application/manifest+json",
+    "sw.js": "application/javascript",
+    "favicon.svg": "image/svg+xml",
+}
+
+
+def _voice_page() -> HTMLResponse:
+    html = (ROOT / "index.html").read_text(encoding="utf-8")
+    html = html.replace(
+        '<meta name="apple-mobile-web-app-title" content="Toolkit" />',
+        '<meta name="apple-mobile-web-app-title" content="Voice" />',
+        1,
+    )
+    html = html.replace(
+        '<link rel="icon" type="image/svg+xml" href="/favicon.svg" />',
+        '<link rel="icon" type="image/svg+xml" href="/voice/favicon.svg" />',
+        1,
+    )
+    html = html.replace(
+        '<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />',
+        '<link rel="apple-touch-icon" href="/voice/icons/apple-touch-icon.png" />',
+        1,
+    )
+    html = html.replace(
+        '<link rel="manifest" href="/manifest.webmanifest" />',
+        '<link rel="manifest" href="/voice/manifest.webmanifest" />',
+        1,
+    )
+    html = html.replace("<title>Toolkit</title>", "<title>Voice</title>", 1)
+    needle = '<meta name="apple-mobile-web-app-capable" content="yes" />'
+    extra = (
+        needle
+        + "\n"
+        '  <meta name="mobile-web-app-capable" content="yes" />\n'
+        '  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />'
+    )
+    html = html.replace(needle, extra, 1)
+    return HTMLResponse(html, headers={"Cache-Control": "no-cache"})
+
+
+def _voice_static(rest: str) -> FileResponse | None:
+    rel = rest.strip("/")
+    if not rel or ".." in rel:
+        return None
+    media = _VOICE_STATIC_TYPES.get(rel)
+    if media is None and rel.startswith("icons/"):
+        name = rel[len("icons/") :]
+        if "/" in name or not name:
+            return None
+        if name.endswith(".png"):
+            media = "image/png"
+        elif name.endswith(".svg"):
+            media = "image/svg+xml"
+    if media is None:
+        return None
+    path = (VOICE_DIR / rel).resolve()
+    root = VOICE_DIR.resolve()
+    if path != root and root not in path.parents:
+        return None
+    if not path.is_file():
+        return None
+    headers = {"Cache-Control": "no-cache"} if rel in {"sw.js", "manifest.webmanifest"} else None
+    extra = {}
+    if rel == "sw.js":
+        extra["Service-Worker-Allowed"] = "/voice/"
+    return FileResponse(
+        path,
+        media_type=media,
+        headers={**(headers or {}), **extra} or None,
+    )
+
+
+@app.get("/voice")
+def voice_redirect():
+    return RedirectResponse(url="/voice/", status_code=307)
+
+
+@app.get("/voice/")
+def voice_index():
+    return _voice_page()
+
+
+@app.get("/voice/{rest:path}")
+def voice_spa(rest: str):
+    static = _voice_static(rest)
+    if static is not None:
+        return static
+    return _voice_page()
 
 
 @app.api_route(
@@ -2568,8 +3386,20 @@ def main():
     global _uvicorn_server
     import uvicorn
 
-    host = os.environ.get("HOST", "0.0.0.0")
+    host = (os.environ.get("HOST") or "0.0.0.0").strip() or "0.0.0.0"
     port = int(os.environ.get("PORT", "8000"))
+    require_loopback = (
+        os.environ.get("TOOLKIT_REQUIRE_LOOPBACK", "").strip().lower()
+        in {"1", "true", "yes", "on"}
+        or stt_engine.profile() == "vps"
+    )
+    if require_loopback and host not in {"127.0.0.1", "localhost", "::1"}:
+        log(
+            "server",
+            f"Refusing HOST={host} on VPS/loopback-only. Set HOST=127.0.0.1.",
+            level="error",
+        )
+        raise SystemExit(2)
     log("server", f"Audio Notes server → http://{host}:{port}")
     public = os.environ.get("TOOLKIT_PUBLIC_URL", "").strip().rstrip("/")
     if public:
@@ -2577,25 +3407,38 @@ def main():
     log("server", f"Data directory     → {DATA}")
     atexit.register(_stop_finance_os)
     _start_finance_os()
-    log("server", f"Whisper            → {WHISPER_MODEL} on {WHISPER_DEVICE}")
-    if WHISPER_DEVICE == "cuda":
-        if "libcublas.so.12" in _cuda_libs_preloaded:
-            log("server", "CUDA libs          → preloaded cublas from venv")
+    stt_caps = stt_engine.options()
+    log("server", f"Host profile       → {stt_caps['profile']}")
+    if stt_caps["local_enabled"]:
+        log("server", f"Whisper            → {WHISPER_MODEL} on {WHISPER_DEVICE}")
+        if WHISPER_DEVICE == "cuda":
+            if "libcublas.so.12" in _cuda_libs_preloaded:
+                log("server", "CUDA libs          → preloaded cublas from venv")
+            else:
+                log(
+                    "server",
+                    "CUDA libs          → libcublas.so.12 not preloaded; GPU transcribe may fail",
+                    level="warn",
+                )
+        if WHISPER_KEEP_ALIVE_SEC < 0:
+            log("server", "GPU keep-alive    → always resident (no auto-unload)")
+        elif WHISPER_KEEP_ALIVE_SEC == 0:
+            log("server", "GPU keep-alive    → unload immediately after each job")
         else:
             log(
                 "server",
-                "CUDA libs          → libcublas.so.12 not preloaded; GPU transcribe may fail",
-                level="warn",
+                f"GPU keep-alive    → unload after {WHISPER_KEEP_ALIVE_SEC:g}s idle "
+                "(frees VRAM for local AI)",
             )
-    if WHISPER_KEEP_ALIVE_SEC < 0:
-        log("server", "GPU keep-alive    → always resident (no auto-unload)")
-    elif WHISPER_KEEP_ALIVE_SEC == 0:
-        log("server", "GPU keep-alive    → unload immediately after each job")
+    else:
+        log("server", "Speech            → cloud only (OpenAI whisper-1)")
+    if stt_caps["cloud_ready"]:
+        log("server", f"Cloud STT         → OpenAI {stt_caps['cloud_model']}")
     else:
         log(
             "server",
-            f"GPU keep-alive    → unload after {WHISPER_KEEP_ALIVE_SEC:g}s idle "
-            "(frees VRAM for local AI)",
+            "Cloud STT         → disabled (OPENAI_API_KEY not set)",
+            level="warn",
         )
     log(
         "server",
@@ -2605,7 +3448,7 @@ def main():
     log("server", f"Activity log      → {app_log.ACTIVITY_PATH}")
     # Optional preload — default off so the server does not hog GPU at boot.
     # First note pays a one-time load; subsequent notes within keep-alive stay warm.
-    if os.environ.get("WHISPER_PRELOAD", "0") == "1":
+    if stt_caps["local_enabled"] and os.environ.get("WHISPER_PRELOAD", "0") == "1":
         def _preload_and_schedule():
             try:
                 get_model(WHISPER_MODEL)
@@ -2616,23 +3459,56 @@ def main():
 
         threading.Thread(target=_preload_and_schedule, daemon=True).start()
 
-    # Own signal handlers: uvicorn alone will not exit while a sync Whisper
-    # job is blocked inside CTranslate2 C++ (Ctrl+C appears to "do nothing").
+    # uvicorn 0.52 capture_signals() owns SIGINT; first Ctrl+C must force_exit
+    # or the phone EventSource blocks "Waiting for connections to close".
     atexit.register(_cleanup_models_best_effort)
-    if threading.current_thread() is threading.main_thread():
-        signal.signal(signal.SIGINT, _handle_sigint)
-        signal.signal(signal.SIGTERM, _handle_sigterm)
 
-    config = uvicorn.Config(app, host=host, port=port, log_level="info")
-    _uvicorn_server = uvicorn.Server(config)
-    # We installed handlers above; skip uvicorn's so double-Ctrl+C is ours.
-    _uvicorn_server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
+    class _IgnoreWsUpgradeNoise(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            msg = record.getMessage()
+            if msg.startswith("Unsupported upgrade request"):
+                return False
+            return "No supported WebSocket library detected" not in msg
+
+    logging.getLogger("uvicorn.error").addFilter(_IgnoreWsUpgradeNoise())
+
+    class ToolkitServer(uvicorn.Server):
+        def handle_exit(self, sig: int, frame) -> None:  # noqa: ARG002
+            self._captured_signals.append(sig)
+            if sig == signal.SIGINT:
+                _handle_sigint(sig, frame)
+            else:
+                _handle_sigterm(sig, frame)
+
+        async def shutdown(self, sockets=None) -> None:
+            import asyncio
+
+            await super().shutdown(sockets)
+            # uvicorn skips lifespan.shutdown() when force_exit is set, which
+            # leaves Starlette blocked on receive() and logs CancelledError.
+            if self.force_exit:
+                try:
+                    await asyncio.wait_for(self.lifespan.shutdown(), timeout=1.0)
+                except (asyncio.TimeoutError, asyncio.CancelledError):
+                    pass
+
+    config = uvicorn.Config(
+        app,
+        host=host,
+        port=port,
+        log_level="info",
+        ws="none",
+        timeout_graceful_shutdown=max(1, int(SHUTDOWN_FORCE_AFTER_SEC)),
+    )
+    _uvicorn_server = ToolkitServer(config)
 
     try:
         _uvicorn_server.run()
     except KeyboardInterrupt:
         log("server", "KeyboardInterrupt — exiting")
     finally:
+        if _hard_exit_timer is not None:
+            _hard_exit_timer.cancel()
         _stop_finance_os()
         _cleanup_models_best_effort()
         log("server", "bye")

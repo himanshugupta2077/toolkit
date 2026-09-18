@@ -3,13 +3,18 @@ import { rupeesToPaise } from "../engine/money.ts";
 import type { Account, Category, LedgerEntry, LedgerType } from "../engine/types.ts";
 import {
   accountsForSlot,
+  amountDraftFromText,
   amountExpression,
   amountPaise,
   applyAmountKey,
   defaultAccounts,
+  defaultCategoryGroup,
   defaultCategoryId,
   EMPTY_AMOUNT,
+  filterCategories,
+  hasExactCategory,
   quickAddHints,
+  topCategoryIds,
   visibleAccountSlots,
   type AmountDraft,
 } from "./quickAdd.ts";
@@ -156,6 +161,15 @@ describe("amount keypad", () => {
   });
 });
 
+describe("amount typed field", () => {
+  it("parses rupees, commas, and plus parts", () => {
+    expect(amountDraftFromText("")).toEqual(EMPTY_AMOUNT);
+    expect(amountPaise(amountDraftFromText("₹1,240"))).toBe(rupeesToPaise(1240));
+    expect(amountExpression(amountDraftFromText("120 + 80"))).toBe("120 + 80");
+    expect(amountPaise(amountDraftFromText("120 + 80"))).toBe(rupeesToPaise(200));
+  });
+});
+
 describe("type defaults", () => {
   it("hides Expense as To and Refund as From", () => {
     expect(visibleAccountSlots("expense")).toEqual({ from: true, to: false });
@@ -200,6 +214,62 @@ describe("type defaults", () => {
   it("restricts CC payment To to credit cards", () => {
     const tos = accountsForSlot("cc_payment", "to", catalog.accounts);
     expect(tos.map((a) => a.id)).toEqual([accounts.hdfcCc.id]);
+  });
+});
+
+describe("category chips", () => {
+  it("ranks the five most-used categories for the type", () => {
+    const extra = category("cat_fuel", "Fuel", "Transport", true, 7);
+    const cats = [...catalog.categories, extra];
+    const entries: LedgerEntry[] = [
+      ...Array.from({ length: 4 }, (_, i) => ({
+        id: `e-eat-${i}`,
+        date: "2026-09-05",
+        time: null,
+        type: "expense" as LedgerType,
+        amount: 100,
+        fromAccountId: accounts.hdfc.id,
+        toAccountId: accounts.expense.id,
+        categoryId: categories.eating.id,
+        inBudget: true,
+        notes: "",
+        source: "manual" as const,
+        goalId: null,
+        holdingTxnId: null,
+        createdAt: "2026-09-05T10:00:00+05:30",
+        updatedAt: "2026-09-05T10:00:00+05:30",
+      })),
+      ...Array.from({ length: 2 }, (_, i) => ({
+        id: `e-groc-${i}`,
+        date: "2026-09-04",
+        time: null,
+        type: "expense" as LedgerType,
+        amount: 100,
+        fromAccountId: accounts.hdfc.id,
+        toAccountId: accounts.expense.id,
+        categoryId: categories.groceries.id,
+        inBudget: true,
+        notes: "",
+        source: "manual" as const,
+        goalId: null,
+        holdingTxnId: null,
+        createdAt: "2026-09-04T10:00:00+05:30",
+        updatedAt: "2026-09-04T10:00:00+05:30",
+      })),
+    ];
+    expect(topCategoryIds(entries, "expense", cats, 5)[0]).toBe(categories.eating.id);
+    expect(topCategoryIds(entries, "expense", cats, 5)[1]).toBe(categories.groceries.id);
+    expect(topCategoryIds(entries, "expense", cats, 5)).toHaveLength(5);
+  });
+
+  it("filters All by name and offers create when missing", () => {
+    expect(filterCategories(catalog.categories, "eat").map((row) => row.id)).toEqual([
+      categories.eating.id,
+    ]);
+    expect(hasExactCategory(catalog.categories, "Eating outside")).toBe(true);
+    expect(hasExactCategory(catalog.categories, "Milk")).toBe(false);
+    expect(defaultCategoryGroup("expense")).toBe("Lifestyle");
+    expect(defaultCategoryGroup("income")).toBe("Income");
   });
 });
 

@@ -19,6 +19,7 @@ import {
 import { rupeesToPaise } from "../src/engine/money.ts";
 import { insertAccount } from "./repo/accounts.ts";
 import { createApp } from "./app.ts";
+import { buildHome } from "./home.ts";
 import { backupDatabase } from "./db/backup.ts";
 import { openDatabase, type OpenedDb } from "./db/client.ts";
 import { DUMMY_EXPENSE_PAISE, SEED_IDS, ensureCatalog } from "./db/seed.ts";
@@ -58,7 +59,7 @@ describe("server store", () => {
     expect(res.status).toBe(200);
     const body = await json(res);
     expect(body.ok).toBe(true);
-    expect(body.schemaVersion).toBe("6");
+    expect(body.schemaVersion).toBe("7");
     expect(body.dbFile).toBe(dbFile);
   });
 
@@ -608,6 +609,91 @@ describe("home", () => {
     ).toBe(true);
     expect(withCard.free.ccDue).toBe(rupeesToPaise(702.16));
   });
+
+  it("lists the first instance of each upcoming payment, including every plan kind", async () => {
+    const { app, db } = harness();
+    const rent = await app.request("/api/plans/recurring", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Rent",
+        categoryId: SEED_IDS.rent,
+        frequency: "monthly",
+        amount: rupeesToPaise(10_800),
+        startDate: "2026-08-01",
+        kind: "bill",
+        active: true,
+      }),
+    });
+    expect(rent.status).toBe(201);
+    const yearly = await app.request("/api/plans/recurring", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Scooty insurance",
+        categoryId: SEED_IDS.groceries,
+        frequency: "yearly",
+        amount: rupeesToPaise(1_800),
+        startDate: "2026-12-01",
+        kind: "bill",
+        active: true,
+      }),
+    });
+    expect(yearly.status).toBe(201);
+    const sip = await app.request("/api/plans/recurring", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "SIP",
+        categoryId: SEED_IDS.groceries,
+        frequency: "monthly",
+        amount: rupeesToPaise(5_000),
+        startDate: "2026-08-01",
+        kind: "investment",
+        active: true,
+      }),
+    });
+    expect(sip.status).toBe(201);
+    const oneTime = await app.request("/api/plans/one-time", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Flights",
+        categoryId: SEED_IDS.groceries,
+        expectedDate: "2026-09-20",
+        amount: rupeesToPaise(7_500),
+        priority: "high",
+        status: "planned",
+        kind: "bill",
+      }),
+    });
+    const hotel = await app.request("/api/plans/one-time", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Hotel",
+        categoryId: SEED_IDS.groceries,
+        expectedDate: "2026-09-18",
+        amount: rupeesToPaise(4_000),
+        priority: "medium",
+        status: "planned",
+      }),
+    });
+    expect(hotel.status).toBe(201);
+    expect(oneTime.status).toBe(201);
+
+    const home = buildHome(db, "2026-09-06");
+    expect(home.upcomingBills.map((row) => `${row.name}:${row.dueDate}`)).toEqual([
+      "Hotel:2026-09-18",
+      "Flights:2026-09-20",
+      "Rent:2026-10-01",
+      "SIP:2026-10-01",
+      "Scooty insurance:2026-12-01",
+    ]);
+    expect(home.upcomingBills.filter((row) => row.name === "Rent")).toHaveLength(1);
+    expect(home.upcomingBills.find((row) => row.name === "SIP")?.kind).toBe("investment");
+    expect(home.upcomingBills.find((row) => row.name === "Hotel")?.kind).toBeNull();
+  });
 });
 
 describe("plan tab APIs", () => {
@@ -742,6 +828,86 @@ describe("plan tab APIs", () => {
     };
     expect(plan.oneTime.find((row) => row.id === id)?.status).toBe("completed");
   });
+
+  it("DELETE removes recurring, one-time, and inflows without touching the ledger", async () => {
+    const { app } = harness();
+    const rec = (await json(
+      await app.request("/api/plans/recurring", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Gym",
+          categoryId: SEED_IDS.groceries,
+          frequency: "monthly",
+          amount: rupeesToPaise(2_000),
+          startDate: "2026-01-01",
+          kind: "lifestyle",
+          active: true,
+        }),
+      }),
+    )) as { recurring: { id: string; name: string }[] };
+    const recId = rec.recurring.find((row) => row.name === "Gym")?.id;
+    expect(recId).toBeTruthy();
+
+    const one = (await json(
+      await app.request("/api/plans/one-time", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Hotel",
+          categoryId: SEED_IDS.groceries,
+          expectedDate: "2026-09-22",
+          amount: rupeesToPaise(4_000),
+          status: "planned",
+        }),
+      }),
+    )) as { oneTime: { id: string; name: string }[] };
+    const oneId = one.oneTime.find((row) => row.name === "Hotel")?.id;
+    expect(oneId).toBeTruthy();
+
+    const inflow = (await json(
+      await app.request("/api/plans/inflows", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: "Refund",
+          expectedDate: "2026-09-25",
+          amount: rupeesToPaise(1_200),
+          status: "expected",
+        }),
+      }),
+    )) as { inflows: { id: string; name: string }[] };
+    const inflowId = inflow.inflows.find((row) => row.name === "Refund")?.id;
+    expect(inflowId).toBeTruthy();
+
+    const before = (await json(await app.request("/api/dev/counts"))) as {
+      counts: { ledgerEntries: number };
+    };
+
+    const recDel = await app.request(`/api/plans/recurring/${recId}`, { method: "DELETE" });
+    expect(recDel.status).toBe(200);
+    const oneDel = await app.request(`/api/plans/one-time/${oneId}`, { method: "DELETE" });
+    expect(oneDel.status).toBe(200);
+    const inDel = await app.request(`/api/plans/inflows/${inflowId}`, { method: "DELETE" });
+    expect(inDel.status).toBe(200);
+
+    const missing = await app.request("/api/plans/recurring/nope", { method: "DELETE" });
+    expect(missing.status).toBe(404);
+
+    const plan = (await json(await app.request("/api/plan"))) as {
+      recurring: { id: string }[];
+      oneTime: { id: string }[];
+      inflows: { id: string }[];
+    };
+    expect(plan.recurring.some((row) => row.id === recId)).toBe(false);
+    expect(plan.oneTime.some((row) => row.id === oneId)).toBe(false);
+    expect(plan.inflows.some((row) => row.id === inflowId)).toBe(false);
+
+    const after = (await json(await app.request("/api/dev/counts"))) as {
+      counts: { ledgerEntries: number };
+    };
+    expect(after.counts.ledgerEntries).toBe(before.counts.ledgerEntries);
+  });
 });
 
 describe("categories, settings, lock, tailnet", () => {
@@ -841,6 +1007,66 @@ describe("categories, settings, lock, tailnet", () => {
       headers: { "Tailscale-User-Login": "himanshu@github" },
     });
     expect(ok.status).toBe(200);
+  });
+
+  it("serves /finance/api the same as /api (VPS Serve path)", async () => {
+    const db = openDatabase(":memory:");
+    opened.push(db);
+    ensureCatalog(db.db);
+    const app = createApp({
+      ...db,
+      auth: {
+        requireTailscale: true,
+        allowedLogin: "himanshugupta2077@gmail.com",
+        allowUnauth: false,
+      },
+    });
+    const health = await app.request("/finance/api/health");
+    expect(health.status).toBe(200);
+    expect((await json(health)).ok).toBe(true);
+
+    const denied = await app.request("/finance/api/books");
+    expect(denied.status).toBe(401);
+
+    const ok = await app.request("/finance/api/books", {
+      headers: { "Tailscale-User-Login": "himanshugupta2077@gmail.com" },
+    });
+    expect(ok.status).toBe(200);
+  });
+
+  it("serves the UI at /finance/ and redirects /finance", async () => {
+    const db = openDatabase(":memory:");
+    opened.push(db);
+    ensureCatalog(db.db);
+    const ui = createApp({ ...db, serveUi: true });
+    const prefix = await ui.request("/finance");
+    expect(prefix.status).toBe(302);
+    expect(prefix.headers.get("location")).toBe("/finance/");
+    const page = await ui.request("/finance/");
+    expect(page.status).toBe(200);
+    const html = await page.text();
+    expect(html).toContain("/finance/");
+  });
+
+  it("does not register wipe or dummy-expense when allowDevRoutes is false", async () => {
+    const db = openDatabase(":memory:");
+    opened.push(db);
+    ensureCatalog(db.db);
+    const app = createApp({ ...db, allowDevRoutes: false });
+    const dummy = await app.request("/api/dev/dummy-expense", { method: "POST" });
+    expect(dummy.status).toBe(404);
+    const wipe = await app.request("/api/dev/wipe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: "wipe" }),
+    });
+    expect(wipe.status).toBe(404);
+    const prefixed = await app.request("/finance/api/dev/wipe", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ confirm: "wipe" }),
+    });
+    expect(prefixed.status).toBe(404);
   });
 });
 

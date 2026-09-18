@@ -139,7 +139,7 @@ export function GoalDetailScreen() {
           : formatInr(card.remaining ?? 0);
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page desk:max-w-2xl">
       <Link
         to="/wealth/goals"
         className="btn-ghost"
@@ -157,7 +157,7 @@ export function GoalDetailScreen() {
         <>
           <div className="mt-2 flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight text-ink">{card.name}</h1>
+              <h1 className="page-title">{card.name}</h1>
               {shown ? (
                 <span
                   className={`mt-2 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${pillClass(shown.pill)}`}
@@ -297,7 +297,7 @@ export function GoalDetailScreen() {
       >
         <div className="pb-4">
           <p className="text-sm text-muted">
-            No bank move — just earmark savings. A note is required.
+            No bank move: just earmark savings. A note is required.
           </p>
           <label className="mt-4 block">
             <span className="kicker">Amount ₹</span>

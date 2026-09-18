@@ -96,6 +96,17 @@ export function replaceAsset(plan: InvestPlan, asset: InvestAsset): InvestPlan {
   };
 }
 
+export function moveAsset(plan: InvestPlan, id: string, dir: -1 | 1): InvestPlan {
+  const index = plan.assets.findIndex((row) => row.id === id);
+  const next = index + dir;
+  if (index < 0 || next < 0 || next >= plan.assets.length) return plan;
+  const assets = plan.assets.slice();
+  const [row] = assets.splice(index, 1);
+  if (!row) return plan;
+  assets.splice(next, 0, row);
+  return { ...plan, assets };
+}
+
 export function moveDipPriority(plan: InvestPlan, id: string, dir: -1 | 1): InvestPlan {
   const ranked = plan.assets
     .filter((row) => row.dipPriority != null)

@@ -7,12 +7,11 @@ import {
   getSettings,
   postPin,
   putSettings,
-  type CategoryListItem,
 } from "../api/store.ts";
 import { formatInr } from "../engine/index.ts";
 import type { AppShellOutlet } from "./AppShell.tsx";
 import { BottomSheet } from "./BottomSheet.tsx";
-import { Keypad } from "./Keypad.tsx";
+import { AmountField } from "./formFields.tsx";
 import { amountDraftFromPaise } from "./ledger.ts";
 import {
   AUTO_LOCK_OPTIONS,
@@ -28,12 +27,9 @@ import { apiErrorText } from "./copy.ts";
 import { PIE_BY, useDisplayPrefs, type PieBy } from "./displayPrefs.ts";
 import { FetchError } from "./FetchError.tsx";
 import {
-  amountExpression,
   amountPaise,
-  applyAmountKey,
   EMPTY_AMOUNT,
   type AmountDraft,
-  type AmountKey,
 } from "./quickAdd.ts";
 
 const PIE_BY_LABELS: Record<PieBy, string> = {
@@ -69,19 +65,16 @@ function AmountSheet({
   );
   const paise = amountPaise(amount);
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="pb-1">
       <p className="text-sm text-muted">{label}</p>
-      <p className="mt-3 hero-num">
-        {amountExpression(amount) ? `₹${amountExpression(amount)}` : "₹0"}
-      </p>
-      <div className="mt-auto shrink-0 pt-2">
-        <Keypad onKey={(key: AmountKey) => setAmount((d) => applyAmountKey(d, key))} />
+      <div className="mt-4">
+        <AmountField amount={amount} onChange={setAmount} plus={false} />
       </div>
       <button
         type="button"
         disabled={saving || paise <= 0}
         onClick={() => onSave(paise)}
-        className="mt-3 btn-primary w-full"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : "Save"}
       </button>
@@ -177,8 +170,6 @@ export function SettingsScreen() {
   const data = settingsQ.data;
   const money = data?.money;
   const lock = data?.lock;
-  const categories = data?.categories ?? [];
-  const liveCats = categories.filter((row) => !row.isArchived);
 
   async function save(body: Parameters<typeof putSettings>[0]) {
     setSaving(true);
@@ -224,13 +215,6 @@ export function SettingsScreen() {
     }
   }
 
-  async function toggleEssential(row: CategoryListItem) {
-    const next = new Set(data?.essentialIds ?? []);
-    if (next.has(row.id)) next.delete(row.id);
-    else next.add(row.id);
-    await save({ essentialIds: [...next] });
-  }
-
   async function toggleBio() {
     if (bioOn) {
       clearWebauthnId(localStorage);
@@ -253,11 +237,11 @@ export function SettingsScreen() {
   }
 
   return (
-    <section className="px-5 pb-8">
-      <Link to="/more" className="btn-ghost">
+    <section className="page">
+      <Link to="/more" className="back-link btn-ghost">
         ← More
       </Link>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">Settings</h1>
+      <h1 className="page-title mt-2">Settings</h1>
       <p className="mt-1 text-sm text-muted">Money defaults live in SQLite on the laptop.</p>
 
       {settingsQ.isPending ? (
@@ -265,8 +249,9 @@ export function SettingsScreen() {
       ) : settingsQ.error ? (
         <FetchError error={settingsQ.error} onRetry={() => void settingsQ.refetch()} />
       ) : money && lock ? (
-        <>
-          <h2 className="mt-6 kicker">Money</h2>
+        <div className="desk-dash mt-6">
+        <div className="desk:col-span-6">
+          <h2 className="kicker">Money</h2>
           <div className="mt-2 divide-y divide-line card">
             <button
               type="button"
@@ -284,69 +269,14 @@ export function SettingsScreen() {
               <span className="text-base text-ink">Expected monthly salary</span>
               <span className="text-sm tabular-nums text-muted">{formatInr(money.monthlySalary)}</span>
             </button>
-            <label className="flex min-h-14 items-center justify-between px-4">
-              <span className="text-base text-ink">Salary day</span>
-              <input
-                type="number"
-                min={1}
-                max={31}
-                value={money.salaryDay}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isInteger(n) && n >= 1 && n <= 31) void save({ salaryDay: n });
-                }}
-                className="w-16 rounded-lg border border-line-strong bg-card px-2 py-1 text-right text-sm text-ink"
-              />
-            </label>
-            <label className="flex min-h-14 items-center justify-between px-4">
-              <span className="text-base text-ink">Emergency fund months</span>
-              <input
-                type="number"
-                min={1}
-                max={24}
-                value={money.efMonths}
-                onChange={(e) => {
-                  const n = Number(e.target.value);
-                  if (Number.isInteger(n) && n >= 1 && n <= 24) void save({ efMonths: n });
-                }}
-                className="w-16 rounded-lg border border-line-strong bg-card px-2 py-1 text-right text-sm text-ink"
-              />
-            </label>
           </div>
           <p className="mt-2 text-xs text-muted">
             Changing the default budget only fills months that do not already have their own cap row.
           </p>
+        </div>
 
-          <h2 className="mt-6 kicker">
-            Essentials (EF target)
-          </h2>
-          <ul className="mt-2 divide-y divide-line card">
-            {liveCats.map((row) => {
-              const on = data.essentialIds.includes(row.id);
-              return (
-                <li key={row.id}>
-                  <button
-                    type="button"
-                    role="switch"
-                    aria-checked={on}
-                    aria-label={`${row.name} essential`}
-                    className="flex min-h-14 w-full items-center justify-between px-4 text-left"
-                    onClick={() => void toggleEssential(row)}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-base text-ink">{row.name}</span>
-                      <span className="block text-xs text-muted">{row.group}</span>
-                    </span>
-                    <span className={`text-sm font-medium ${on ? "text-accent" : "text-muted"}`}>
-                      {on ? "On" : "Off"}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-
-          <h2 className="mt-6 kicker">Security</h2>
+        <div className="desk:col-span-6">
+          <h2 className="kicker">Security</h2>
           <div className="mt-2 divide-y divide-line card">
             <button
               type="button"
@@ -397,7 +327,7 @@ export function SettingsScreen() {
               className="flex min-h-14 w-full items-center justify-between px-4 text-left"
               onClick={() => void save({ blurDefault: !lock.blurDefault })}
             >
-              <span className="text-base text-ink">Blur Home numbers by default</span>
+              <span className="text-base text-ink">Blur dashboard numbers by default</span>
               <span className="text-sm text-muted">{lock.blurDefault ? "On" : "Off"}</span>
             </button>
           </div>
@@ -445,13 +375,13 @@ export function SettingsScreen() {
             ) : null}
           </div>
           <p className="mt-4 text-xs text-muted">Notifications wait for a later phase. Export / backup is Phase 23.</p>
-        </>
+        </div>
+        </div>
       ) : null}
 
       <BottomSheet
         open={moneySheet != null}
         title={moneySheet === "salary" ? "Monthly salary" : "Default budget"}
-        tall
         onClose={() => setMoneySheet(null)}
       >
         {moneySheet === "budget" && money ? (

@@ -1,0 +1,11 @@
+Read /home/toolkit/AGENTS.md. You are the on-box operator for the personal finance app on this VPS.
+
+Run:
+
+  bash /home/toolkit/bin/finance-check.sh
+
+Then report a short pass/fail table. Do not dump ledger JSON, balances, or /etc/finance.env values. Do not write the database. Do not enable Funnel. Do not bind 0.0.0.0. Do not npm-build.
+
+If something failed, say the next sudo command I should run. If everything passed, also list what you cannot verify from inside this guest (Tailscale ACL, DigitalOcean Cloud Firewall, phone PWA).
+
+After the baseline, I may ask you to dig into a specific screen or API — still read-only unless I explicitly ask for a write.

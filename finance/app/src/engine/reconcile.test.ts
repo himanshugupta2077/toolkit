@@ -6,6 +6,7 @@ import {
   canReconcileAccount,
   currentCycleStart,
   cycleSpends,
+  nextStatementDate,
   findAdjustmentCounterpart,
   findReconciliationCategory,
   reconcileDifference,
@@ -179,6 +180,28 @@ describe("currentCycleStart", () => {
 
   it("clamps day 31 in February", () => {
     expect(currentCycleStart("2026-03-02", 31)).toBe("2026-02-28");
+  });
+});
+
+describe("nextStatementDate", () => {
+  it("is null when there is no statement day", () => {
+    expect(nextStatementDate("2026-09-07", null)).toBeNull();
+    expect(nextStatementDate("2026-09-07", 0)).toBeNull();
+  });
+
+  it("uses this month when today is before the statement day", () => {
+    expect(nextStatementDate("2026-09-07", 12)).toBe("2026-09-12");
+    expect(nextStatementDate("2026-09-11", 12)).toBe("2026-09-12");
+  });
+
+  it("rolls to next month on and after the statement day", () => {
+    expect(nextStatementDate("2026-09-12", 12)).toBe("2026-10-12");
+    expect(nextStatementDate("2026-09-13", 12)).toBe("2026-10-12");
+  });
+
+  it("clamps day 31 in February", () => {
+    expect(nextStatementDate("2026-01-20", 31)).toBe("2026-01-31");
+    expect(nextStatementDate("2026-01-31", 31)).toBe("2026-02-28");
   });
 });
 

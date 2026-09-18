@@ -26,6 +26,7 @@ import type {
   OneTimePlan,
   RecurringPlan,
 } from "./engine/types.ts";
+import type { UpcomingBill } from "./engine/index.ts";
 import type {
   AccountBalanceRow,
   AllocationResponse,
@@ -72,6 +73,26 @@ function cc(id: string, name: string): Account {
     bucketId: null,
     statementDay: 17,
     dueDay: 7,
+    isArchived: false,
+    notes: "",
+    virtualKind: null,
+  };
+}
+
+function loan(id: string, name: string): Account {
+  return {
+    id,
+    name,
+    type: "liability",
+    openingBalance: 0,
+    openingDate: OPENING,
+    creditLimit: null,
+    includeNetWorth: true,
+    includeLiquid: false,
+    group: "loan",
+    bucketId: null,
+    statementDay: null,
+    dueDay: null,
     isArchived: false,
     notes: "",
     virtualKind: null,
@@ -261,6 +282,7 @@ const FLIGHTS: OneTimePlan = {
   amount: rupeesToPaise(7_500),
   priority: "high",
   status: "planned",
+  kind: null,
   payFromAccountId: ACCOUNTS.hdfc.id,
   notes: "",
   linkedLedgerEntryId: null,
@@ -700,6 +722,7 @@ function stubApi(opts?: {
   blurDefault?: boolean;
   goals?: GoalsResponse;
   invest?: InvestResponse;
+  upcomingBills?: UpcomingBill[];
 }) {
   const books = opts?.books ?? mockBooks();
   const ledgerStatus = opts?.ledgerStatus ?? 201;
@@ -712,6 +735,34 @@ function stubApi(opts?: {
     accounts: [...books.accounts],
     categories: [...books.categories],
   });
+  function setRecurring(next: RecurringPlan[]) {
+    const live = next.filter((row) => row.active);
+    plan = {
+      ...plan,
+      recurring: next,
+      recurringHeader: {
+        monthlyFixed: live
+          .filter((row) => row.frequency === "monthly")
+          .reduce((s, row) => s + row.amount, 0),
+        activeCount: live.length,
+        yearlyCommitments: live
+          .filter((row) => row.frequency === "yearly")
+          .reduce((s, row) => s + row.amount, 0),
+      },
+    };
+  }
+  function setOneTime(next: OneTimePlan[]) {
+    const planned = next.filter((row) => row.status === "planned");
+    plan = {
+      ...plan,
+      oneTime: next,
+      oneTimeHeader: {
+        next30: planned.reduce((s, row) => s + row.amount, 0),
+        next90: planned.reduce((s, row) => s + row.amount, 0),
+        totalPlanned: planned.reduce((s, row) => s + row.amount, 0),
+      },
+    };
+  }
   const accountRows: AccountBalanceRow[] = books.accounts.map((row) =>
     asBalanceRow(row, { balance: opts?.accountBalances?.[row.id] ?? 0 }),
   );
@@ -745,7 +796,7 @@ function stubApi(opts?: {
     if (url.pathname === "/api/health") {
       return jsonResponse({
         ok: true,
-        schemaVersion: "6",
+        schemaVersion: "7",
         dbFile: "test.sqlite",
         lastBackup: null,
         lastImport: null,
@@ -797,9 +848,13 @@ function stubApi(opts?: {
       if (method === "PUT") {
         const body = JSON.parse(String(init?.body ?? "{}")) as {
           defaultBudget?: number;
+          salaryDay?: number;
+          efMonths?: number;
           blurDefault?: boolean;
         };
         if (body.defaultBudget != null) money.defaultBudget = body.defaultBudget;
+        if (body.salaryDay != null) money.salaryDay = body.salaryDay;
+        if (body.efMonths != null) money.efMonths = body.efMonths;
         if (body.blurDefault != null) lock.blurDefault = body.blurDefault;
         return jsonResponse(settingsPayload());
       }
@@ -817,6 +872,36 @@ function stubApi(opts?: {
     }
     if (url.pathname === "/api/books") {
       return jsonResponse({ ok: true, books: { ...books, entries } });
+    }
+    if (url.pathname === "/api/finance-os/parse" && method === "POST") {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { text?: string };
+      if (!body.text?.trim()) {
+        return jsonResponse({ detail: "text is required" }, 400);
+      }
+      return jsonResponse({
+        ok: true,
+        status: "parsed",
+        transcript: body.text,
+        confidence: "high",
+        raw_summary: "₹20 curd from savings",
+        entries: [
+          {
+            date: books.today,
+            time: null,
+            type: "expense",
+            amount: rupeesToPaise(20),
+            fromAccountId: ACCOUNTS.hdfc.id,
+            toAccountId: ACCOUNTS.expense.id,
+            categoryId: CATEGORIES.groceries.id,
+            inBudget: true,
+            notes: "curd",
+            source: "ai",
+            fromAccountName: "HDFC Savings",
+            toAccountName: "Expense",
+            categoryName: "Groceries",
+          },
+        ],
+      });
     }
     if (url.pathname === "/api/home") {
       if (opts?.homeStatus && opts.homeStatus !== 200) {
@@ -875,6 +960,9 @@ function stubApi(opts?: {
         recent: entries.slice(0, 5),
         accounts: books.accounts,
         categories: books.categories,
+        savingsMonths: ["2026-04", "2026-05", "2026-06", "2026-07", "2026-08", "2026-09"].map(
+          (month) => ({ month, savings: 0 }),
+        ),
         recon: accountRows.map((row) => ({
           id: row.id,
           name: row.name,
@@ -885,6 +973,7 @@ function stubApi(opts?: {
           daysSinceReconcile: row.daysSinceReconcile,
         })),
         paceByCategory: [],
+        upcomingBills: opts?.upcomingBills ?? [],
       });
     }
     if (url.pathname === "/api/wealth") {
@@ -1187,23 +1276,12 @@ function stubApi(opts?: {
     if (url.pathname.startsWith("/api/plans/recurring/") && method === "PATCH") {
       const id = decodeURIComponent(url.pathname.slice("/api/plans/recurring/".length));
       const body = JSON.parse(String(init?.body ?? "{}")) as Partial<RecurringPlan>;
-      plan = {
-        ...plan,
-        recurring: plan.recurring.map((row) => (row.id === id ? { ...row, ...body } : row)),
-      };
-      const live = plan.recurring.filter((row) => row.active);
-      plan = {
-        ...plan,
-        recurringHeader: {
-          monthlyFixed: live
-            .filter((row) => row.frequency === "monthly")
-            .reduce((s, row) => s + row.amount, 0),
-          activeCount: live.length,
-          yearlyCommitments: live
-            .filter((row) => row.frequency === "yearly")
-            .reduce((s, row) => s + row.amount, 0),
-        },
-      };
+      setRecurring(plan.recurring.map((row) => (row.id === id ? { ...row, ...body } : row)));
+      return jsonResponse(plan);
+    }
+    if (url.pathname.startsWith("/api/plans/recurring/") && method === "DELETE") {
+      const id = decodeURIComponent(url.pathname.slice("/api/plans/recurring/".length));
+      setRecurring(plan.recurring.filter((row) => row.id !== id));
       return jsonResponse(plan);
     }
     if (url.pathname === "/api/plans/recurring" && method === "POST") {
@@ -1212,26 +1290,35 @@ function stubApi(opts?: {
     if (url.pathname.startsWith("/api/plans/one-time/") && method === "PATCH") {
       const id = decodeURIComponent(url.pathname.slice("/api/plans/one-time/".length));
       const body = JSON.parse(String(init?.body ?? "{}")) as Partial<OneTimePlan>;
-      plan = {
-        ...plan,
-        oneTime: plan.oneTime.map((row) => (row.id === id ? { ...row, ...body } : row)),
-      };
-      const planned = plan.oneTime.filter((row) => row.status === "planned");
-      plan = {
-        ...plan,
-        oneTimeHeader: {
-          next30: planned.reduce((s, row) => s + row.amount, 0),
-          next90: planned.reduce((s, row) => s + row.amount, 0),
-          totalPlanned: planned.reduce((s, row) => s + row.amount, 0),
-        },
-      };
+      setOneTime(plan.oneTime.map((row) => (row.id === id ? { ...row, ...body } : row)));
+      return jsonResponse(plan);
+    }
+    if (url.pathname.startsWith("/api/plans/one-time/") && method === "DELETE") {
+      const id = decodeURIComponent(url.pathname.slice("/api/plans/one-time/".length));
+      setOneTime(plan.oneTime.filter((row) => row.id !== id));
       return jsonResponse(plan);
     }
     if (url.pathname === "/api/plans/one-time" && method === "POST") {
       return jsonResponse(plan, 201);
     }
-    if (url.pathname.startsWith("/api/plans/inflows") && (method === "POST" || method === "PATCH")) {
-      return jsonResponse(plan, method === "POST" ? 201 : 200);
+    if (url.pathname === "/api/plans/inflows" && method === "POST") {
+      return jsonResponse(plan, 201);
+    }
+    if (url.pathname.startsWith("/api/plans/inflows/") && method === "PATCH") {
+      return jsonResponse(plan);
+    }
+    if (url.pathname.startsWith("/api/plans/inflows/") && method === "DELETE") {
+      const id = decodeURIComponent(url.pathname.slice("/api/plans/inflows/".length));
+      const next = plan.inflows.filter((row) => row.id !== id);
+      const expected = next.filter((row) => row.status === "expected");
+      plan = {
+        ...plan,
+        inflows: next,
+        inflowsHeader: {
+          expectedNotCounted: expected.reduce((s, row) => s + row.amount, 0),
+        },
+      };
+      return jsonResponse(plan);
     }
     if (url.pathname.startsWith("/api/month/")) {
       return jsonResponse({ ok: true, ...MONTH_PAYLOAD });
@@ -1243,11 +1330,30 @@ function stubApi(opts?: {
           group: Account["group"];
           openingBalance: number;
           includeLiquid: boolean;
+          bucketId?: string | null;
         };
         const created: Account = asset("acc_new", body.name, body.group);
         created.includeLiquid = body.includeLiquid;
         created.openingBalance = body.openingBalance;
+        created.bucketId = body.bucketId ?? null;
         accountRows.push(asBalanceRow(created, { balance: body.openingBalance }));
+        if (body.bucketId) {
+          wealth = {
+            ...wealth,
+            buckets: wealth.buckets.map((bucket) =>
+              bucket.id === body.bucketId
+                ? {
+                    ...bucket,
+                    accounts: [
+                      ...bucket.accounts,
+                      { id: created.id, name: created.name, balance: body.openingBalance },
+                    ],
+                    accountIds: [...bucket.accountIds, created.id],
+                  }
+                : bucket,
+            ),
+          };
+        }
         return jsonResponse({ ok: true, account: created, liquid: body.openingBalance, accounts: accountRows }, 201);
       }
       return jsonResponse({
@@ -1278,6 +1384,9 @@ function stubApi(opts?: {
         daysSinceReconcile: row.daysSinceReconcile,
         cycleStart: "2026-09-01",
         cycleSpent: 0,
+        estimatedNextStatement:
+          row.group === "credit_card" ? row.balance + rupeesToPaise(38_200) : null,
+        nextStatementDate: row.group === "credit_card" ? "2026-09-12" : null,
         entries: entries.filter(
           (e) => e.fromAccountId === id || e.toAccountId === id,
         ),
@@ -1422,7 +1531,21 @@ afterEach(() => {
   vi.unstubAllGlobals();
   sessionStorage.clear();
   localStorage.clear();
+  mockMatchMedia(false);
 });
+
+function mockMatchMedia(matchesDesktop: boolean) {
+  window.matchMedia = (query: string) => ({
+    matches: matchesDesktop && query.includes("60rem"),
+    media: query,
+    onchange: null,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    dispatchEvent: () => false,
+  });
+}
 
 describe("app shell", () => {
   it("renders Home and switches tabs", async () => {
@@ -1444,7 +1567,30 @@ describe("app shell", () => {
     await user.click(screen.getByRole("tab", { name: "More" }));
     expect(screen.getByRole("heading", { name: "More" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Ledger" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Plan" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Emergency" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Debt" })).toBeInTheDocument();
+  });
+
+  it("uses a sidebar and the full dashboard on desktop widths", async () => {
+    mockMatchMedia(true);
+    stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Monthly savings" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Upcoming payments" })).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Primary" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Ledger" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Budget" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Emergency" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Debt" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Accounts" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("link", { name: "Ledger" }));
+    expect(await screen.findByRole("heading", { name: "September 2026" })).toBeInTheDocument();
+    mockMatchMedia(false);
   });
 
   it("opens and closes the Quick Add sheet", async () => {
@@ -1467,12 +1613,15 @@ describe("app shell", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick Add" }));
     const addSheet = await screen.findByRole("dialog", { name: "Quick Add" });
-    expect(await within(addSheet).findByText("HDFC Credit Card")).toBeInTheDocument();
-    expect(within(addSheet).getByRole("button", { name: "Eating outside" })).toBeInTheDocument();
+    expect(await within(addSheet).findByRole("combobox", { name: "From" })).toHaveDisplayValue(
+      "HDFC Credit Card",
+    );
+    expect(within(addSheet).getByRole("combobox", { name: "Category" })).toHaveDisplayValue(
+      "Eating outside",
+    );
+    expect(within(addSheet).queryByRole("button", { name: "2" })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "2" }));
-    await user.click(screen.getByRole("button", { name: "4" }));
-    await user.click(screen.getByRole("button", { name: "0" }));
+    await user.type(within(addSheet).getByRole("textbox", { name: "Amount" }), "240");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -1496,6 +1645,77 @@ describe("app shell", () => {
 
     expect(await screen.findByRole("status")).toHaveTextContent(/₹240/);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("types a sentence and posts an AI ledger row", async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Quick Add" }));
+    const addSheet = await screen.findByRole("dialog", { name: "Quick Add" });
+    await user.click(within(addSheet).getByRole("radio", { name: "Type" }));
+    const box = await within(addSheet).findByRole("textbox", { name: "What happened" });
+    await user.type(box, "curd 20 rupee from savings");
+    await user.click(within(addSheet).getByRole("button", { name: "Add to ledger" }));
+
+    await waitFor(() => {
+      const parsed = fetchMock.mock.calls.find((call) =>
+        String(call[0]).includes("/api/finance-os/parse"),
+      );
+      expect(parsed).toBeTruthy();
+      const parseBody = JSON.parse(String(parsed?.[1]?.body ?? "{}")) as {
+        text: string;
+        catalog: { accounts: { name: string }[] };
+      };
+      expect(parseBody.text).toBe("curd 20 rupee from savings");
+      expect(parseBody.catalog.accounts.some((row) => row.name === "HDFC Savings")).toBe(true);
+
+      const posted = fetchMock.mock.calls.find((call) => {
+        if (!String(call[0]).includes("/api/ledger")) return false;
+        return (call[1] as RequestInit | undefined)?.method === "POST";
+      });
+      expect(posted).toBeTruthy();
+      const body = JSON.parse(String(posted?.[1]?.body ?? "{}")) as {
+        amount: number;
+        type: string;
+        fromAccountId: string;
+        source: string;
+        notes: string;
+      };
+      expect(body.amount).toBe(rupeesToPaise(20));
+      expect(body.type).toBe("expense");
+      expect(body.fromAccountId).toBe(ACCOUNTS.hdfc.id);
+      expect(body.source).toBe("ai");
+      expect(body.notes).toBe("curd");
+    });
+  });
+
+  it("searches All categories and can create a missing one", async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Quick Add" }));
+    const addSheet = await screen.findByRole("dialog", { name: "Quick Add" });
+    await user.click(within(addSheet).getByRole("button", { name: "New category" }));
+    const search = await within(addSheet).findByPlaceholderText("Find or create");
+    await user.type(search, "Milk");
+    await user.click(within(addSheet).getByRole("button", { name: /Create .*Milk/ }));
+    await waitFor(() => {
+      const posted = fetchMock.mock.calls.find((call) => {
+        const url = String(call[0]);
+        const method = call[1]?.method ?? "GET";
+        return url.endsWith("/api/categories") && method === "POST";
+      });
+      expect(posted).toBeTruthy();
+      const body = JSON.parse(String(posted?.[1]?.body ?? "{}")) as { name: string; group: string };
+      expect(body.name).toBe("Milk");
+      expect(body.group).toBe("Lifestyle");
+    });
+    expect(await within(addSheet).findByRole("combobox", { name: "Category" })).toHaveDisplayValue(
+      "Milk",
+    );
   });
 
   it("shows an inline hint when there is no credit card to pay", async () => {
@@ -1524,10 +1744,10 @@ describe("app shell", () => {
 
     await user.click(screen.getByRole("button", { name: "Quick Add" }));
     const addSheet = await screen.findByRole("dialog", { name: "Quick Add" });
-    await within(addSheet).findByText("HDFC Credit Card");
-    await user.click(screen.getByRole("button", { name: "2" }));
-    await user.click(screen.getByRole("button", { name: "4" }));
-    await user.click(screen.getByRole("button", { name: "0" }));
+    expect(await within(addSheet).findByRole("combobox", { name: "From" })).toHaveDisplayValue(
+      "HDFC Credit Card",
+    );
+    await user.type(within(addSheet).getByRole("textbox", { name: "Amount" }), "240");
     await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
@@ -1595,6 +1815,30 @@ describe("accounts + reconcile screens", () => {
     expect(screen.getByText("Savings")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /HDFC Savings/ })).toBeInTheDocument();
     expect(screen.getByText(/cannot type one here/i)).toBeInTheDocument();
+    const ccLink = screen.getByRole("link", { name: /HDFC Credit Card/ });
+    expect(ccLink).not.toHaveTextContent("%");
+  });
+
+  it("shows Est. next statement on a credit card and hides limit tiles", async () => {
+    stubApi({ accountBalances: { [ACCOUNTS.hdfcCc.id]: rupeesToPaise(8840.29) } });
+    const user = userEvent.setup();
+    render(<App />);
+
+    await user.click(screen.getByRole("tab", { name: "More" }));
+    await user.click(await screen.findByRole("link", { name: "Accounts" }));
+    const cc = await screen.findByRole("link", { name: /HDFC Credit Card/ });
+    expect(cc).toHaveTextContent("₹8,840.29");
+    expect(cc).not.toHaveTextContent("%");
+    await user.click(cc);
+
+    expect(await screen.findByText("Due")).toBeInTheDocument();
+    expect(screen.getByText("₹8,840.29")).toBeInTheDocument();
+    expect(screen.getByText(/Est\. next statement/)).toBeInTheDocument();
+    expect(screen.getByText("₹47,040.29")).toBeInTheDocument();
+    expect(screen.getByText(/includes unposted EMI/)).toBeInTheDocument();
+    expect(screen.queryByText("Limit")).not.toBeInTheDocument();
+    expect(screen.queryByText("Available")).not.toBeInTheDocument();
+    expect(screen.queryByText(/used/i)).not.toBeInTheDocument();
   });
 
   it("stamps a zero difference and posts an adjustment when the bank number differs", async () => {
@@ -1636,10 +1880,8 @@ describe("accounts + reconcile screens", () => {
     await user.click(await screen.findByRole("link", { name: "Reconcile" }));
     await screen.findByRole("heading", { name: "Reconcile" });
 
-    await user.click(screen.getByRole("button", { name: "2" }));
-    await user.click(screen.getByRole("button", { name: "0" }));
-    await user.click(screen.getByRole("button", { name: "0" }));
-    const note = await screen.findByPlaceholderText("Required — why the gap");
+    await user.type(screen.getByRole("textbox", { name: "Bank actual" }), "200");
+    const note = await screen.findByPlaceholderText("Required: why the gap");
     await user.type(note, "bank vs app");
     await user.click(screen.getByRole("button", { name: "Add adjustment" }));
 
@@ -1672,7 +1914,7 @@ describe("accounts + reconcile screens", () => {
     const name = await screen.findByPlaceholderText("HDFC Savings");
     await user.clear(name);
     await user.type(name, "Wallet");
-    await user.click(screen.getByRole("button", { name: "Cash" }));
+    await user.selectOptions(screen.getByRole("combobox", { name: "Group" }), "cash");
     await user.click(screen.getByRole("button", { name: "Add account" }));
 
     await waitFor(() => {
@@ -1695,13 +1937,34 @@ describe("accounts + reconcile screens", () => {
 });
 
 describe("home screen", () => {
-  it("shows pace, negative free cash, and the free-cash breakdown", async () => {
+  async function openDetailed(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole("link", { name: "Detailed" }));
+  }
+
+  it("keeps Home clear and opens Detailed from the top right", async () => {
     stubApi();
     const user = userEvent.setup();
     render(<App />);
 
+    expect(await screen.findByRole("link", { name: "Detailed" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "September 2026" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Monthly savings" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Safe to spend today/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No spending yet/)).not.toBeInTheDocument();
+
+    await openDetailed(user);
+    expect(await screen.findByRole("heading", { name: "Monthly savings" })).toBeInTheDocument();
+    expect(screen.getByText("No spending yet: ₹1,215.00 / day")).toBeInTheDocument();
+  });
+
+  it("shows pace, negative free cash, and the free-cash breakdown", async () => {
+    stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await openDetailed(user);
+
     expect(
-      await screen.findByText("No spending yet — ₹1,215.00 / day"),
+      await screen.findByText("No spending yet: ₹1,215.00 / day"),
     ).toBeInTheDocument();
     expect(screen.getAllByText("Committed beyond liquid").length).toBeGreaterThan(0);
     expect(screen.getByText("-₹31,000.00")).toBeInTheDocument();
@@ -1713,7 +1976,9 @@ describe("home screen", () => {
 
   it("links this-month tiles and credit-card rows", async () => {
     stubApi({ accountBalances: { [ACCOUNTS.hdfcCc.id]: rupeesToPaise(702.16) } });
+    const user = userEvent.setup();
     render(<App />);
+    await openDetailed(user);
 
     expect(await screen.findByRole("link", { name: /Budget exp/ })).toHaveAttribute(
       "href",
@@ -1722,19 +1987,25 @@ describe("home screen", () => {
     const cc = await screen.findByRole("link", { name: /HDFC Credit Card/ });
     expect(cc).toHaveAttribute("href", `/more/accounts/${ACCOUNTS.hdfcCc.id}`);
     expect(cc).toHaveTextContent("₹702.16");
+    expect(cc).not.toHaveTextContent("%");
   });
 
-  it("shows an unverified-import banner after a statement import", async () => {
+  it("does not nag about statement import or stale reconcile on Home", async () => {
     stubApi({ lastImport: "2026-09-06T10:00:00+05:30" });
+    const user = userEvent.setup();
     render(<App />);
+    await openDetailed(user);
 
-    const banner = await screen.findByRole("link", { name: /Unverified import/ });
-    expect(banner).toHaveAttribute("href", "/more/accounts");
+    expect(await screen.findByText("No spending yet: ₹1,215.00 / day")).toBeInTheDocument();
+    expect(screen.queryByText(/Imported, not reconciled/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not reconciled in/)).not.toBeInTheDocument();
   });
 
   it("lists recent transactions on Home", async () => {
     stubApi({ entries: [personalCareEntry()] });
+    const user = userEvent.setup();
     render(<App />);
+    await openDetailed(user);
     expect(await screen.findByRole("link", { name: /Personal care/ })).toHaveAttribute(
       "href",
       "/ledger/led_pc",
@@ -1743,9 +2014,69 @@ describe("home screen", () => {
 
   it("links the 6-month strip to Plan Forecast", async () => {
     stubApi();
+    const user = userEvent.setup();
     render(<App />);
+    await openDetailed(user);
     const strip = await screen.findByRole("link", { name: /Next 6 months/ });
     expect(strip).toHaveAttribute("href", "/plan?tab=forecast");
+  });
+
+  it("lists the first upcoming payments on simple Home", async () => {
+    stubApi({
+      upcomingBills: [
+        {
+          id: "rec_rent",
+          source: "recurring",
+          name: "Rent",
+          amount: rupeesToPaise(10_800),
+          dueDate: "2026-10-01",
+          kind: "bill",
+          frequency: "monthly",
+        },
+        {
+          id: "rec_sip",
+          source: "recurring",
+          name: "SIP",
+          amount: rupeesToPaise(5_000),
+          dueDate: "2026-10-01",
+          kind: "investment",
+          frequency: "monthly",
+        },
+        {
+          id: "rec_ins",
+          source: "recurring",
+          name: "Scooty insurance",
+          amount: rupeesToPaise(1_800),
+          dueDate: "2026-12-01",
+          kind: "bill",
+          frequency: "yearly",
+        },
+        {
+          id: "ot_flights",
+          source: "one_time",
+          name: "Flights",
+          amount: rupeesToPaise(7_500),
+          dueDate: "2026-09-20",
+          kind: null,
+          frequency: null,
+        },
+      ],
+    });
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Upcoming payments" })).toBeInTheDocument();
+    expect(screen.getByText(/4 payments/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Flights/ })).toHaveAttribute(
+      "href",
+      "/plan?tab=one-time",
+    );
+    expect(screen.getByRole("link", { name: /Rent/ })).toHaveAttribute(
+      "href",
+      "/plan?tab=recurring",
+    );
+    expect(screen.getByText("SIP")).toBeInTheDocument();
+    expect(screen.getByText("Scooty insurance")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Monthly savings" })).not.toBeInTheDocument();
   });
 
   it("shows retry when Home cannot reach the API", async () => {
@@ -1768,7 +2099,7 @@ describe("plan screen", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("tab", { name: "More" }));
-    await user.click(screen.getByRole("link", { name: "Plan" }));
+    await user.click(screen.getByRole("link", { name: "Budget" }));
     expect(await screen.findByText("Cap")).toBeInTheDocument();
     expect(screen.getByText("₹31,000.00")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Recurring" })).toBeInTheDocument();
@@ -1780,10 +2111,11 @@ describe("plan screen", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("tab", { name: "More" }));
-    await user.click(screen.getByRole("link", { name: "Plan" }));
+    await user.click(screen.getByRole("link", { name: "Budget" }));
     await user.click(await screen.findByRole("button", { name: "Recurring" }));
     expect(await screen.findByText("MacBook SmartEMI")).toBeInTheDocument();
     expect(screen.getByText("Scooty insurance")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Bill" })).toBeInTheDocument();
     await user.click(screen.getByRole("switch", { name: "MacBook SmartEMI active" }));
     await waitFor(() => {
       const patched = fetchMock.mock.calls.find((call) => {
@@ -1808,7 +2140,7 @@ describe("plan screen", () => {
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("tab", { name: "More" }));
-    await user.click(screen.getByRole("link", { name: "Plan" }));
+    await user.click(screen.getByRole("link", { name: "Budget" }));
     await user.click(await screen.findByRole("button", { name: "One-time" }));
     expect(await screen.findByText("Flights")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Complete" }));
@@ -1830,12 +2162,77 @@ describe("plan screen", () => {
     expect(ledgerPosts).toEqual([]);
   });
 
+  it("deleting recurring, one-time, and inflow from the edit sheet does not post a ledger row", async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("tab", { name: "More" }));
+    await user.click(screen.getByRole("link", { name: "Budget" }));
+
+    await user.click(await screen.findByRole("button", { name: "Recurring" }));
+    await user.click(await screen.findByText("MacBook SmartEMI"));
+    const recSheet = await screen.findByRole("dialog", { name: "Edit recurring" });
+    expect(within(recSheet).getByText(/Forecast bars and Recurring filters/)).toBeInTheDocument();
+    expect(within(recSheet).getByRole("combobox", { name: "Kind" })).toBeInTheDocument();
+    await user.click(within(recSheet).getByRole("button", { name: "Delete" }));
+    await user.click(within(recSheet).getByRole("button", { name: "Delete recurring" }));
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some((call) => {
+          const url = String(call[0]);
+          const method = call[1]?.method ?? "GET";
+          return url.includes("/api/plans/recurring/rec_smart") && method === "DELETE";
+        }),
+      ).toBe(true);
+    });
+    expect(screen.queryByRole("dialog", { name: "Edit recurring" })).not.toBeInTheDocument();
+    expect(screen.queryByText("MacBook SmartEMI")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "One-time" }));
+    await user.click(await screen.findByText("Flights"));
+    const oneSheet = await screen.findByRole("dialog", { name: "Edit one-time" });
+    expect(within(oneSheet).getByRole("combobox", { name: "Kind" })).toBeInTheDocument();
+    await user.click(within(oneSheet).getByRole("button", { name: "Delete" }));
+    await user.click(within(oneSheet).getByRole("button", { name: "Delete one-time" }));
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some((call) => {
+          const url = String(call[0]);
+          const method = call[1]?.method ?? "GET";
+          return url.includes("/api/plans/one-time/ot_flights") && method === "DELETE";
+        }),
+      ).toBe(true);
+    });
+
+    await user.click(screen.getByRole("button", { name: "Inflows" }));
+    await user.click(await screen.findByText("Bonus"));
+    const inflowSheet = await screen.findByRole("dialog", { name: "Edit inflow" });
+    await user.click(within(inflowSheet).getByRole("button", { name: "Delete" }));
+    await user.click(within(inflowSheet).getByRole("button", { name: "Delete inflow" }));
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some((call) => {
+          const url = String(call[0]);
+          const method = call[1]?.method ?? "GET";
+          return url.includes("/api/plans/inflows/in_bonus") && method === "DELETE";
+        }),
+      ).toBe(true);
+    });
+
+    const ledgerPosts = fetchMock.mock.calls.filter((call) => {
+      const url = String(call[0]);
+      const method = call[1]?.method ?? "GET";
+      return url.includes("/api/ledger") && method === "POST";
+    });
+    expect(ledgerPosts).toEqual([]);
+  });
+
   it("Forecast lists which rows make up Loan/EMI in a month", async () => {
     stubApi();
     const user = userEvent.setup();
     render(<App />);
     await user.click(screen.getByRole("tab", { name: "More" }));
-    await user.click(screen.getByRole("link", { name: "Plan" }));
+    await user.click(screen.getByRole("link", { name: "Budget" }));
     await user.click(await screen.findByRole("button", { name: "Forecast" }));
     expect(await screen.findByRole("switch", { name: /Assume expected inflows arrive/ })).toBeInTheDocument();
     const loanButtons = await screen.findAllByRole("button", { name: /Loan\/EMI/ });
@@ -1852,7 +2249,7 @@ describe("categories + settings", () => {
     await user.click(screen.getByRole("tab", { name: "More" }));
     await user.click(screen.getByRole("link", { name: "Categories" }));
     expect(await screen.findByText("Eating outside")).toBeInTheDocument();
-    expect(screen.getByText("3 uses · essential")).toBeInTheDocument();
+    expect(screen.getByText("3 uses")).toBeInTheDocument();
 
     await user.click(screen.getByRole("switch", { name: "Eating outside default in budget" }));
     await waitFor(() => {
@@ -1898,7 +2295,11 @@ describe("categories + settings", () => {
       );
     });
 
-    await user.click(screen.getByRole("switch", { name: /Blur Home numbers by default/ }));
+    expect(screen.queryByLabelText("Salary day")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Emergency fund months")).not.toBeInTheDocument();
+    expect(screen.queryByText("Essentials (EF target)")).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("switch", { name: /Blur dashboard numbers by default/ }));
     await waitFor(() => {
       const puts = fetchMock.mock.calls.filter(
         (call) =>
@@ -1926,9 +2327,105 @@ describe("wealth", () => {
     expect(screen.getByLabelText("Emergency Fund 100%")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Portfolio" })).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "Net worth history" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+ FD" })).not.toBeInTheDocument();
     expect(
       screen.getByText(/With ₹20,000.00 surplus today this plan gives EF ₹0.00, Savings ₹10,000.00, Investment ₹10,000.00/),
     ).toBeInTheDocument();
+  });
+
+  it("opens Emergency from Wealth and saves a typed target", async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("tab", { name: "Wealth" }));
+    await user.click(await screen.findByRole("link", { name: /Emergency Fund/ }));
+    expect(await screen.findByRole("heading", { name: "Emergency" })).toBeInTheDocument();
+    expect(screen.queryByText("How this number is built")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /FD/ })).toHaveAttribute(
+      "href",
+      `/more/accounts/${ACCOUNTS.fd.id}`,
+    );
+
+    const target = screen.getByLabelText("Emergency Fund target rupees");
+    await user.clear(target);
+    await user.type(target, "40000");
+    await user.click(screen.getByRole("button", { name: "Save target" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Target saved");
+    const puts = fetchMock.mock.calls.filter(
+      (call) =>
+        String(call[0]).includes("/api/buckets") &&
+        (call[1] as RequestInit | undefined)?.method === "PUT",
+    );
+    expect(puts).toHaveLength(1);
+    const body = JSON.parse(String((puts[0]?.[1] as RequestInit | undefined)?.body ?? "{}")) as {
+      buckets: { id: string; targetRule: string; targetAmount: number | null }[];
+    };
+    const ef = body.buckets.find((row) => row.id === DEFAULT_BUCKET_IDS.emergencyFund);
+    expect(ef?.targetRule).toBe("fixed");
+    expect(ef?.targetAmount).toBe(rupeesToPaise(40_000));
+
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    const addSheet = await screen.findByRole("dialog", { name: "Add to emergency" });
+    await user.selectOptions(within(addSheet).getByRole("combobox", { name: "Type" }), "fd");
+    expect(within(addSheet).getByDisplayValue("FD1")).toBeInTheDocument();
+    await user.click(within(addSheet).getByRole("button", { name: "Add" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("FD1 added");
+  });
+
+  it("adds labelled savings on Emergency", async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("tab", { name: "More" }));
+    await user.click(screen.getByRole("link", { name: "Emergency" }));
+    expect(await screen.findByRole("heading", { name: "Emergency" })).toBeInTheDocument();
+    expect(screen.getByText("Total emergency")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "+ Add" }));
+    const addSheet = await screen.findByRole("dialog", { name: "Add to emergency" });
+    await user.type(within(addSheet).getByLabelText("Label"), "Axis savings");
+    await user.click(within(addSheet).getByRole("button", { name: "Add" }));
+    expect(await screen.findByRole("status")).toHaveTextContent("Axis savings added");
+    const posts = fetchMock.mock.calls.filter((call) => {
+      const url = String(call[0]);
+      const method = (call[1] as RequestInit | undefined)?.method ?? "GET";
+      return url.includes("/api/accounts") && method === "POST";
+    });
+    expect(posts).toHaveLength(1);
+    const body = JSON.parse(String((posts[0]?.[1] as RequestInit | undefined)?.body ?? "{}")) as {
+      name: string;
+      group: string;
+      bucketId: string | null;
+    };
+    expect(body.name).toBe("Axis savings");
+    expect(body.group).toBe("savings");
+    expect(body.bucketId).toBe(DEFAULT_BUCKET_IDS.emergencyFund);
+  });
+
+  it("lists credit cards, loans, and EMIs on Debt", async () => {
+    const car = loan("acc_car", "Car loan");
+    stubApi({
+      books: mockBooks([...Object.values(ACCOUNTS), car]),
+      accountBalances: {
+        [ACCOUNTS.hdfcCc.id]: rupeesToPaise(702.16),
+        [car.id]: rupeesToPaise(1_20_000),
+      },
+    });
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("tab", { name: "More" }));
+    await user.click(screen.getByRole("link", { name: "Debt" }));
+    expect(await screen.findByRole("heading", { name: "Debt" })).toBeInTheDocument();
+    const ccRow = await screen.findByRole("link", { name: /HDFC Credit Card/ });
+    expect(ccRow).toHaveAttribute("href", `/more/accounts/${ACCOUNTS.hdfcCc.id}`);
+    expect(ccRow).toHaveTextContent("₹702.16");
+    const loanRow = screen.getByRole("link", { name: /Car loan/ });
+    expect(loanRow).toHaveAttribute("href", `/more/accounts/${car.id}`);
+    expect(loanRow).toHaveTextContent("₹1,20,000.00");
+    expect(screen.getByRole("link", { name: /MacBook SmartEMI/ })).toHaveAttribute(
+      "href",
+      "/plan?tab=recurring",
+    );
   });
 
   it("updates rings and the example split when Savings target goes 10k → 30k without posting ledger", async () => {
@@ -1938,6 +2435,11 @@ describe("wealth", () => {
     await user.click(screen.getByRole("tab", { name: "Wealth" }));
     await user.click(await screen.findByRole("link", { name: "Edit bucket rules" }));
     expect(await screen.findByRole("heading", { name: "Bucket rules" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Emergency Fund target rupees")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit target on Emergency Fund" })).toHaveAttribute(
+      "href",
+      "/emergency",
+    );
 
     const savingsTarget = await screen.findByLabelText("Savings buffer target rupees");
     await user.clear(savingsTarget);
@@ -2056,6 +2558,7 @@ describe("invest", () => {
     render(<App />);
     await user.click(screen.getByRole("tab", { name: "Invest" }));
     expect(await screen.findByRole("heading", { name: "Invest" })).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "Invested assets pie" })).toBeInTheDocument();
     expect(screen.getAllByText("Gold").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("switch", { name: "Gold active" }));
     expect(await screen.findByText("sum = 100% ✓")).toBeInTheDocument();
@@ -2102,6 +2605,42 @@ describe("invest", () => {
     };
     expect(body.amount).toBe(rupeesToPaise(3_450));
   });
+
+  it("reorders assets immediately and confirms delete once", async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(screen.getByRole("tab", { name: "Invest" }));
+    const plan = seedDefaultInvestPlan();
+    const first = plan.assets[0]!;
+    const second = plan.assets[1]!;
+    await user.click(await screen.findByRole("button", { name: `Move ${first.name} down` }));
+    await waitFor(() => {
+      const puts = fetchMock.mock.calls.filter(
+        (call) =>
+          String(call[0]).includes("/api/invest/plan") &&
+          (call[1]?.method ?? "GET").toUpperCase() === "PUT",
+      );
+      expect(puts.length).toBeGreaterThan(0);
+      const body = JSON.parse(String(puts[puts.length - 1]?.[1]?.body ?? "{}")) as InvestPlan;
+      expect(body.assets[0]?.id).toBe(second.id);
+      expect(body.assets[1]?.id).toBe(first.id);
+    });
+
+    const remove = screen.getByRole("button", { name: `Remove ${first.name}` });
+    await user.click(remove);
+    expect(screen.getByRole("button", { name: `Confirm remove ${first.name}` })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: `Confirm remove ${first.name}` }));
+    await waitFor(() => {
+      const puts = fetchMock.mock.calls.filter(
+        (call) =>
+          String(call[0]).includes("/api/invest/plan") &&
+          (call[1]?.method ?? "GET").toUpperCase() === "PUT",
+      );
+      const body = JSON.parse(String(puts[puts.length - 1]?.[1]?.body ?? "{}")) as InvestPlan;
+      expect(body.assets.some((row) => row.id === first.id)).toBe(false);
+    });
+  });
 });
 
 describe("portfolio", () => {
@@ -2123,6 +2662,7 @@ describe("privacy blur + PIN lock", () => {
     stubApi({ blurDefault: true });
     const user = userEvent.setup();
     render(<App />);
+    await user.click(await screen.findByRole("link", { name: "Detailed" }));
     expect(await screen.findByRole("button", { name: "Show amounts" })).toBeInTheDocument();
     expect(document.querySelectorAll(".privacy-blur").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Show amounts" }));
@@ -2135,7 +2675,7 @@ describe("privacy blur + PIN lock", () => {
     const user = userEvent.setup();
     render(<App />);
     expect(await screen.findByText("Locked")).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: "Home" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: "Dashboard" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "1" }));
     await user.click(screen.getByRole("button", { name: "2" }));
@@ -2143,7 +2683,7 @@ describe("privacy blur + PIN lock", () => {
     await user.click(screen.getByRole("button", { name: "4" }));
     await user.click(screen.getByRole("button", { name: "Unlock" }));
 
-    expect(await screen.findByRole("tab", { name: "Home" })).toBeInTheDocument();
+    expect(await screen.findByRole("tab", { name: "Dashboard" })).toBeInTheDocument();
     expect(screen.queryByText("Locked")).not.toBeInTheDocument();
   });
 });

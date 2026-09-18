@@ -51,6 +51,7 @@ export type NewOneTimeInput = {
   amount: Paise;
   priority: PlanPriority;
   status: OneTimeStatus;
+  kind: RecurringKind | null;
   payFromAccountId: string | null;
   notes: string;
 };
@@ -157,6 +158,14 @@ export function updateRecurringPlan(
   return mapRecurringPlan(row);
 }
 
+export function deleteRecurringPlan(db: AppDb, id: string): RecurringPlan | null {
+  const current = getRecurringRow(db, id);
+  if (!current) return null;
+  const mapped = mapRecurringPlan(current);
+  db.delete(recurringPlans).where(eq(recurringPlans.id, id)).run();
+  return mapped;
+}
+
 export function insertOneTimePlan(db: AppDb, input: NewOneTimeInput): OneTimePlan {
   const at = nowIso();
   const id = uuidv7();
@@ -169,6 +178,7 @@ export function insertOneTimePlan(db: AppDb, input: NewOneTimeInput): OneTimePla
       amount: input.amount,
       priority: input.priority,
       status: input.status,
+      kind: input.kind,
       payFromAccountId: input.payFromAccountId,
       linkedEntryId: null,
       notes: input.notes,
@@ -196,6 +206,7 @@ export function updateOneTimePlan(
     amount: patch.amount ?? mapped.amount,
     priority: patch.priority ?? mapped.priority,
     status: patch.status ?? mapped.status,
+    kind: patch.kind !== undefined ? patch.kind : mapped.kind,
     payFromAccountId:
       patch.payFromAccountId !== undefined ? patch.payFromAccountId : mapped.payFromAccountId,
     notes: patch.notes ?? mapped.notes,
@@ -209,6 +220,7 @@ export function updateOneTimePlan(
       amount: next.amount,
       priority: next.priority,
       status: next.status,
+      kind: next.kind,
       payFromAccountId: next.payFromAccountId,
       notes: next.notes,
       updatedAt: at,
@@ -218,6 +230,14 @@ export function updateOneTimePlan(
   const row = getOneTimeRow(db, id);
   if (!row) throw new Error("update one-time failed");
   return mapOneTimePlan(row);
+}
+
+export function deleteOneTimePlan(db: AppDb, id: string): OneTimePlan | null {
+  const current = getOneTimeRow(db, id);
+  if (!current) return null;
+  const mapped = mapOneTimePlan(current);
+  db.delete(oneTimePlans).where(eq(oneTimePlans.id, id)).run();
+  return mapped;
 }
 
 export function insertExpectedInflow(db: AppDb, input: NewInflowInput): ExpectedInflow {
@@ -282,6 +302,14 @@ export function updateExpectedInflow(
   const row = getInflowRow(db, id);
   if (!row) throw new Error("update inflow failed");
   return mapExpectedInflow(row);
+}
+
+export function deleteExpectedInflow(db: AppDb, id: string): ExpectedInflow | null {
+  const current = getInflowRow(db, id);
+  if (!current) return null;
+  const mapped = mapExpectedInflow(current);
+  db.delete(expectedInflows).where(eq(expectedInflows.id, id)).run();
+  return mapped;
 }
 
 export function upsertMonthBudget(

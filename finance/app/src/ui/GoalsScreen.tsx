@@ -148,13 +148,13 @@ export function GoalsScreen() {
   }
 
   return (
-    <section className="px-5 pb-8">
-      <Link to="/wealth" className="btn-ghost">
+    <section className="page">
+      <Link to="/wealth" className="back-link btn-ghost">
         ← Wealth
       </Link>
       <div className="mt-2 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Goals</h1>
+          <h1 className="page-title">Goals</h1>
           {data ? (
             <>
               <p className="mt-0.5 text-sm text-muted">
@@ -180,7 +180,7 @@ export function GoalsScreen() {
       ) : rows.length === 0 ? (
         <p className="mt-8 text-sm text-muted">{EMPTY_GOALS_HINT}</p>
       ) : (
-        <div className="mt-4 space-y-3">
+        <div className="mt-4 space-y-3 desk:grid desk:grid-cols-3 desk:gap-5 desk:space-y-0">
           {rows.map((row, index) => (
             <GoalRow
               key={row.id}

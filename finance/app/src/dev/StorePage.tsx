@@ -138,7 +138,7 @@ export function StorePage() {
           </dl>
         ) : health.error ? (
           <p className="mt-2 text-sm text-red-700 dark:text-red-400">
-            {errorText(health.error)} — is the API running on :8787?
+            {errorText(health.error)}: is the API running on :8787?
           </p>
         ) : (
           <p className="mt-2 text-sm text-muted">Loading…</p>

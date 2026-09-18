@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { accountBalance } from "./balances.ts";
 import { type MonthLedgerEntry } from "./budget.ts";
 import { rupeesToPaise } from "./money.ts";
 import {
   committedEmiRemaining,
+  estimatedNextStatement,
   nextRecurringDueDate,
   oneTimeInMonth,
   oneTimeWindow,
@@ -10,12 +12,15 @@ import {
   recurringDueLines,
   recurringIsEnded,
   resolveRecurringKind,
+  upcomingBills,
   yearlyCommitments,
+  type CardEmiLedgerEntry,
   type OneTimeWindowPlan,
   type RecurringDuePlan,
   type RecurringLinePlan,
+  type UpcomingOneTimePlan,
 } from "./plans.ts";
-import type { Category, RecurringKind } from "./types.ts";
+import type { Account, Category, RecurringKind } from "./types.ts";
 
 function cat(
   id: string,
@@ -44,6 +49,7 @@ function rec(
     endDate: null,
     active: true,
     kind: "lifestyle",
+    payFromAccountId: null,
     ...extra,
   };
 }
@@ -53,6 +59,35 @@ function oneTime(
 ): OneTimeWindowPlan {
   return {
     status: "planned",
+    ...extra,
+  };
+}
+
+function recLine(
+  extra: Partial<RecurringLinePlan> &
+    Pick<RecurringDuePlan, "amount" | "frequency"> & { name: string },
+): RecurringLinePlan {
+  return {
+    id: extra.id ?? extra.name,
+    categoryId: extra.categoryId ?? "cat_other",
+    intervalMonths: extra.intervalMonths ?? null,
+    startDate: extra.startDate ?? "2026-08-01",
+    endDate: extra.endDate ?? null,
+    active: extra.active ?? true,
+    kind: extra.kind ?? "lifestyle",
+    payFromAccountId: extra.payFromAccountId ?? null,
+    ...extra,
+  };
+}
+
+function upcomingOne(
+  extra: Partial<UpcomingOneTimePlan> &
+    Pick<UpcomingOneTimePlan, "expectedDate" | "amount"> & { name: string },
+): UpcomingOneTimePlan {
+  return {
+    id: extra.id ?? extra.name,
+    status: extra.status ?? "planned",
+    kind: extra.kind === undefined ? "bill" : extra.kind,
     ...extra,
   };
 }
@@ -150,6 +185,11 @@ describe("resolveRecurringKind", () => {
     expect(resolveRecurringKind(null, "Rent")).toBe("lifestyle");
     expect(resolveRecurringKind(null, undefined)).toBe("lifestyle");
   });
+
+  it("bill counts as lifestyle for forecast", () => {
+    expect(resolveRecurringKind("bill", "Rent")).toBe("lifestyle");
+    expect(resolveRecurringKind("bill", "EMIs")).toBe("lifestyle");
+  });
 });
 
 describe("recurringDue from Planned Expenses behaviour", () => {
@@ -188,6 +228,14 @@ describe("recurringDue from Planned Expenses behaviour", () => {
     expect(recurringDue(SEP, "loan_emi", planned, categories)).toBe(rupeesToPaise(38200));
     expect(recurringDue(SEP, "lifestyle", planned, categories)).toBe(rupeesToPaise(25127));
     expect(recurringDue(SEP, "investment", planned, categories)).toBe(0);
+    expect(
+      recurringDue(
+        SEP,
+        "lifestyle",
+        [rec({ amount: rupeesToPaise(10800), frequency: "monthly", kind: "bill" })],
+        categories,
+      ),
+    ).toBe(rupeesToPaise(10800));
     expect(recurringDue(SEP, null, planned, categories)).toBe(rupeesToPaise(63327));
   });
 
@@ -471,5 +519,377 @@ describe("next due, ended, yearly commitments", () => {
   it("yearly commitments sum active yearly amounts, not ÷12", () => {
     expect(yearlyCommitments(TODAY, planned)).toBe(rupeesToPaise(1800));
     expect(yearlyCommitments(TODAY, [rentInactive, milk])).toBe(0);
+  });
+});
+
+describe("upcomingBills first instance", () => {
+  it("lists each live recurring plan once, on the next due on or after today", () => {
+    const rent = recLine({
+      name: "Rent",
+      frequency: "monthly",
+      amount: rupeesToPaise(10800),
+      startDate: "2026-08-01",
+      kind: "bill",
+    });
+    const milkBill = recLine({
+      name: "Milk",
+      frequency: "monthly",
+      amount: rupeesToPaise(2500),
+      startDate: "2026-08-10",
+      kind: "bill",
+    });
+    const bills = upcomingBills(TODAY, [rent, milkBill], [], categories);
+    expect(bills.map((row) => `${row.name}:${row.dueDate}`)).toEqual([
+      "Milk:2026-09-10",
+      "Rent:2026-10-01",
+    ]);
+    expect(bills.filter((row) => row.name === "Rent")).toHaveLength(1);
+  });
+
+  it("keeps a monthly due that is still today", () => {
+    const rent = recLine({
+      name: "Rent",
+      frequency: "monthly",
+      amount: rupeesToPaise(10800),
+      startDate: "2026-08-06",
+      kind: "bill",
+    });
+    const bills = upcomingBills(TODAY, [rent], [], categories);
+    expect(bills).toEqual([
+      expect.objectContaining({
+        name: "Rent",
+        dueDate: TODAY,
+        source: "recurring",
+        frequency: "monthly",
+        kind: "bill",
+        amount: rupeesToPaise(10800),
+      }),
+    ]);
+  });
+
+  it("includes a yearly bill months away, not smeared into this month", () => {
+    const insurance = recLine({
+      id: "rec_domain",
+      name: "Scooty insurance",
+      categoryId: domainCat.id,
+      frequency: "yearly",
+      amount: rupeesToPaise(1800),
+      startDate: "2026-12-01",
+      kind: "bill",
+    });
+    const bills = upcomingBills(TODAY, [insurance], [], categories);
+    expect(bills).toEqual([
+      expect.objectContaining({
+        name: "Scooty insurance",
+        dueDate: "2026-12-01",
+        frequency: "yearly",
+        kind: "bill",
+        amount: rupeesToPaise(1800),
+      }),
+    ]);
+  });
+
+  it("includes planned one-time bills from today onward and skips completed or past", () => {
+    const bills = upcomingBills(
+      TODAY,
+      [],
+      [
+        upcomingOne({
+          name: "Flights",
+          expectedDate: "2026-09-20",
+          amount: rupeesToPaise(7500),
+        }),
+        upcomingOne({
+          name: "Past dentist",
+          expectedDate: "2026-09-01",
+          amount: rupeesToPaise(500),
+        }),
+        upcomingOne({
+          name: "Done",
+          expectedDate: "2026-10-01",
+          amount: rupeesToPaise(100),
+          status: "completed",
+        }),
+      ],
+      categories,
+    );
+    expect(bills.map((row) => row.name)).toEqual(["Flights"]);
+    expect(bills[0]?.source).toBe("one_time");
+    expect(bills[0]?.frequency).toBeNull();
+  });
+
+  it("includes every live plan kind, not only Bill", () => {
+    const bills = upcomingBills(
+      TODAY,
+      [
+        recLine({
+          name: "SIP",
+          frequency: "monthly",
+          amount: rupeesToPaise(5000),
+          kind: "investment",
+        }),
+        recLine({
+          name: "Milk",
+          frequency: "monthly",
+          amount: rupeesToPaise(2500),
+          kind: "lifestyle",
+        }),
+        recLine({
+          name: "Rent",
+          frequency: "monthly",
+          amount: rupeesToPaise(10800),
+          kind: "bill",
+        }),
+        recLine({
+          id: "rec_emi",
+          name: "SmartEMI",
+          categoryId: emiCat.id,
+          frequency: "monthly",
+          amount: rupeesToPaise(38200),
+          kind: "loan_emi",
+        }),
+        recLine({
+          id: "rec_auto_sip",
+          name: "Auto SIP",
+          categoryId: investCat.id,
+          frequency: "monthly",
+          amount: rupeesToPaise(2000),
+          kind: null,
+        }),
+      ],
+      [
+        upcomingOne({
+          name: "Flights",
+          expectedDate: "2026-09-20",
+          amount: rupeesToPaise(7500),
+          kind: null,
+        }),
+        upcomingOne({
+          name: "Passport",
+          expectedDate: "2026-09-15",
+          amount: rupeesToPaise(1500),
+          kind: "bill",
+        }),
+      ],
+      categories,
+    );
+    expect(bills.map((row) => `${row.name}:${row.kind}:${row.dueDate}`)).toEqual([
+      "Passport:bill:2026-09-15",
+      "Flights:null:2026-09-20",
+      "Auto SIP:investment:2026-10-01",
+      "Milk:lifestyle:2026-10-01",
+      "Rent:bill:2026-10-01",
+      "SIP:investment:2026-10-01",
+      "SmartEMI:loan_emi:2026-10-01",
+    ]);
+  });
+
+  it("drops inactive and ended recurring rows", () => {
+    const bills = upcomingBills(
+      TODAY,
+      [
+        recLine({
+          name: "Ended rent",
+          frequency: "monthly",
+          amount: rupeesToPaise(10800),
+          startDate: "2026-08-01",
+          endDate: "2026-08-31",
+          kind: "bill",
+        }),
+        recLine({
+          name: "Off",
+          frequency: "monthly",
+          amount: rupeesToPaise(100),
+          active: false,
+          kind: "bill",
+        }),
+      ],
+      [],
+      categories,
+    );
+    expect(bills).toEqual([]);
+  });
+});
+
+describe("estimatedNextStatement", () => {
+  const CARD = "acc_hdfc_credit_card";
+  const OTHER = "acc_other_card";
+  const AS_OF = "2026-09-07";
+  const DUE = rupeesToPaise(8840.29);
+  const EMI = rupeesToPaise(38200);
+
+  const card: Account = {
+    id: CARD,
+    name: "HDFC Credit Card",
+    type: "liability",
+    openingBalance: DUE,
+    openingDate: "2026-08-01",
+    creditLimit: rupeesToPaise(150000),
+    includeNetWorth: true,
+    includeLiquid: false,
+    group: "credit_card",
+    bucketId: null,
+    statementDay: 12,
+    dueDay: 7,
+    isArchived: false,
+    notes: "",
+    virtualKind: null,
+  };
+
+  const onCard = rec({
+    categoryId: emiCat.id,
+    frequency: "monthly",
+    amount: EMI,
+    startDate: "2026-09-01",
+    kind: "loan_emi",
+    payFromAccountId: CARD,
+  });
+
+  function emiRow(
+    date: string,
+    fromAccountId: string,
+    amountRupees = 38200,
+  ): CardEmiLedgerEntry {
+    return {
+      date,
+      amount: rupeesToPaise(amountRupees),
+      fromAccountId,
+      categoryId: emiCat.id,
+    };
+  }
+
+  it("adds unposted this-card EMI in the statement window without folding it into due", () => {
+    const result = estimatedNextStatement(AS_OF, 12, CARD, DUE, [onCard], categories, []);
+    expect(result.due).toBe(DUE);
+    expect(result.due).toBe(accountBalance(card, []));
+    expect(result.unpostedEmi).toBe(EMI);
+    expect(result.estimated).toBe(DUE + EMI);
+    expect(result.nextStatementDate).toBe("2026-09-12");
+  });
+
+  it("equals due after this-card EMI posts in the window", () => {
+    const result = estimatedNextStatement(AS_OF, 12, CARD, DUE, [onCard], categories, [
+      emiRow("2026-09-01", CARD),
+    ]);
+    expect(result.due).toBe(DUE);
+    expect(result.unpostedEmi).toBe(0);
+    expect(result.estimated).toBe(DUE);
+  });
+
+  it("uses this calendar month on this card when statementDay is null", () => {
+    const open = estimatedNextStatement(AS_OF, null, CARD, DUE, [onCard], categories, []);
+    expect(open.nextStatementDate).toBeNull();
+    expect(open.unpostedEmi).toBe(EMI);
+    expect(open.estimated).toBe(DUE + EMI);
+
+    const postedThisMonth = estimatedNextStatement(AS_OF, null, CARD, DUE, [onCard], categories, [
+      emiRow("2026-09-01", CARD),
+    ]);
+    expect(postedThisMonth.unpostedEmi).toBe(0);
+    expect(postedThisMonth.estimated).toBe(DUE);
+
+    const postedLastMonth = estimatedNextStatement(AS_OF, null, CARD, DUE, [onCard], categories, [
+      emiRow("2026-08-01", CARD),
+    ]);
+    expect(postedLastMonth.unpostedEmi).toBe(EMI);
+  });
+
+  it("does not net a statement-day posting against the following cycle's EMI", () => {
+    const onStmt = estimatedNextStatement("2026-09-12", 12, CARD, DUE, [onCard], categories, [
+      emiRow("2026-09-12", CARD),
+    ]);
+    expect(onStmt.nextStatementDate).toBe("2026-10-12");
+    expect(onStmt.unpostedEmi).toBe(EMI);
+    expect(onStmt.estimated).toBe(DUE + EMI);
+
+    const afterStmt = estimatedNextStatement(
+      "2026-09-13",
+      12,
+      CARD,
+      DUE,
+      [onCard],
+      categories,
+      [emiRow("2026-09-12", CARD)],
+    );
+    expect(afterStmt.nextStatementDate).toBe("2026-10-12");
+    expect(afterStmt.unpostedEmi).toBe(EMI);
+    expect(afterStmt.estimated).toBe(DUE + EMI);
+  });
+
+  it("does not treat last statement's EMI posting as this window's payment", () => {
+    const result = estimatedNextStatement(AS_OF, 12, CARD, DUE, [onCard], categories, [
+      emiRow("2026-08-12", CARD),
+    ]);
+    expect(result.unpostedEmi).toBe(EMI);
+    expect(result.estimated).toBe(DUE + EMI);
+  });
+
+  it("includes an EMI that falls on the next statement date", () => {
+    const onTwelfth = rec({
+      categoryId: emiCat.id,
+      frequency: "monthly",
+      amount: EMI,
+      startDate: "2026-08-12",
+      kind: "loan_emi",
+      payFromAccountId: CARD,
+    });
+    const result = estimatedNextStatement(AS_OF, 12, CARD, DUE, [onTwelfth], categories, []);
+    expect(result.unpostedEmi).toBe(EMI);
+  });
+
+  it("excludes an occurrence after the next statement date", () => {
+    const late = rec({
+      categoryId: emiCat.id,
+      frequency: "monthly",
+      amount: EMI,
+      startDate: "2026-09-15",
+      kind: "loan_emi",
+      payFromAccountId: CARD,
+    });
+    const beforeStmt = estimatedNextStatement(AS_OF, 12, CARD, DUE, [late], categories, []);
+    expect(beforeStmt.unpostedEmi).toBe(0);
+
+    const afterStmt = estimatedNextStatement(
+      "2026-09-12",
+      12,
+      CARD,
+      DUE,
+      [late],
+      categories,
+      [],
+    );
+    expect(afterStmt.unpostedEmi).toBe(EMI);
+    expect(afterStmt.nextStatementDate).toBe("2026-10-12");
+  });
+
+  it("excludes loan_emi paid from another account", () => {
+    const other = rec({
+      categoryId: emiCat.id,
+      frequency: "monthly",
+      amount: EMI,
+      startDate: "2026-09-01",
+      kind: "loan_emi",
+      payFromAccountId: OTHER,
+    });
+    const unassigned = rec({
+      categoryId: emiCat.id,
+      frequency: "monthly",
+      amount: EMI,
+      startDate: "2026-09-01",
+      kind: "loan_emi",
+      payFromAccountId: null,
+    });
+    const result = estimatedNextStatement(
+      AS_OF,
+      12,
+      CARD,
+      DUE,
+      [other, unassigned],
+      categories,
+      [emiRow("2026-09-01", OTHER)],
+    );
+    expect(result.due).toBe(DUE);
+    expect(result.unpostedEmi).toBe(0);
+    expect(result.estimated).toBe(DUE);
   });
 });

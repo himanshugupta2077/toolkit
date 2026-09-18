@@ -1,0 +1,25 @@
+[Unit]
+Description=Toolkit PWA (notes, food, cfa, heart) on Tailscale loopback
+After=network-online.target finance.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=toolkit
+Group=toolkit
+WorkingDirectory=/opt/toolkit
+EnvironmentFile=/etc/toolkit.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/toolkit/.venv/bin/python /opt/toolkit/server.py
+Restart=on-failure
+RestartSec=3
+MemoryMax=384M
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/toolkit
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target

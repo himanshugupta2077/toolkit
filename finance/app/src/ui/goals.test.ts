@@ -70,7 +70,7 @@ describe("goals copy", () => {
         higherPriority: [],
         lifecycle: "active",
       }),
-    ).toBe("Yes — Savings buffer has ₹10,000.00 and this goal needs ₹8,000.00.");
+    ).toBe("Yes: Savings buffer has ₹10,000.00 and this goal needs ₹8,000.00.");
     expect(
       fundTodayWhy({
         needsTarget: false,
@@ -81,7 +81,7 @@ describe("goals copy", () => {
         higherPriority: [{ name: "German Exams", remaining: rupeesToPaise(8_000) }],
         lifecycle: "active" satisfies GoalStatus,
       }),
-    ).toContain("No —");
+    ).toContain("No:");
     expect(
       fundTodayWhy({
         needsTarget: false,

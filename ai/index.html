@@ -1,0 +1,1111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="AI" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <link rel="icon" type="image/svg+xml" href="/ai/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/ai/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/ai/manifest.webmanifest" />
+  <title>AI</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --surface: #141b24;
+      --surface2: #1c2633;
+      --border: #2a3648;
+      --text: #e8eef6;
+      --muted: #7f8fa6;
+      --accent: #a78bfa;
+      --accent-dim: rgba(167, 139, 250, 0.16);
+      --ok: #7fd962;
+      --danger: #f07178;
+      --warn: #e6b450;
+      --radius: 16px;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background:
+        radial-gradient(90% 50% at 50% -8%, rgba(167, 139, 250, 0.14), transparent 52%),
+        var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px calc(24px + var(--safe-b));
+    }
+    @media (min-width: 60rem) {
+      .app { max-width: 640px; }
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: calc(10px + var(--safe-t)) 0 12px;
+      background: rgba(11, 15, 20, 0.92);
+      backdrop-filter: blur(12px);
+    }
+    .back, .ghost {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font: inherit;
+      font-size: 1.15rem;
+      cursor: pointer;
+      text-decoration: none;
+      flex-shrink: 0;
+    }
+    .back:active, .ghost:active { transform: scale(0.96); }
+    .wordmark {
+      font-size: 0.78rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    main { display: flex; flex-direction: column; gap: 14px; padding-top: 4px; }
+    .hero {
+      background:
+        linear-gradient(180deg, rgba(167, 139, 250, 0.14), transparent 70%),
+        var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 20px 18px 16px;
+    }
+    .hero-kicker {
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+    .hero-usd {
+      font-size: 2.35rem;
+      font-weight: 750;
+      letter-spacing: -0.045em;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.05;
+    }
+    .hero-inr {
+      margin-top: 4px;
+      font-size: 1.05rem;
+      font-weight: 650;
+      color: #c4b5fd;
+      font-variant-numeric: tabular-nums;
+    }
+    .hero-meta {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .spark {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 44px;
+      margin-top: 14px;
+    }
+    .spark i {
+      flex: 1;
+      min-width: 0;
+      border-radius: 3px 3px 1px 1px;
+      background: rgba(167, 139, 250, 0.55);
+      display: block;
+    }
+    .keys {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .chip {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 650;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--danger);
+    }
+    .chip.on .dot { background: var(--ok); }
+    .sec {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 4px;
+    }
+    .sec h2 {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+    }
+    .sec a {
+      color: var(--accent);
+      font-size: 0.78rem;
+      font-weight: 650;
+      text-decoration: none;
+    }
+    .card, .row {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+    .mod {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+    }
+    .mod + .mod { margin-top: 8px; }
+    .mod-ico {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+    }
+    .mod-body { min-width: 0; flex: 1; }
+    .mod-title { font-weight: 700; font-size: 0.98rem; }
+    .mod-sub {
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 2px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .mod-cost {
+      text-align: right;
+      flex-shrink: 0;
+      font-variant-numeric: tabular-nums;
+    }
+    .mod-cost b {
+      display: block;
+      font-size: 0.92rem;
+      font-weight: 700;
+    }
+    .mod-cost span {
+      color: var(--muted);
+      font-size: 0.72rem;
+    }
+    .use {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 13px 14px;
+    }
+    .use + .use { margin-top: 8px; }
+    .use-body { min-width: 0; flex: 1; }
+    .use-title { font-weight: 700; font-size: 0.95rem; }
+    .use-sub {
+      color: var(--muted);
+      font-size: 0.76rem;
+      margin-top: 2px;
+    }
+    .sw {
+      appearance: none;
+      border: 0;
+      width: 46px;
+      height: 28px;
+      border-radius: 99px;
+      background: #3a4556;
+      position: relative;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+    .sw i {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #e8eef6;
+      transition: transform 0.16s ease;
+    }
+    .sw.on { background: #7c5cbf; }
+    .sw.on i { transform: translateX(18px); background: #fff; }
+    .sw:disabled { opacity: 0.45; cursor: default; }
+    .call {
+      padding: 12px 14px;
+    }
+    .call + .call { margin-top: 8px; }
+    .call-top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: baseline;
+    }
+    .call-title { font-weight: 650; font-size: 0.9rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .call-cost { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 0.86rem; color: var(--ok); flex-shrink: 0; }
+    .call.fail .call-cost { color: var(--danger); }
+    .call-sub {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 0.74rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .pill.on { color: var(--ok); }
+    .pill.off { color: var(--danger); }
+    .pill.need { color: var(--warn); }
+    .block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .block h3 {
+      font-size: 0.72rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .how { font-size: 0.9rem; line-height: 1.45; }
+    .kv {
+      display: grid;
+      grid-template-columns: 92px 1fr;
+      gap: 6px 10px;
+      font-size: 0.86rem;
+    }
+    .kv dt { color: var(--muted); }
+    .kv dd { font-weight: 600; overflow-wrap: anywhere; }
+    .tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 8px;
+    }
+    .tabs button {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 6px 11px;
+      font: inherit;
+      font-size: 0.76rem;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .tabs button.on { color: var(--text); border-color: rgba(167, 139, 250, 0.5); background: var(--accent-dim); }
+    .prompt {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.72rem;
+      line-height: 1.45;
+      background: #0a0e14;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px;
+      white-space: pre-wrap;
+      overflow: auto;
+      max-height: 52vh;
+    }
+    textarea.prompt {
+      display: block;
+      width: 100%;
+      min-height: 42vh;
+      max-height: none;
+      color: var(--text);
+      resize: vertical;
+      line-height: 1.45;
+    }
+    textarea.prompt:focus {
+      outline: none;
+      border-color: rgba(167, 139, 250, 0.55);
+    }
+    .prompt-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 10px;
+      flex-wrap: wrap;
+    }
+    .prompt-bar .okmsg {
+      color: var(--ok);
+      font-size: 0.78rem;
+      font-weight: 650;
+    }
+    .copy {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 0.74rem;
+      font-weight: 650;
+      cursor: pointer;
+      float: right;
+      margin: -2px 0 8px 8px;
+    }
+    .var {
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      border-radius: 12px;
+      padding: 10px 12px;
+      margin-top: 8px;
+    }
+    .var b { font-size: 0.86rem; }
+    .var span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.78rem;
+      margin-top: 2px;
+      line-height: 1.35;
+    }
+    .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.78rem; }
+    .empty { color: var(--muted); font-size: 0.88rem; padding: 8px 2px; }
+    .err { color: var(--danger); font-size: 0.88rem; }
+    .hint {
+      font-size: 0.8rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .field label { font-size: 0.78rem; color: var(--muted); font-weight: 650; }
+    .field input {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 11px 12px;
+      font: inherit;
+      font-size: 1rem;
+    }
+    .btn-row { display: flex; gap: 8px; margin-top: 10px; }
+    .btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--accent-dim);
+      color: var(--text);
+      border-color: rgba(167, 139, 250, 0.4);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+    }
+    .btn.soft { background: var(--surface2); border-color: var(--border); }
+    .bar {
+      height: 6px;
+      border-radius: 99px;
+      background: var(--surface2);
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .bar span {
+      display: block;
+      height: 100%;
+      background: var(--accent);
+      border-radius: 99px;
+    }
+    .docs-name {
+      font-size: 0.8rem;
+      font-weight: 650;
+      margin: 10px 0 6px;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <a class="back" id="back" href="/" aria-label="Back">←</a>
+      <span class="wordmark" id="word">AI</span>
+      <a class="ghost" id="headBtn" href="/ai/keys" data-nav aria-label="Keys">⚙</a>
+    </header>
+    <main id="main"><div class="empty">…</div></main>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = {
+      overview: null,
+      detail: null,
+      error: null,
+      promptTab: "system",
+      promptDrafts: {},
+      busy: null,
+    };
+
+    function esc(s) {
+      return String(s ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    function route() {
+      const p = location.pathname.replace(/^\/ai\/?/, "").replace(/\/$/, "");
+      const parts = p ? p.split("/") : [];
+      if (!parts.length) return { name: "home" };
+      if (parts[0] === "history") return { name: "history" };
+      if (parts[0] === "keys") return { name: "keys" };
+      if (parts[0] === "m" && parts[1]) return { name: "module", id: decodeURIComponent(parts[1]) };
+      if (parts[0] === "u" && parts[1]) return { name: "use", id: decodeURIComponent(parts[1]) };
+      return { name: "home" };
+    }
+
+    function go(path, replace) {
+      const url = path.startsWith("/") ? path : "/ai/" + path;
+      if (replace) history.replaceState({}, "", url);
+      else history.pushState({}, "", url);
+      render();
+    }
+
+    function formatUsd(n) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      const v = Number(n);
+      if (v === 0) return "$0.00";
+      if (v < 0.01) return `$${v.toFixed(6)}`.replace(/0+$/, "").replace(/\.$/, "");
+      if (v < 1) return `$${v.toFixed(4)}`;
+      return `$${v.toFixed(2)}`;
+    }
+
+    function formatInr(n) {
+      if (n == null || Number.isNaN(Number(n))) return "—";
+      const v = Number(n);
+      if (v === 0) return "₹0.00";
+      if (v < 0.01) return `₹${v.toFixed(4)}`;
+      if (v < 1) return `₹${v.toFixed(3)}`;
+      return "₹" + v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    }
+
+    function formatTok(n) {
+      if (n == null || n === "") return "—";
+      const v = Number(n);
+      if (Number.isNaN(v)) return "—";
+      if (v >= 1000) return `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
+      return String(v);
+    }
+
+    function formatTime(iso) {
+      if (!iso) return "";
+      try {
+        const d = new Date(iso);
+        if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16);
+        return d.toLocaleString(undefined, {
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        });
+      } catch {
+        return String(iso).slice(0, 16);
+      }
+    }
+
+    function fxMeta(fx) {
+      if (!fx) return "";
+      const rate = Number(fx.usd_inr);
+      const src = fx.source === "override" ? "manual rate"
+        : fx.source === "frankfurter" || fx.source === "cache" ? "ECB"
+        : fx.source === "stale" ? "cached rate"
+        : "fallback rate";
+      const asOf = fx.as_of ? ` · ${fx.as_of}` : "";
+      return `₹${rate.toFixed(2)} / $1 · ${src}${asOf}`;
+    }
+
+    function callTitle(c) {
+      if (c.use_title) {
+        const mod = (c.module_ui || c.module || "").toString();
+        const nice = mod ? mod.charAt(0).toUpperCase() + mod.slice(1) : "";
+        return nice ? `${nice} · ${c.use_title}` : c.use_title;
+      }
+      const mod = (c.module_ui || c.module || "").toString();
+      const act = (c.action || "").toString();
+      const m = mod ? mod.charAt(0).toUpperCase() + mod.slice(1) : "";
+      if (m && act) return `${m} · ${act}`;
+      return act || m || "API call";
+    }
+
+    function switchHtml(id, on, disabled) {
+      return `<button type="button" class="sw${on ? " on" : ""}" data-toggle="${esc(id)}" ${disabled ? "disabled" : ""} role="switch" aria-checked="${on ? "true" : "false"}" aria-label="Toggle"><i></i></button>`;
+    }
+
+    function statePill(u) {
+      if (u.state === "on") return `<span class="pill on">On</span>`;
+      if (u.state === "off") return `<span class="pill off">Off</span>`;
+      if (u.state === "needs_key") return `<span class="pill need">Key missing</span>`;
+      if (u.state === "local") return `<span class="pill">Local · free</span>`;
+      return "";
+    }
+
+    function sparkHtml(days) {
+      const rows = days || [];
+      if (!rows.length) return "";
+      const max = Math.max(0.0000001, ...rows.map((d) => Number(d.cost_usd) || 0));
+      return `<div class="spark" aria-hidden="true">${rows.map((d) => {
+        const v = Number(d.cost_usd) || 0;
+        const h = 8 + Math.round(92 * (v / max));
+        return `<i style="height:${h}%" title="${esc(d.day)} ${formatUsd(v)}"></i>`;
+      }).join("")}</div>`;
+    }
+
+    function callsHtml(calls, empty) {
+      const rows = calls || [];
+      if (!rows.length) return `<div class="empty">${esc(empty || "No API calls yet")}</div>`;
+      return rows.map((c) => {
+        const fail = c.ok === false;
+        const href = c.use_id ? `/ai/u/${encodeURIComponent(c.use_id)}` : "";
+        const tag = href ? "a" : "div";
+        const extra = href ? ` href="${href}" data-nav` : "";
+        const cost = c.cost_usd != null ? formatUsd(c.cost_usd) : (fail ? "fail" : "—");
+        const tok = c.duration_sec
+          ? `${Number(c.duration_sec).toFixed(1)}s audio`
+          : `${formatTok(c.prompt_tokens)} in · ${formatTok(c.completion_tokens)} out`;
+        return (
+          `<${tag} class="card call${fail ? " fail" : ""}"${extra}>` +
+          `<div class="call-top"><div class="call-title">${esc(callTitle(c))}</div><div class="call-cost">${esc(cost)}</div></div>` +
+          `<div class="call-sub"><span>${esc(c.model || "—")} · ${esc(tok)}</span><span>${esc(formatTime(c.ts))}</span></div>` +
+          `</${tag}>`
+        );
+      }).join("");
+    }
+
+    function moduleList(modules) {
+      const max = Math.max(0.0000001, ...modules.map((m) => Number(m.cost_usd) || 0));
+      return modules.map((m) => {
+        const pct = Math.round(100 * (Number(m.cost_usd) || 0) / max);
+        return (
+          `<a class="card mod" href="/ai/m/${esc(m.id)}" data-nav>` +
+          `<div class="mod-ico" style="border-color:${esc(m.accent || "#2a3648")}">${esc(m.icon || "•")}</div>` +
+          `<div class="mod-body"><div class="mod-title">${esc(m.title)}</div>` +
+          `<div class="mod-sub">${esc(m.blurb || "")}</div>` +
+          `<div class="bar"><span style="width:${pct}%;background:${esc(m.accent || "#a78bfa")}"></span></div></div>` +
+          `<div class="mod-cost"><b>${esc(formatUsd(m.cost_usd))}</b><span>${esc(formatInr(m.cost_inr))} · ${m.calls || 0}</span></div>` +
+          `</a>`
+        );
+      }).join("");
+    }
+
+    function useList(uses) {
+      return (uses || []).map((u) => {
+        const inner =
+          `<div class="use-body"><div class="use-title">${esc(u.title)}</div>` +
+          `<div class="use-sub">${esc(u.provider_label || u.provider)} · ${esc(u.model || "—")}` +
+          ` · ${esc(formatUsd(u.cost_usd))} · ${u.calls || 0} calls</div>` +
+          `<div class="use-sub">${statePill(u)}</div></div>`;
+        const toggle = u.toggleable
+          ? switchHtml(u.id, u.feature_on, state.busy === u.id)
+          : `<span class="pill">Always on</span>`;
+        return (
+          `<div class="card use">` +
+          `<a href="/ai/u/${encodeURIComponent(u.id)}" data-nav style="display:flex;flex:1;min-width:0;text-decoration:none;color:inherit;align-items:center;gap:12px">${inner}</a>` +
+          toggle +
+          `</div>`
+        );
+      }).join("");
+    }
+
+    function keysChips(keys) {
+      return (keys || []).map((k) => (
+        `<a class="chip${k.set ? " on" : ""}" href="/ai/keys" data-nav>` +
+        `<span class="dot"></span>${esc(k.label)} ${k.set ? "set" : "missing"}` +
+        `</a>`
+      )).join("");
+    }
+
+    function renderHome(ov) {
+      const t = ov.totals || {};
+      const month = ov.this_month || {};
+      $("word").textContent = "AI";
+      $("back").href = "/";
+      $("back").removeAttribute("data-nav");
+      $("headBtn").href = "/ai/history";
+      $("headBtn").setAttribute("data-nav", "");
+      $("headBtn").textContent = "☰";
+      $("headBtn").setAttribute("aria-label", "History");
+      $("main").innerHTML =
+        `<section class="hero">` +
+        `<div class="hero-kicker">All-time spend</div>` +
+        `<div class="hero-usd">${esc(formatUsd(t.cost_usd))}</div>` +
+        `<div class="hero-inr">${esc(formatInr(t.cost_inr))}</div>` +
+        `<div class="hero-meta">${t.calls || 0} call${t.calls === 1 ? "" : "s"}` +
+        ` · this month ${esc(formatUsd(month.cost_usd))} · ${esc(fxMeta(ov.fx))}</div>` +
+        sparkHtml(ov.by_day) +
+        `</section>` +
+        `<div class="keys">${keysChips(ov.keys)}<a class="chip" href="/ai/keys" data-nav>Rate &amp; keys</a></div>` +
+        `<div class="sec"><h2>Modules</h2></div>` +
+        `<div>${moduleList(ov.modules || [])}</div>` +
+        `<div class="sec"><h2>By model</h2></div>` +
+        `<div>${(ov.by_model || []).length
+          ? ov.by_model.map((m) => (
+              `<div class="card call"><div class="call-top"><div class="call-title">${esc(m.model)}</div>` +
+              `<div class="call-cost">${esc(formatUsd(m.cost_usd))}</div></div>` +
+              `<div class="call-sub"><span>${m.calls || 0} calls · ${esc(formatInr(m.cost_inr))}</span></div></div>`
+            )).join("")
+          : `<div class="empty">No models yet</div>`}</div>` +
+        `<div class="sec"><h2>Recent</h2><a href="/ai/history" data-nav>All</a></div>` +
+        `<div>${callsHtml((ov.calls || []).slice(0, 8))}</div>`;
+    }
+
+    function renderModule(ov, id) {
+      const mod = (ov.modules || []).find((m) => m.id === id);
+      if (!mod) {
+        $("main").innerHTML = `<div class="err">Unknown module</div>`;
+        return;
+      }
+      $("word").textContent = mod.title;
+      $("back").href = "/ai/";
+      $("back").setAttribute("data-nav", "");
+      $("headBtn").href = mod.href || "/ai/";
+      $("headBtn").textContent = "↗";
+      $("headBtn").setAttribute("aria-label", "Open app");
+      if (mod.href) $("headBtn").removeAttribute("data-nav");
+      else $("headBtn").setAttribute("data-nav", "");
+      const calls = (ov.calls || []).filter((c) => (c.module_ui || c.module) === id);
+      $("main").innerHTML =
+        `<section class="hero">` +
+        `<div class="hero-kicker">${esc(mod.title)} spend</div>` +
+        `<div class="hero-usd">${esc(formatUsd(mod.cost_usd))}</div>` +
+        `<div class="hero-inr">${esc(formatInr(mod.cost_inr))}</div>` +
+        `<div class="hero-meta">${mod.calls || 0} calls · ${esc(mod.blurb || "")}</div>` +
+        `</section>` +
+        `<div class="sec"><h2>Use cases</h2></div>` +
+        `<div>${useList(mod.use_cases)}</div>` +
+        `<div class="sec"><h2>Recent</h2></div>` +
+        `<div>${callsHtml(calls.slice(0, 12))}</div>`;
+    }
+
+    function renderHistory(ov) {
+      $("word").textContent = "History";
+      $("back").href = "/ai/";
+      $("back").setAttribute("data-nav", "");
+      $("headBtn").href = "/ai/keys";
+      $("headBtn").setAttribute("data-nav", "");
+      $("headBtn").textContent = "⚙";
+      $("main").innerHTML =
+        `<div class="hero-meta" style="padding:0 2px">${ov.calls?.length || 0} latest of ${ov.totals?.calls || 0} · ${esc(formatUsd(ov.totals?.cost_usd))} / ${esc(formatInr(ov.totals?.cost_inr))}</div>` +
+        `<div>${callsHtml(ov.calls, "No API calls yet")}</div>`;
+    }
+
+    function renderKeys(ov) {
+      $("word").textContent = "Keys";
+      $("back").href = "/ai/";
+      $("back").setAttribute("data-nav", "");
+      $("headBtn").href = "/ai/";
+      $("headBtn").setAttribute("data-nav", "");
+      $("headBtn").textContent = "⌂";
+      const fx = ov.fx || {};
+      const usesByKey = {};
+      for (const mod of ov.modules || []) {
+        for (const u of mod.use_cases || []) {
+          if (!u.key_id) continue;
+          (usesByKey[u.key_id] ||= []).push(u);
+        }
+      }
+      const keyBlocks = (ov.keys || []).map((k) => (
+        `<div class="block" style="margin-bottom:10px">` +
+        `<h3>${esc(k.label)}</h3>` +
+        `<dl class="kv">` +
+        `<dt>Env</dt><dd class="code">${esc(k.env)}</dd>` +
+        `<dt>Status</dt><dd>${k.set ? "Set on this host" : "Not set"}</dd>` +
+        `<dt>Model</dt><dd class="code">${esc(k.model)}</dd>` +
+        `<dt>Base</dt><dd class="code">${esc(k.base_url)}</dd>` +
+        `</dl>` +
+        `<p class="hint" style="margin-top:10px">The phone never sees the secret. Edit <span class="code">.env</span> on the laptop (or <span class="code">/etc/toolkit.env</span> on the VPS) and restart.</p>` +
+        `<div class="sec" style="margin-top:12px"><h2>Used by</h2></div>` +
+        (usesByKey[k.id] || []).map((u) => (
+          `<a class="card use" href="/ai/u/${encodeURIComponent(u.id)}" data-nav style="margin-top:8px">` +
+          `<div class="use-body"><div class="use-title">${esc(u.title)}</div>` +
+          `<div class="use-sub">${esc(u.module)} · ${statePill(u)}</div></div></a>`
+        )).join("") +
+        `</div>`
+      )).join("");
+      $("main").innerHTML =
+        keyBlocks +
+        `<div class="block">` +
+        `<h3>Rupee rate</h3>` +
+        `<p class="hint">Spend is stored in USD. The UI also shows INR using this rate. Leave blank to use the live ECB rate (${esc(fxMeta(fx))}).</p>` +
+        `<div class="field"><label for="fxRate">USD / INR</label>` +
+        `<input id="fxRate" type="number" min="1" max="1000" step="0.01" value="${fx.source === "override" ? esc(fx.usd_inr) : ""}" placeholder="${esc(fx.usd_inr)}" /></div>` +
+        `<div class="btn-row">` +
+        `<button type="button" class="btn" id="fxSave">Save rate</button>` +
+        `<button type="button" class="btn soft" id="fxClear">Use live rate</button>` +
+        `</div></div>`;
+    }
+
+    function promptBody(detail) {
+      const tab = state.promptTab;
+      if (state.promptDrafts && state.promptDrafts[tab] != null) return state.promptDrafts[tab];
+      const p = detail.prompt || {};
+      if (tab === "user") return p.user_template || "";
+      if (tab === "params") {
+        if (p.params) return JSON.stringify(p.params, null, 2);
+        if (p.endpoint) return `${p.endpoint}\n\n${JSON.stringify(p.params || {}, null, 2)}`;
+        return p.engine ? `${p.engine}\ndevice=${p.device || "?"}` : "";
+      }
+      if (tab.startsWith("doc:")) {
+        const name = tab.slice(4);
+        const doc = (p.docs || []).find((d) => d.name === name);
+        return doc ? doc.text : "";
+      }
+      return p.system || "";
+    }
+
+    function tabIsEditable(p, tab) {
+      if (!p || !p.editable) return false;
+      return tab === "system" || tab === "user" || String(tab).startsWith("doc:");
+    }
+
+    function tabOverridden(p, tab) {
+      if (!p) return false;
+      if (tab === "system") return !!p.system_overridden;
+      if (tab === "user") return !!p.user_overridden;
+      if (String(tab).startsWith("doc:")) {
+        const name = tab.slice(4);
+        const doc = (p.docs || []).find((d) => d.name === name);
+        return !!(doc && doc.overridden);
+      }
+      return false;
+    }
+
+    function stashPromptDraft() {
+      const el = $("promptEdit");
+      if (!el || !state.promptTab) return;
+      state.promptDrafts = state.promptDrafts || {};
+      state.promptDrafts[state.promptTab] = el.value;
+    }
+
+    function promptFieldForTab(tab) {
+      if (tab === "user") return { field: "user_template" };
+      if (String(tab).startsWith("doc:")) return { field: "doc", name: tab.slice(4) };
+      return { field: "system" };
+    }
+
+    function renderUse(detail) {
+      const u = detail.use || {};
+      const p = detail.prompt || {};
+      const mod = detail.module || {};
+      $("word").textContent = u.title || "Use";
+      $("back").href = `/ai/m/${encodeURIComponent(u.module || "")}`;
+      $("back").setAttribute("data-nav", "");
+      $("headBtn").href = "/ai/";
+      $("headBtn").setAttribute("data-nav", "");
+      $("headBtn").textContent = "⌂";
+      const tabs = [];
+      if (p.kind === "chat" || p.kind === "vision") {
+        tabs.push(["system", "System"]);
+        tabs.push(["user", "User"]);
+      } else {
+        tabs.push(["params", "Request"]);
+      }
+      (p.docs || []).forEach((d) => tabs.push([`doc:${d.name}`, d.name.replace(".md", "")]));
+      if (!tabs.some((t) => t[0] === state.promptTab)) state.promptTab = tabs[0]?.[0] || "system";
+      const body = promptBody(detail);
+      const canEdit = tabIsEditable(p, state.promptTab);
+      const customHint = p.system_overridden && state.promptTab === "system"
+        ? `<p class="hint" style="margin:8px 0 0">Custom system prompt. Docs below are not sent until you reset System.</p>`
+        : p.editable && state.promptTab === "user"
+          ? `<p class="hint" style="margin:8px 0 0">Keep placeholders like <span class="code">{transcript}</span> so live values still get filled in.</p>`
+          : "";
+      $("main").innerHTML =
+        `<div class="block" style="display:flex;align-items:center;gap:12px;justify-content:space-between">` +
+        `<div>${statePill(u)}<div class="use-sub" style="margin-top:6px">${esc(u.provider_label || "")}` +
+        `${u.key_env ? ` · <span class="code">${esc(u.key_env)}</span>` : ""}` +
+        `${u.key_set === false && u.toggleable ? " · key not set" : ""}</div></div>` +
+        (u.toggleable ? switchHtml(u.id, u.feature_on, state.busy === u.id) : "") +
+        `</div>` +
+        `<div class="block"><h3>How it works</h3><p class="how">${esc(u.how)}</p></div>` +
+        `<div class="block"><h3>Runtime</h3><dl class="kv">` +
+        `<dt>Module</dt><dd>${esc(mod.title || u.module)}</dd>` +
+        `<dt>Provider</dt><dd>${esc(u.provider_label || u.provider)}</dd>` +
+        `<dt>Model</dt><dd class="code">${esc(u.model)}</dd>` +
+        (p.base_url ? `<dt>Base</dt><dd class="code">${esc(p.base_url)}</dd>` : "") +
+        (p.temperature != null ? `<dt>Temp</dt><dd>${esc(p.temperature)}</dd>` : "") +
+        (p.extra_body ? `<dt>Extra</dt><dd class="code">${esc(JSON.stringify(p.extra_body))}</dd>` : "") +
+        (p.timeout_sec ? `<dt>Timeout</dt><dd>${esc(p.timeout_sec)}s</dd>` : "") +
+        (p.receipt_mode ? `<dt>Receipt</dt><dd>${esc(p.receipt_mode)}</dd>` : "") +
+        `</dl></div>` +
+        `<div class="block"><h3>Prompt</h3>` +
+        `<button type="button" class="copy" id="copyPrompt">Copy</button>` +
+        `<div class="tabs">${tabs.map(([id, lab]) =>
+          `<button type="button" data-tab="${esc(id)}" class="${id === state.promptTab ? "on" : ""}">${esc(lab)}${tabOverridden(p, id) ? " · custom" : ""}</button>`
+        ).join("")}</div>` +
+        customHint +
+        (canEdit
+          ? `<textarea class="prompt" id="promptEdit" spellcheck="false"></textarea>` +
+            `<div class="prompt-bar">` +
+            `<button type="button" class="btn" id="promptSave">Save</button>` +
+            `<button type="button" class="btn soft" id="promptReset">Reset to default</button>` +
+            `<span class="okmsg" id="promptSaved" hidden>Saved</span>` +
+            `</div>`
+          : `<pre class="prompt" id="promptPre"></pre>`) +
+        `</div>` +
+        `<div class="block"><h3>Variables</h3>` +
+        ((detail.variables || []).length
+          ? detail.variables.map((v) => (
+              `<div class="var"><b class="code">${esc(v.name)}</b>` +
+              `<span>${esc(v.in)} · ${esc(v.source)}</span></div>`
+            )).join("")
+          : `<div class="empty">No template variables</div>`) +
+        `</div>` +
+        `<div class="hero" style="padding:16px 18px">` +
+        `<div class="hero-kicker">Spend for this use</div>` +
+        `<div class="hero-usd" style="font-size:1.8rem">${esc(formatUsd(u.cost_usd))}</div>` +
+        `<div class="hero-inr">${esc(formatInr(u.cost_inr))}</div>` +
+        `<div class="hero-meta">${u.calls || 0} calls</div></div>` +
+        `<div class="sec"><h2>Recent</h2></div>` +
+        `<div>${callsHtml(detail.calls)}</div>`;
+      const edit = $("promptEdit");
+      if (edit) edit.value = body;
+      const pre = $("promptPre");
+      if (pre) pre.textContent = body || "(no prompt)";
+    }
+
+    async function loadOverview(force) {
+      if (state.overview && !force) return state.overview;
+      const r = await fetch("/api/ai/overview?limit=200");
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      state.overview = await r.json();
+      return state.overview;
+    }
+
+    async function loadDetail(id, force) {
+      const same = state.detail && state.detail.use && state.detail.use.id === id;
+      if (same && !force) return state.detail;
+      if (!same || force) state.promptDrafts = {};
+      const r = await fetch(`/api/ai/use/${encodeURIComponent(id)}`);
+      if (!r.ok) throw new Error(r.status === 404 ? "Unknown use-case" : `HTTP ${r.status}`);
+      state.detail = await r.json();
+      return state.detail;
+    }
+
+    async function savePrompt() {
+      const d = state.detail;
+      if (!d || !d.use) return;
+      const el = $("promptEdit");
+      if (!el) return;
+      const spec = promptFieldForTab(state.promptTab);
+      const r = await fetch(`/api/ai/use/${encodeURIComponent(d.use.id)}/prompt`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...spec, text: el.value }),
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || `HTTP ${r.status}`);
+      }
+      state.detail = await r.json();
+      state.promptDrafts = {};
+      renderUse(state.detail);
+      const ok = $("promptSaved");
+      if (ok) {
+        ok.hidden = false;
+        setTimeout(() => { ok.hidden = true; }, 1400);
+      }
+    }
+
+    async function resetPrompt() {
+      const d = state.detail;
+      if (!d || !d.use) return;
+      const spec = promptFieldForTab(state.promptTab);
+      const r = await fetch(`/api/ai/use/${encodeURIComponent(d.use.id)}/prompt/reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(spec),
+      });
+      if (!r.ok) {
+        const t = await r.text();
+        throw new Error(t || `HTTP ${r.status}`);
+      }
+      state.detail = await r.json();
+      state.promptDrafts = {};
+      renderUse(state.detail);
+    }
+
+    async function render() {
+      const r = route();
+      state.error = null;
+      try {
+        if (r.name === "use") {
+          const d = await loadDetail(r.id);
+          renderUse(d);
+        } else {
+          const ov = await loadOverview();
+          if (r.name === "module") renderModule(ov, r.id);
+          else if (r.name === "history") renderHistory(ov);
+          else if (r.name === "keys") renderKeys(ov);
+          else renderHome(ov);
+        }
+      } catch (e) {
+        $("main").innerHTML = `<div class="err">${esc(e.message || "Failed to load")}</div>`;
+      }
+    }
+
+    async function setFeature(id, enabled) {
+      state.busy = id;
+      try {
+        const r = await fetch("/api/ai/features", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, enabled }),
+        });
+        if (!r.ok) {
+          const t = await r.text();
+          throw new Error(t || `HTTP ${r.status}`);
+        }
+        state.overview = null;
+        state.detail = null;
+        await render();
+      } catch (e) {
+        $("main").insertAdjacentHTML("afterbegin", `<div class="err">${esc(e.message || "Toggle failed")}</div>`);
+      } finally {
+        state.busy = null;
+      }
+    }
+
+    document.addEventListener("click", (ev) => {
+      const t = ev.target;
+      if (!(t instanceof Element)) return;
+      const nav = t.closest("a[data-nav]");
+      if (nav) {
+        ev.preventDefault();
+        go(nav.getAttribute("href"));
+        return;
+      }
+      const sw = t.closest("[data-toggle]");
+      if (sw) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const id = sw.getAttribute("data-toggle");
+        const on = !sw.classList.contains("on");
+        setFeature(id, on);
+        return;
+      }
+      const tab = t.closest("[data-tab]");
+      if (tab && state.detail) {
+        stashPromptDraft();
+        state.promptTab = tab.getAttribute("data-tab");
+        renderUse(state.detail);
+        return;
+      }
+      if (t.id === "copyPrompt") {
+        const edit = $("promptEdit");
+        const pre = $("promptPre");
+        const text = edit ? edit.value : (pre ? pre.textContent : "");
+        navigator.clipboard.writeText(text || "").then(() => {
+          t.textContent = "Copied";
+          setTimeout(() => { t.textContent = "Copy"; }, 1200);
+        }).catch(() => {});
+        return;
+      }
+      if (t.id === "promptSave") {
+        savePrompt().catch((e) => {
+          $("main").insertAdjacentHTML("afterbegin", `<div class="err">${esc(e.message || "Save failed")}</div>`);
+        });
+        return;
+      }
+      if (t.id === "promptReset") {
+        resetPrompt().catch((e) => {
+          $("main").insertAdjacentHTML("afterbegin", `<div class="err">${esc(e.message || "Reset failed")}</div>`);
+        });
+        return;
+      }
+      if (t.id === "fxSave") {
+        const v = $("fxRate").value;
+        fetch("/api/ai/fx", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usd_inr: v === "" ? null : Number(v) }),
+        }).then((r) => {
+          if (!r.ok) throw new Error("Could not save rate");
+          state.overview = null;
+          return render();
+        }).catch((e) => {
+          $("main").insertAdjacentHTML("afterbegin", `<div class="err">${esc(e.message)}</div>`);
+        });
+        return;
+      }
+      if (t.id === "fxClear") {
+        fetch("/api/ai/fx", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ usd_inr: null }),
+        }).then(() => {
+          state.overview = null;
+          return render();
+        });
+      }
+    });
+
+    window.addEventListener("popstate", () => render());
+    render();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/ai/sw.js", { scope: "/ai/" }).catch(() => {});
+    }
+  </script>
+</body>
+</html>

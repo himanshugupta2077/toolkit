@@ -366,6 +366,7 @@ function replacePlans(db: AppDb, parsed: ParsedFinanceWorkbook, ids: IdMaps, at:
         amount: row.amount,
         priority: row.priority,
         status: row.status,
+        kind: null,
         payFromAccountId: null,
         linkedEntryId: null,
         notes: row.notes,

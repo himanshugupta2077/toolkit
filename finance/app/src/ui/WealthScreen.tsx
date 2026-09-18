@@ -1,7 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
-import { getGoals, getInvest, getWealth, type WealthAccountLine, type WealthBucketCard } from "../api/store.ts";
-import { formatInr } from "../engine/index.ts";
+import {
+  getGoals,
+  getInvest,
+  getWealth,
+  type WealthAccountLine,
+  type WealthBucketCard,
+} from "../api/store.ts";
+import { DEFAULT_BUCKET_IDS, formatInr } from "../engine/index.ts";
 import { FetchError } from "./FetchError.tsx";
 import { GearIcon } from "./icons.tsx";
 import { Amount } from "./Privacy.tsx";
@@ -59,30 +65,57 @@ function NwRow({ row }: { row: WealthAccountLine }) {
   );
 }
 
-function BucketCard({ bucket }: { bucket: WealthBucketCard }) {
+function BucketCard({
+  bucket,
+  href,
+}: {
+  bucket: WealthBucketCard;
+  href?: string;
+}) {
   const pctLabel = formatFillPct(bucket.fillPct);
+  const title = (
+    <>
+      <h2 className="text-base font-semibold text-ink">{bucket.name}</h2>
+      <p className="mt-0.5 text-sm text-muted">
+        <Amount>{bucketHeroCaption(bucket)}</Amount>
+      </p>
+      <p className="mt-1 text-[13px] text-muted">{FILL_MODE_LABELS[bucket.fillMode]}</p>
+    </>
+  );
   return (
     <article className="card p-4">
       <div className="flex items-start gap-3">
-        <BucketRing
-          fillPct={bucket.fillPct}
-          colour={bucket.colour}
-          label={`${bucket.name} ${pctLabel ?? "no target"}`}
-        />
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-ink">{bucket.name}</h2>
-          <p className="mt-0.5 text-sm text-muted">
-            <Amount>{bucketHeroCaption(bucket)}</Amount>
-          </p>
-          <p className="mt-1 text-[13px] text-muted">{FILL_MODE_LABELS[bucket.fillMode]}</p>
-        </div>
+        {href ? (
+          <Link to={href} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+            <BucketRing
+              fillPct={bucket.fillPct}
+              colour={bucket.colour}
+              label={`${bucket.name} ${pctLabel ?? "no target"}`}
+            />
+            <div className="min-w-0 flex-1">{title}</div>
+          </Link>
+        ) : (
+          <>
+            <BucketRing
+              fillPct={bucket.fillPct}
+              colour={bucket.colour}
+              label={`${bucket.name} ${pctLabel ?? "no target"}`}
+            />
+            <div className="min-w-0 flex-1">{title}</div>
+          </>
+        )}
       </div>
       {bucket.accounts.length > 0 ? (
         <ul className="mt-3 space-y-1 border-t border-line pt-3">
           {bucket.accounts.map((account) => (
-            <li key={account.id} className="flex items-center justify-between gap-3 text-sm">
-              <span className="truncate text-ink">{account.name}</span>
-              <Amount className="shrink-0 tabular-nums text-muted">{formatInr(account.balance)}</Amount>
+            <li key={account.id}>
+              <Link
+                to={`/more/accounts/${account.id}`}
+                className="flex items-center justify-between gap-3 py-1 text-sm"
+              >
+                <span className="truncate text-ink">{account.name}</span>
+                <Amount className="shrink-0 tabular-nums text-muted">{formatInr(account.balance)}</Amount>
+              </Link>
             </li>
           ))}
         </ul>
@@ -116,10 +149,10 @@ export function WealthScreen() {
     (data?.netWorth ?? 0) < 0 ? "text-danger" : "";
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page">
       <header className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Wealth</h1>
+          <h1 className="page-title">Wealth</h1>
           <p className="mt-0.5 text-sm text-muted">Buckets, not a typed balance.</p>
         </div>
         <Link
@@ -137,7 +170,8 @@ export function WealthScreen() {
         <FetchError error={wealthQ.error} onRetry={() => void wealthQ.refetch()} />
       ) : data ? (
         <>
-          <div className="mt-4 card p-4">
+          <div className="desk-dash mt-4">
+          <div className="card p-4 desk:col-span-8 desk:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <p className="kicker">Net worth</p>
@@ -152,16 +186,23 @@ export function WealthScreen() {
             <NetWorthSparkline points={data.netWorthHistory ?? []} />
           </div>
 
-          <p className="mt-4 text-sm text-muted">{exampleFromWealth(data)}</p>
+          <p className="text-sm text-muted desk:col-span-12">{exampleFromWealth(data)}</p>
 
-          <div className="mt-3 space-y-3">
+          <div className="space-y-3 desk:col-span-12 desk:grid desk:grid-cols-3 desk:gap-5 desk:space-y-0">
             {data.buckets.map((bucket) => (
-              <BucketCard key={bucket.id} bucket={bucket} />
+              <BucketCard
+                key={bucket.id}
+                bucket={bucket}
+                href={
+                  bucket.id === DEFAULT_BUCKET_IDS.emergencyFund
+                    ? "/emergency"
+                    : undefined
+                }
+              />
             ))}
           </div>
 
-          <div className="mt-4 grid grid-cols-2 gap-3">
-            <div className="card p-3">
+          <div className="card p-3 desk:col-span-4 desk:p-5">
               <p className="kicker">Assets</p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-ink">
                 <Amount>{formatInr(data.assetsTotal)}</Amount>
@@ -178,7 +219,7 @@ export function WealthScreen() {
                 </ul>
               )}
             </div>
-            <div className="card p-3">
+            <div className="card p-3 desk:col-span-4 desk:p-5">
               <p className="kicker">Liabilities</p>
               <p className="mt-1 text-lg font-semibold tabular-nums text-ink">
                 <Amount>{formatInr(data.liabilitiesTotal)}</Amount>
@@ -195,9 +236,8 @@ export function WealthScreen() {
                 </ul>
               )}
             </div>
-          </div>
 
-          <div className="mt-4 card p-4">
+          <div className="card p-4 desk:col-span-4 desk:p-5">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-ink">Goals</p>
               <Link to="/wealth/goals" className="btn-ghost -mr-3 -my-2">
@@ -232,7 +272,7 @@ export function WealthScreen() {
             )}
           </div>
 
-          <div className="mt-4 card p-4">
+          <div className="card p-4 desk:col-span-4 desk:col-start-9 desk:row-start-1 desk:p-5">
             <div className="flex items-center justify-between gap-3">
               <p className="text-sm font-semibold text-ink">Invest</p>
               <Link to="/wealth/invest" className="btn-ghost -mr-3 -my-2">
@@ -262,15 +302,15 @@ export function WealthScreen() {
           {data.free > 0 ? (
             <Link
               to="/wealth/allocate"
-              className="btn-primary mt-5 min-h-12 w-full flex-col gap-0 rounded-2xl py-3 text-left"
+              className="btn-primary min-h-12 w-full flex-col gap-0 rounded-2xl py-3 text-left desk:col-span-12"
             >
               <p className="w-full text-base font-medium">
-                Allocate this month — <Amount>{formatInr(data.free)}</Amount> free
+                Allocate this month: <Amount>{formatInr(data.free)}</Amount> free
               </p>
               <p className="mt-0.5 w-full text-sm opacity-80">Preview the waterfall, then confirm transfers.</p>
             </Link>
           ) : data.free < 0 ? (
-            <div className="mt-4 card-danger p-4">
+            <div className="card-danger p-4 desk:col-span-12">
               <p className="text-base font-medium text-danger">
                 Committed beyond liquid
               </p>
@@ -279,6 +319,7 @@ export function WealthScreen() {
               </p>
             </div>
           ) : null}
+          </div>
         </>
       ) : null}
     </section>

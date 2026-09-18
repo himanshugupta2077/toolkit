@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#efe6d6" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="CFA" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="icon" type="image/svg+xml" href="/cfa/favicon.svg" />
+  <link rel="apple-touch-icon" sizes="180x180" href="/cfa/icons/apple-touch-icon.png" />
+  <link rel="manifest" href="/cfa/manifest.webmanifest" />
   <title>CFA</title>
   <style>
     :root {
@@ -71,6 +77,7 @@
       font: inherit;
       font-size: 1.15rem;
       cursor: pointer;
+      text-decoration: none;
     }
     .back:active, .ghost:active { transform: scale(0.96); }
     .wordmark {
@@ -98,11 +105,36 @@
       letter-spacing: -0.03em;
       line-height: 1.15;
     }
+    .date-br {
+      color: var(--muted);
+      font-weight: 650;
+      font-size: 0.58em;
+      letter-spacing: 0;
+      margin-left: 0.4em;
+      white-space: nowrap;
+    }
     .date-sub {
       color: var(--muted);
       font-size: 0.95rem;
       font-family: system-ui, -apple-system, sans-serif;
       line-height: 1.45;
+    }
+    .date-sub.warn { color: var(--ox); }
+    .pace-out {
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 0.92rem;
+      line-height: 1.45;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--olive-soft);
+      color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .pace-out.bad {
+      background: var(--ox-soft);
+      color: var(--ox);
     }
     .date-v-row {
       display: flex;
@@ -219,12 +251,6 @@
       border-top: 1px solid rgba(216, 205, 184, 0.7);
     }
     .row:first-of-type { border-top: 0; }
-    .num {
-      font-variant-numeric: tabular-nums;
-      font-weight: 700;
-      color: var(--muted);
-      font-size: 0.92rem;
-    }
     .ttl {
       font-size: 1rem;
       line-height: 1.25;
@@ -240,11 +266,12 @@
       margin-top: 2px;
     }
     .pct {
-      min-width: 46px;
+      min-width: 52px;
       text-align: right;
       font-variant-numeric: tabular-nums;
       font-weight: 700;
       font-size: 0.92rem;
+      font-family: system-ui, sans-serif;
     }
     .pct.done { color: var(--olive); }
     .star { color: var(--gold); margin-left: 4px; }
@@ -345,26 +372,6 @@
     .d-tag.off { color: var(--ox); }
     .d-tag.rev { color: var(--gold); }
 
-    .seg {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 6px;
-      background: rgba(27, 23, 18, 0.05);
-      padding: 4px;
-      border-radius: 14px;
-    }
-    .seg button {
-      appearance: none;
-      border: 0;
-      background: transparent;
-      color: var(--muted);
-      border-radius: 11px;
-      padding: 10px 8px;
-      font: inherit;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .seg button.on { background: var(--paper); color: var(--ink); box-shadow: 0 1px 4px rgba(27, 23, 18, 0.08); }
     .err { color: var(--ox); font-size: 0.82rem; min-height: 1.1em; }
 
     .btn {
@@ -373,7 +380,7 @@
       background: var(--ink);
       color: var(--paper);
       border-radius: 12px;
-      padding: 12px 14px;
+      padding: 12px 10px;
       font: inherit;
       font-weight: 700;
       cursor: pointer;
@@ -490,6 +497,40 @@
       box-shadow: 0 1px 4px rgba(27, 23, 18, 0.2);
       cursor: pointer;
     }
+    .page-scale {
+      display: flex;
+      justify-content: space-between;
+      font-family: system-ui, sans-serif;
+      font-size: 0.72rem;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .page-picks {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .page-pick {
+      appearance: none;
+      min-width: 38px;
+      height: 36px;
+      padding: 0 8px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fffdf8;
+      color: var(--ink);
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-family: system-ui, sans-serif;
+      font-variant-numeric: tabular-nums;
+      cursor: pointer;
+    }
+    .page-pick.on {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
     .warn-copy {
       font-size: 0.98rem;
       line-height: 1.45;
@@ -500,7 +541,6 @@
       flex-direction: column;
       gap: 6px;
     }
-    .pick { display: flex; flex-direction: column; max-height: 34vh; overflow: auto; }
     .actions { display: flex; gap: 8px; }
     .actions .btn { flex: 1; }
     .list-tools { display: flex; gap: 8px; }
@@ -519,6 +559,7 @@
       outline: none;
     }
     .sheet input[type="date"] { min-height: 48px; }
+    .sheet input[type="number"] { min-height: 48px; }
     .sheet textarea { min-height: 88px; resize: vertical; }
   </style>
 </head>
@@ -526,17 +567,18 @@
   <div class="app">
     <header>
       <a class="back" href="/" aria-label="Toolkit">←</a>
+      <span class="wordmark">CFA</span>
       <span style="width:40px" aria-hidden="true"></span>
     </header>
 
     <section id="view-home" class="view on"></section>
-    <section id="view-chapters" class="view"></section>
+    <section id="view-readings" class="view"></section>
     <section id="view-plan" class="view"></section>
   </div>
 
   <nav class="nav">
     <button type="button" data-tab="home" class="on">Home</button>
-    <button type="button" data-tab="chapters">Chapters</button>
+    <button type="button" data-tab="readings">Readings</button>
     <button type="button" data-tab="plan">Plan</button>
   </nav>
 
@@ -550,8 +592,6 @@
     let tab = "home";
     let listFilter = "left";
     let listQ = "";
-    let dayQ = "";
-    let dayDraftOff = false;
     let saveTimer = 0;
 
     const $ = (id) => document.getElementById(id);
@@ -591,18 +631,141 @@
       return `${y}-${m}-${day}`;
     }
 
-    function offMap() {
-      const m = {};
-      for (const o of state.offDays || []) m[o.date] = o.reason || "";
-      return m;
+    function readings() {
+      return state.readings || state.chapters || [];
     }
 
-    function chapterById(id) {
-      return (state.chapters || []).find((c) => c.id === id);
+    function readingById(id) {
+      return readings().find((r) => r.id === id);
     }
 
-    function chapterLabel(ch) {
-      return `Chapter ${ch.n}`;
+    function readingLabel(r) {
+      return `Reading ${r.n}`;
+    }
+
+    function isDone(r) {
+      const pages = Number(r.pages) || 0;
+      const page = Number(r.page) || 0;
+      return pages > 0 && page >= pages;
+    }
+
+    function pageRange(from, to) {
+      if (from === to) return `p. ${from}`;
+      return `p. ${from}–${to}`;
+    }
+
+    function pageStatus(r) {
+      const pages = Number(r.pages) || 0;
+      const page = Number(r.page) || 0;
+      if (!pages) return "No pages";
+      if (!page) return `0 of ${pages}`;
+      if (page >= pages) return `All ${pages} pages`;
+      return `Through page ${page} of ${pages}`;
+    }
+
+    function fmtNum(n) {
+      const x = Number(n);
+      if (!Number.isFinite(x)) return "0";
+      return Number.isInteger(x) ? String(x) : String(x);
+    }
+
+    function roundPages(n) {
+      if (!(n > 0)) return 0;
+      return Math.floor(n + 0.5);
+    }
+
+    function isWeekendIso(iso) {
+      const d = parseISO(iso);
+      if (!d) return false;
+      const w = d.getDay();
+      return w === 0 || w === 6;
+    }
+
+    function paceOutlookFromInputs(pph, wd, we) {
+      const remaining = Number(state.stats && state.stats.remainingPages) || 0;
+      const days = (state.plan || []).filter((d) => d.kind === "prep");
+      let hoursAvail = 0;
+      let pagesAvail = 0;
+      let left = remaining;
+      let finishOn = null;
+      for (const day of days) {
+        const hours = isWeekendIso(day.date) ? we : wd;
+        const cap = roundPages(pph * hours);
+        hoursAvail += Number(hours) || 0;
+        pagesAvail += cap;
+        if (left > 0 && cap > 0) {
+          left -= Math.min(left, cap);
+          if (left <= 0) finishOn = day.date;
+        }
+      }
+      const unscheduled = Math.max(0, left);
+      const feasible = remaining === 0 || unscheduled === 0;
+      let suggest = null;
+      if (!feasible && hoursAvail > 0) {
+        let step = Math.ceil((remaining / hoursAvail) * 2 - 1e-9) / 2;
+        if (step < 0.5) step = 0.5;
+        while (step <= 40) {
+          let trialLeft = remaining;
+          for (const day of days) {
+            const hours = isWeekendIso(day.date) ? we : wd;
+            const cap = roundPages(step * hours);
+            if (cap <= 0) continue;
+            trialLeft -= Math.min(trialLeft, cap);
+            if (trialLeft <= 0) break;
+          }
+          if (trialLeft <= 0) {
+            suggest = step;
+            break;
+          }
+          step = Math.round((step + 0.5) * 10) / 10;
+        }
+      }
+      return {
+        remainingPages: remaining,
+        hoursAvailable: hoursAvail,
+        hoursNeeded: pph ? remaining / pph : 0,
+        pagesAvailable: pagesAvail,
+        unscheduledPages: unscheduled,
+        finishOn,
+        feasible,
+        suggestPagesPerHour: suggest,
+        weekdayPages: roundPages(pph * wd),
+        weekendPages: roundPages(pph * we),
+        revisionStart: revisionStartIso(),
+      };
+    }
+
+    function paceStatusLine(s) {
+      if ((s.remainingPages || 0) <= 0) return "Readings complete";
+      if (s.feasible && s.finishOn) return `Finish by ${fmtDay(s.finishOn, "tiny")}`;
+      const short = s.unscheduledPages || 0;
+      return `Not feasible — ${short} pages short`;
+    }
+
+    function paceOutlookHtml(o) {
+      if ((o.remainingPages || 0) <= 0) {
+        return `<div id="paceOut" class="pace-out">All readings are done.</div>`;
+      }
+      if (o.feasible && o.finishOn) {
+        return (
+          `<div id="paceOut" class="pace-out">` +
+          `<strong>Finish by ${esc(fmtDay(o.finishOn))}</strong>` +
+          `<span>${o.remainingPages} pages left · ${o.weekdayPages} pages / weekday · ${o.weekendPages} / weekend</span>` +
+          `</div>`
+        );
+      }
+      const suggest = o.suggestPagesPerHour
+        ? `<span>At these hours you need at least ${esc(fmtNum(o.suggestPagesPerHour))} pages per hour to finish before revision.</span>`
+        : "";
+      return (
+        `<div id="paceOut" class="pace-out bad">` +
+        `<strong>Not feasible.</strong>` +
+        `<span>You cannot finish before revision` +
+        (o.revisionStart ? ` (${esc(fmtDay(o.revisionStart, "tiny"))})` : "") +
+        `. This pace covers ${o.pagesAvailable} of ${o.remainingPages} pages; ${o.unscheduledPages} would still be unread.</span>` +
+        suggest +
+        `</div>`
+      );
     }
 
     function editIcon(attr) {
@@ -618,23 +781,52 @@
       return (state.plan || []).find((d) => d.date === iso) || null;
     }
 
-    function planForChapter(id) {
+    function planForReading(id) {
       const out = [];
       for (const day of state.plan || []) {
         for (const it of day.items || []) {
-          if (it.id === id) out.push({ date: day.date, percent: it.percent, from: it.from, to: it.to });
+          if (it.id === id) {
+            out.push({
+              date: day.date,
+              pagesFrom: it.pagesFrom,
+              pagesTo: it.pagesTo,
+              pages: it.pages,
+            });
+          }
         }
       }
       return out;
     }
 
+    function revisionStartIso() {
+      return state.revisionStart || (state.stats && state.stats.revisionStart) || "";
+    }
+
+    function revisionEndIso() {
+      return (state.stats && state.stats.revisionEnd) || addDays(EXAM, -1);
+    }
+
     function revisionWindowDays() {
       const s = state.stats || {};
-      const revStart = revisionStartIso();
-      const a = parseISO(revStart);
-      const b = parseISO(s.examDate || EXAM);
-      if (!a || !b) return state.revisionDays || 0;
-      return Math.max(0, Math.round((b - a) / 86400000));
+      if (s.revisionDays != null) return s.revisionDays;
+      const a = parseISO(revisionStartIso());
+      const b = parseISO(revisionEndIso());
+      if (!a || !b) return 0;
+      return Math.max(0, Math.round((b - a) / 86400000) + 1);
+    }
+
+    function examDaysCopy(s) {
+      if (s.daysToExam > 1) return `[${s.daysToExam} days left]`;
+      if (s.daysToExam === 1) return `[1 day left]`;
+      if (s.daysToExam === 0) return `[Exam today]`;
+      return `[Exam passed]`;
+    }
+
+    function revisionDaysCopy(s) {
+      if (s.daysToRevision > 1) return `[${s.daysToRevision} days to revision]`;
+      if (s.daysToRevision === 1) return `[1 day to revision]`;
+      if (s.daysToRevision === 0) return `[Revision starts today]`;
+      return `[In revision]`;
     }
 
     function addOffDates(isos) {
@@ -647,6 +839,19 @@
         added = true;
       }
       if (added) persist();
+    }
+
+    function persistBody() {
+      return {
+        startedOn: state.startedOn,
+        revisionStart: state.revisionStart,
+        planVersion: state.planVersion,
+        pagesPerHour: state.pagesPerHour,
+        weekdayHours: state.weekdayHours,
+        weekendHours: state.weekendHours,
+        readings: readings(),
+        offDays: state.offDays,
+      };
     }
 
     async function load() {
@@ -666,33 +871,46 @@
       const r = await fetch("/api/cfa", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startedOn: state.startedOn,
-          revisionStart: state.revisionStart,
-          planVersion: state.planVersion,
-          chapters: state.chapters,
-          offDays: state.offDays,
-        }),
+        body: JSON.stringify(persistBody()),
       });
       if (!r.ok) return;
-      const openId = $("sheet").dataset.chapter;
+      const openId = $("sheet").dataset.reading;
       const openDay = $("sheet").dataset.day;
+      const openSheetKind = $("sheet").dataset.sheet;
       state = await r.json();
       render();
-      const openSheetKind = $("sheet").dataset.sheet;
-      if (openId) openChapter(openId);
+      if (openId) openReading(openId);
       if (openDay) openDaySheet(openDay);
       if (openSheetKind === "rev") openRevSheet();
+      if (openSheetKind === "pace") openPaceSheet();
       if (openSheetKind === "ex-one") openExcludeOne();
       if (openSheetKind === "ex-range") openExcludeRange();
     }
 
-    function setProgress(ch, value) {
-      const next = Math.max(0, Math.min(100, Math.round(Number(value) / 10) * 10));
+    function setPage(rd, value) {
+      const pages = Number(rd.pages) || 0;
+      const next = Math.max(0, Math.min(pages, Math.round(Number(value) || 0)));
       const today = state.stats.today;
-      ch.progress = next;
-      ch.updatedOn = today;
-      ch.completedOn = next >= 100 ? today : null;
+      rd.page = next;
+      rd.progress = pages ? Math.round((100 * next) / pages) : 0;
+      rd.updatedOn = today;
+      rd.completedOn = pages && next >= pages ? today : null;
+      persist();
+    }
+
+    function setPagesCount(rd, value) {
+      let pages = Math.round(Number(value) || 0);
+      if (!Number.isFinite(pages)) pages = Number(rd.pages) || 1;
+      pages = Math.max(1, Math.min(200, pages));
+      const prev = Number(rd.page) || 0;
+      rd.pages = pages;
+      if (prev > pages) {
+        setPage(rd, pages);
+        return;
+      }
+      rd.progress = Math.round((100 * prev) / pages);
+      if (prev >= pages) rd.completedOn = state.stats.today;
+      else rd.completedOn = null;
       persist();
     }
 
@@ -718,47 +936,31 @@
       bg.classList.remove("on");
       bg.hidden = true;
       $("sheet").innerHTML = "";
-      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.reading;
       delete $("sheet").dataset.day;
       delete $("sheet").dataset.sheet;
-      dayQ = "";
     }
 
-    function chapterRow(ch, extra) {
-      const done = ch.progress >= 100;
+    function readingRow(rd, extra) {
+      const done = isDone(rd);
+      const pages = Number(rd.pages) || 0;
+      const page = Number(rd.page) || 0;
       return (
-        `<button type="button" class="row" data-open="${esc(ch.id)}">` +
-        `<span><div class="ttl${done ? " done" : ""}">${esc(chapterLabel(ch))}</div>` +
-        (extra ? `<div class="sub">${esc(extra)}</div>` : "") +
+        `<button type="button" class="row" data-open="${esc(rd.id)}">` +
+        `<span><div class="ttl${done ? " done" : ""}">${esc(readingLabel(rd))}</div>` +
+        `<div class="sub">${esc(extra || `${pages} pages`)}</div>` +
         `</span>` +
-        `<span class="pct${done ? " done" : ""}">${ch.progress}%` +
-        (ch.bookmarked ? `<span class="star">★</span>` : "") +
+        `<span class="pct${done ? " done" : ""}">${page}/${pages}` +
+        (rd.bookmarked ? `<span class="star">★</span>` : "") +
         `</span></button>`
       );
-    }
-
-    function revisionStartIso() {
-      return state.revisionStart || (state.stats && state.stats.revisionStart) || "";
-    }
-
-    function examDaysCopy(s) {
-      if (s.daysToExam > 1) return `${s.daysToExam} days left`;
-      if (s.daysToExam === 1) return "1 day left";
-      if (s.daysToExam === 0) return "Exam today";
-      return "Exam passed";
-    }
-
-    function revisionDaysCopy(s) {
-      if (s.daysToRevision > 1) return `${s.daysToRevision} days to revision`;
-      if (s.daysToRevision === 1) return "1 day to revision";
-      if (s.daysToRevision === 0) return "Revision starts today";
-      return "In revision";
     }
 
     function renderHome() {
       const s = state.stats;
       const today = s.today;
       const revStart = revisionStartIso();
+      const revEnd = revisionEndIso();
       const day = planDay(today);
       const items = (day && day.items) || [];
 
@@ -767,7 +969,6 @@
       const revDays = Math.max(0, Math.min(span, span - toRev));
       const prepPct = s.phase === "after" ? 0 : Math.max(0, (toRev / span) * 100);
       const revPct = s.phase === "after" ? 100 : Math.max(0, (revDays / span) * 100);
-      const windowDays = revisionWindowDays();
 
       let body = "";
       if (day && day.kind === "off") {
@@ -780,26 +981,36 @@
         body = `<div class="empty">Nothing today</div>`;
       } else {
         body = items.map((it) => {
-          const ch = chapterById(it.id);
-          return ch ? chapterRow(ch, `${it.percent}% today`) : "";
+          const rd = readingById(it.id);
+          return rd ? readingRow(rd, `${pageRange(it.pagesFrom, it.pagesTo)} · ${it.pages} pages`) : "";
         }).join("");
       }
+
+      const todayMeta = day && day.kind === "prep"
+        ? `${day.pages || 0} pages · ${fmtNum(day.hours || s.todayHours)} h`
+        : (items.length || "");
 
       $("view-home").innerHTML =
         `<div class="dates">` +
         `<div class="date-block">` +
         `<div class="date-k">Exam date</div>` +
-        `<div class="date-v">${esc(fmtDay(s.examDate))}</div>` +
-        `<div class="date-sub">${esc(examDaysCopy(s))}</div>` +
+        `<div class="date-v">${esc(fmtDay(s.examDate))}<span class="date-br">${esc(examDaysCopy(s))}</span></div>` +
         `</div>` +
         `<div class="date-block">` +
         `<div class="date-k">Revision</div>` +
         `<div class="date-v-row">` +
-        `<div class="date-v">${esc(fmtDay(revStart, "tiny"))} – ${esc(fmtDay(s.examDate, "tiny"))}</div>` +
+        `<div class="date-v">${esc(fmtDay(revStart, "tiny"))} – ${esc(fmtDay(revEnd, "tiny"))}<span class="date-br">${esc(revisionDaysCopy(s))}</span></div>` +
         editIcon("data-edit-rev") +
         `</div>` +
-        `<div class="date-sub">${windowDays} days</div>` +
-        `<div class="date-sub">${esc(revisionDaysCopy(s))}</div>` +
+        `</div>` +
+        `<div class="date-block">` +
+        `<div class="date-k">Study pace</div>` +
+        `<div class="date-v-row">` +
+        `<div class="date-v">${esc(fmtNum(s.pagesPerHour))} pages / hour</div>` +
+        editIcon("data-edit-pace") +
+        `</div>` +
+        `<div class="date-sub">Weekdays ${esc(fmtNum(s.weekdayHours))} h · Weekends ${esc(fmtNum(s.weekendHours))} h</div>` +
+        `<div class="date-sub${s.feasible || !(s.remainingPages > 0) ? "" : " warn"}">${esc(paceStatusLine(s))}</div>` +
         `</div>` +
         `</div>` +
         `<div class="track" style="--rev-at:${prepPct}%">` +
@@ -814,7 +1025,7 @@
         `</div>` +
         `</div>` +
         `<div class="card">` +
-        `<div class="sec-h"><h2>${esc(fmtDay(today))}</h2><span>${items.length || ""}</span></div>` +
+        `<div class="sec-h"><h2>${esc(fmtDay(today))}</h2><span>${esc(String(todayMeta))}</span></div>` +
         body +
         `</div>`;
     }
@@ -822,6 +1033,7 @@
     function renderPlan() {
       const s = state.stats;
       const revStart = revisionStartIso();
+      const revEnd = revisionEndIso();
       const windowDays = revisionWindowDays();
       const excluded = (state.offDays || [])
         .filter((o) => o.date >= s.today && o.date < EXAM)
@@ -847,7 +1059,7 @@
           tag = "Revision";
           name = "Revision";
         } else if (day.items && day.items.length) {
-          name = day.items.map((it) => `Chapter ${it.n} · ${it.percent}%`).join("\n");
+          name = day.items.map((it) => `Reading ${it.n} · ${pageRange(it.pagesFrom, it.pagesTo)}`).join("\n");
         } else {
           name = "—";
         }
@@ -865,8 +1077,14 @@
       $("view-plan").innerHTML =
         `<div class="card">` +
         `<div class="sec-h"><h2>Revision</h2>${editIcon("data-edit-rev")}</div>` +
-        `<div class="date-v">${esc(fmtDay(revStart, "tiny"))} – ${esc(fmtDay(s.examDate, "tiny"))}</div>` +
+        `<div class="date-v">${esc(fmtDay(revStart, "tiny"))} – ${esc(fmtDay(revEnd, "tiny"))}<span class="date-br">${esc(revisionDaysCopy(s))}</span></div>` +
         `<div class="date-sub">${windowDays} days</div>` +
+        `</div>` +
+        `<div class="card">` +
+        `<div class="sec-h"><h2>Study pace</h2>${editIcon("data-edit-pace")}</div>` +
+        `<div class="date-v">${esc(fmtNum(s.pagesPerHour))} pages / hour</div>` +
+        `<div class="date-sub">Weekdays ${esc(fmtNum(s.weekdayHours))} h · Weekends ${esc(fmtNum(s.weekendHours))} h</div>` +
+        `<div class="date-sub${s.feasible || !(s.remainingPages > 0) ? "" : " warn"}">${esc(paceStatusLine(s))}</div>` +
         `</div>` +
         `<div class="card">` +
         `<div class="sec-h"><h2>Excluded</h2></div>` +
@@ -879,17 +1097,10 @@
         `<div class="card">${rows}</div>`;
     }
 
-    function renderChapters() {
+    function renderReadings() {
       const q = listQ.trim().toLowerCase();
-      let items = state.chapters.slice().sort((a, b) => a.n - b.n);
-      if (listFilter === "left") items = items.filter((c) => c.progress < 100);
-      else if (listFilter === "done") items = items.filter((c) => c.progress >= 100);
-      else if (listFilter === "star") items = items.filter((c) => c.bookmarked);
-      if (q) {
-        items = items.filter((c) =>
-          String(c.n).includes(q) || String(c.title || "").toLowerCase().includes(q)
-        );
-      }
+      const books = state.books || [];
+      const all = readings().slice().sort((a, b) => a.n - b.n);
       const chips = [
         ["left", "Left"],
         ["all", "All"],
@@ -899,21 +1110,41 @@
         `<button type="button" class="chip${listFilter === k ? " on" : ""}" data-filter="${k}">${lab}</button>`
       ).join("");
 
-      $("view-chapters").innerHTML =
+      const cards = books.map((book) => {
+        let items = all.filter((r) => r.n >= book.from && r.n <= book.to);
+        if (listFilter === "left") items = items.filter((r) => !isDone(r));
+        else if (listFilter === "done") items = items.filter((r) => isDone(r));
+        else if (listFilter === "star") items = items.filter((r) => r.bookmarked);
+        if (q) {
+          items = items.filter((r) =>
+            String(r.n).includes(q) ||
+            String(r.title || "").toLowerCase().includes(q) ||
+            `reading ${r.n}`.includes(q) ||
+            String(book.title || "").toLowerCase().includes(q)
+          );
+        }
+        if (!items.length) return "";
+        return (
+          `<div class="card">` +
+          `<div class="sec-h"><h2>${esc(book.title)}</h2><span>Readings ${book.from}–${book.to}</span></div>` +
+          items.map((r) => readingRow(r)).join("") +
+          `</div>`
+        );
+      }).filter(Boolean).join("");
+
+      $("view-readings").innerHTML =
         `<div class="list-tools">` +
-        `<input class="search" id="listSearch" type="search" placeholder="Chapter" value="${esc(listQ)}" />` +
+        `<input class="search" id="listSearch" type="search" placeholder="Reading" value="${esc(listQ)}" />` +
         `</div>` +
         `<div class="chips">${chips}</div>` +
-        `<div class="card">` +
-        (items.length ? items.map((c) => chapterRow(c)).join("") : `<div class="empty">None</div>`) +
-        `</div>`;
+        (cards || `<div class="card"><div class="empty">None</div></div>`);
 
       const input = $("listSearch");
       if (input) {
         input.addEventListener("input", () => {
           listQ = input.value;
           const pos = input.selectionStart;
-          renderChapters();
+          renderReadings();
           const next = $("listSearch");
           if (next) {
             next.focus();
@@ -930,38 +1161,53 @@
       if (el) el.classList.add("on");
       if (tab === "home") renderHome();
       if (tab === "plan") renderPlan();
-      if (tab === "chapters") renderChapters();
+      if (tab === "readings") renderReadings();
     }
 
-    function openChapter(id, mode) {
-      const ch = chapterById(id);
-      if (!ch) return;
+    function openReading(id, mode) {
+      const rd = readingById(id);
+      if (!rd) return;
       if (mode === "reset") {
         openSheet(
-          `<div class="sec-h"><h2>Reset chapter ${ch.n}?</h2><span></span></div>` +
-          `<div class="warn-copy">Are you sure you want to reset this chapter? This will:` +
+          `<div class="sec-h"><h2>Reset reading ${rd.n}?</h2><span></span></div>` +
+          `<div class="warn-copy">Are you sure you want to reset this reading? This will:` +
           `<ul>` +
-          `<li>Set progress to 0</li>` +
+          `<li>Set progress to page 0</li>` +
           `<li>Clear notes</li>` +
           `</ul></div>` +
           `<div class="actions">` +
-          `<button type="button" class="btn soft" id="chResetNo">No</button>` +
-          `<button type="button" class="btn danger" id="chResetYes">Yes, reset</button>` +
+          `<button type="button" class="btn soft" id="rdResetNo">No</button>` +
+          `<button type="button" class="btn danger" id="rdResetYes">Yes, reset</button>` +
           `</div>`
         );
-        $("sheet").dataset.chapter = id;
+        $("sheet").dataset.reading = id;
         delete $("sheet").dataset.day;
         return;
       }
-      const slots = planForChapter(ch.id);
+      const pages = Number(rd.pages) || 0;
+      const page = Number(rd.page) || 0;
+      const pct = pages ? Math.round((100 * page) / pages) : 0;
+      const slots = planForReading(rd.id);
       const planHtml = slots.length
-        ? slots.map((s) => `<div class="plan-line">${esc(fmtDay(s.date, "short"))} · ${s.percent}%</div>`).join("")
-        : `<div class="empty">${ch.progress >= 100 ? "Done" : "Not in prep window"}</div>`;
+        ? slots.map((s) => `<div class="plan-line">${esc(fmtDay(s.date, "short"))} · ${esc(pageRange(s.pagesFrom, s.pagesTo))}</div>`).join("")
+        : `<div class="empty">${isDone(rd) ? "Done" : "Not in prep window"}</div>`;
+      const ticks = pages <= 1
+        ? `<span>0</span><span>1</span>`
+        : `<span>0</span><span>${pages}</span>`;
+      const picks = Array.from({ length: pages + 1 }, (_, n) =>
+        `<button type="button" class="page-pick${n === page ? " on" : ""}" data-page="${n}">${n === 0 ? "0" : n}</button>`
+      ).join("");
       openSheet(
-        `<div class="sec-h"><h2>Chapter ${ch.n}</h2><span></span></div>` +
+        `<div class="sec-h"><h2>Reading ${rd.n}</h2><span>Book ${rd.book}</span></div>` +
         `<div class="field">` +
-        `<div class="prog-top"><div class="field-lab">Chapter Progress</div><span class="pct-now" id="chPct">${ch.progress}%</span></div>` +
-        `<input id="chProg" class="tube" type="range" min="0" max="100" step="10" value="${ch.progress}" style="--p:${ch.progress}%" />` +
+        `<div class="field-lab">Pages in this reading</div>` +
+        `<input id="rdPages" type="number" min="1" max="200" step="1" value="${pages}" />` +
+        `</div>` +
+        `<div class="field">` +
+        `<div class="prog-top"><div class="field-lab">Done through page</div><span class="pct-now" id="rdPageLab">${esc(pageStatus(rd))}</span></div>` +
+        `<div class="page-picks">${picks}</div>` +
+        `<input id="rdPage" class="tube" type="range" min="0" max="${pages}" step="1" value="${page}" style="--p:${pct}%" />` +
+        `<div class="page-scale">${ticks}</div>` +
         `</div>` +
         `<div class="field">` +
         `<div class="field-lab">Plan</div>` +
@@ -969,28 +1215,75 @@
         `</div>` +
         `<div class="field">` +
         `<div class="field-lab">Notes</div>` +
-        `<textarea id="chNotes" maxlength="4000">${esc(ch.notes)}</textarea>` +
+        `<textarea id="rdNotes" maxlength="4000">${esc(rd.notes)}</textarea>` +
         `</div>` +
         `<div class="actions">` +
-        `<button type="button" class="btn soft" id="chStar">${ch.bookmarked ? "Bookmarked" : "Bookmark"}</button>` +
-        `<button type="button" class="btn danger" id="chReset">Reset</button>` +
+        `<button type="button" class="btn soft" id="rdStar">${rd.bookmarked ? "Bookmarked" : "Bookmark"}</button>` +
+        `<button type="button" class="btn danger" id="rdReset">Reset</button>` +
+        `<button type="button" class="btn" id="rdDone"${isDone(rd) ? " disabled" : ""}>Completed</button>` +
         `</div>`
       );
-      $("sheet").dataset.chapter = id;
+      $("sheet").dataset.reading = id;
       delete $("sheet").dataset.day;
     }
 
     function openRevSheet() {
       const revStart = revisionStartIso();
-      const maxRev = addDays(EXAM, -1);
+      const maxRev = revisionEndIso();
       openSheet(
         `<div class="sec-h"><h2>Revision start</h2><span></span></div>` +
         `<input id="revStart" type="date" value="${esc(revStart)}" max="${esc(maxRev)}" />` +
         `<button type="button" class="btn" id="revSave">Save</button>`
       );
       $("sheet").dataset.sheet = "rev";
-      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.reading;
       delete $("sheet").dataset.day;
+    }
+
+    function openPaceSheet() {
+      const s = state.stats || {};
+      openSheet(
+        `<div class="sec-h"><h2>Study pace</h2><span></span></div>` +
+        `<div class="field"><div class="field-lab">Pages per hour</div>` +
+        `<input id="pacePph" type="number" min="0.5" max="40" step="0.5" value="${esc(fmtNum(s.pagesPerHour))}" /></div>` +
+        `<div class="field"><div class="field-lab">Hours on weekdays</div>` +
+        `<input id="paceWd" type="number" min="0" max="16" step="0.5" value="${esc(fmtNum(s.weekdayHours))}" /></div>` +
+        `<div class="field"><div class="field-lab">Hours on weekends</div>` +
+        `<input id="paceWe" type="number" min="0" max="16" step="0.5" value="${esc(fmtNum(s.weekendHours))}" /></div>` +
+        `<div id="paceOut"></div>` +
+        `<button type="button" class="btn" id="paceSave">Save</button>`
+      );
+      $("sheet").dataset.sheet = "pace";
+      delete $("sheet").dataset.reading;
+      delete $("sheet").dataset.day;
+      refreshPacePreview();
+    }
+
+    function readPaceInputs() {
+      const pph = Number($("pacePph") && $("pacePph").value);
+      const wd = Number($("paceWd") && $("paceWd").value);
+      const we = Number($("paceWe") && $("paceWe").value);
+      return {
+        pagesPerHour: Number.isFinite(pph) ? pph : 0,
+        weekdayHours: Number.isFinite(wd) ? wd : 0,
+        weekendHours: Number.isFinite(we) ? we : 0,
+      };
+    }
+
+    function refreshPacePreview() {
+      const box = $("paceOut");
+      const btn = $("paceSave");
+      if (!box) return;
+      const inp = readPaceInputs();
+      const o = paceOutlookFromInputs(inp.pagesPerHour, inp.weekdayHours, inp.weekendHours);
+      const wrap = document.createElement("div");
+      wrap.innerHTML = paceOutlookHtml(o);
+      const node = wrap.firstElementChild;
+      if (node) box.replaceWith(node);
+      if (btn) {
+        const blocking = (state.stats && state.stats.phase === "prep") && !o.feasible && o.remainingPages > 0;
+        btn.disabled = blocking;
+      }
     }
 
     function openExcludeOne() {
@@ -1002,7 +1295,7 @@
         `<button type="button" class="btn" id="exOneSave">Add</button>`
       );
       $("sheet").dataset.sheet = "ex-one";
-      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.reading;
       delete $("sheet").dataset.day;
     }
 
@@ -1016,7 +1309,7 @@
         `<button type="button" class="btn" id="exRangeSave">Add</button>`
       );
       $("sheet").dataset.sheet = "ex-range";
-      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.reading;
       delete $("sheet").dataset.day;
     }
 
@@ -1036,7 +1329,7 @@
       } else {
         extra =
           (items.length
-            ? items.map((it) => `<div class="plan-line">Chapter ${it.n} · ${it.percent}%</div>`).join("")
+            ? items.map((it) => `<div class="plan-line">Reading ${it.n} · ${pageRange(it.pagesFrom, it.pagesTo)}</div>`).join("")
             : `<div class="empty">Nothing</div>`) +
           `<button type="button" class="btn danger" id="dayExclude">Exclude this day</button>`;
       }
@@ -1044,7 +1337,7 @@
         `<div class="sec-h"><h2>${esc(fmtDay(iso))}</h2><span></span></div>` + extra
       );
       $("sheet").dataset.day = iso;
-      delete $("sheet").dataset.chapter;
+      delete $("sheet").dataset.reading;
     }
 
     document.querySelector(".nav").addEventListener("click", (e) => {
@@ -1056,16 +1349,20 @@
       const filter = e.target.closest("[data-filter]");
       if (filter) {
         listFilter = filter.getAttribute("data-filter") || "left";
-        renderChapters();
+        renderReadings();
         return;
       }
       const open = e.target.closest("[data-open]");
       if (open) {
-        openChapter(open.getAttribute("data-open"));
+        openReading(open.getAttribute("data-open"));
         return;
       }
       if (e.target.closest("[data-edit-rev]")) {
         openRevSheet();
+        return;
+      }
+      if (e.target.closest("[data-edit-pace]")) {
+        openPaceSheet();
         return;
       }
       const unoff = e.target.closest("[data-unoff]");
@@ -1094,31 +1391,41 @@
     });
 
     $("sheet").addEventListener("click", (e) => {
-      const id = $("sheet").dataset.chapter;
+      const id = $("sheet").dataset.reading;
       const day = $("sheet").dataset.day;
       if (id) {
-        const ch = chapterById(id);
-        if (!ch) return;
-        if (e.target.id === "chStar") {
-          ch.bookmarked = !ch.bookmarked;
+        const rd = readingById(id);
+        if (!rd) return;
+        if (e.target.id === "rdStar") {
+          rd.bookmarked = !rd.bookmarked;
           persist();
           return;
         }
-        if (e.target.id === "chReset") {
-          openChapter(id, "reset");
+        if (e.target.id === "rdReset") {
+          openReading(id, "reset");
           return;
         }
-        if (e.target.id === "chResetNo") {
-          openChapter(id);
+        if (e.target.id === "rdResetNo") {
+          openReading(id);
           return;
         }
-        if (e.target.id === "chResetYes") {
-          ch.progress = 0;
-          ch.date = null;
-          ch.notes = "";
-          ch.updatedOn = null;
-          ch.completedOn = null;
+        if (e.target.id === "rdResetYes") {
+          rd.page = 0;
+          rd.progress = 0;
+          rd.date = null;
+          rd.notes = "";
+          rd.updatedOn = null;
+          rd.completedOn = null;
           persist();
+          return;
+        }
+        if (e.target.id === "rdDone") {
+          setPage(rd, rd.pages);
+          return;
+        }
+        const pick = e.target.closest("[data-page]");
+        if (pick) {
+          setPage(rd, pick.getAttribute("data-page"));
           return;
         }
       }
@@ -1126,6 +1433,20 @@
         const next = ($("revStart") && $("revStart").value) || "";
         if (!next || next >= EXAM) return;
         state.revisionStart = next;
+        closeSheet();
+        persist();
+        return;
+      }
+      if (e.target.id === "paceSave") {
+        const inp = readPaceInputs();
+        const o = paceOutlookFromInputs(inp.pagesPerHour, inp.weekdayHours, inp.weekendHours);
+        if ((state.stats && state.stats.phase === "prep") && !o.feasible && o.remainingPages > 0) {
+          refreshPacePreview();
+          return;
+        }
+        if (Number.isFinite(inp.pagesPerHour)) state.pagesPerHour = inp.pagesPerHour;
+        if (Number.isFinite(inp.weekdayHours)) state.weekdayHours = inp.weekdayHours;
+        if (Number.isFinite(inp.weekendHours)) state.weekendHours = inp.weekendHours;
         closeSheet();
         persist();
         return;
@@ -1163,40 +1484,53 @@
     });
 
     $("sheet").addEventListener("change", (e) => {
-      const id = $("sheet").dataset.chapter;
-      if (!id) return;
-      const ch = chapterById(id);
-      if (!ch) return;
-      if (e.target.id === "chNotes") ch.notes = e.target.value;
+      const id = $("sheet").dataset.reading;
+      if (id) {
+        const rd = readingById(id);
+        if (!rd) return;
+        if (e.target.id === "rdNotes") rd.notes = e.target.value;
+        if (e.target.id === "rdPage") {
+          setPage(rd, e.target.value);
+          return;
+        }
+        if (e.target.id === "rdPages") {
+          setPagesCount(rd, e.target.value);
+          return;
+        }
+        persist();
+        return;
+      }
       if (e.target.id === "revStart") {
         const next = e.target.value;
         if (!next || next >= EXAM) return;
         state.revisionStart = next;
         persist();
-        return;
       }
-      if (e.target.id === "chProg") {
-        setProgress(ch, e.target.value);
-        return;
-      }
-      persist();
     });
 
     $("sheet").addEventListener("input", (e) => {
-      const id = $("sheet").dataset.chapter;
-      if (!id) return;
-      const ch = chapterById(id);
-      if (!ch) return;
-      if (e.target.id === "chNotes") ch.notes = e.target.value;
-      if (e.target.id === "chProg") {
-        const next = Math.max(0, Math.min(100, Math.round(Number(e.target.value) / 10) * 10));
-        e.target.style.setProperty("--p", next + "%");
-        const lab = $("chPct");
-        if (lab) lab.textContent = next + "%";
+      if ($("sheet").dataset.sheet === "pace") {
+        refreshPacePreview();
         return;
       }
-      persist();
+      const id = $("sheet").dataset.reading;
+      if (!id) return;
+      const rd = readingById(id);
+      if (!rd) return;
+      if (e.target.id === "rdNotes") rd.notes = e.target.value;
+      if (e.target.id === "rdPage") {
+        const pages = Number(rd.pages) || 0;
+        const next = Math.max(0, Math.min(pages, Math.round(Number(e.target.value) || 0)));
+        const pct = pages ? Math.round((100 * next) / pages) : 0;
+        e.target.style.setProperty("--p", pct + "%");
+        const lab = $("rdPageLab");
+        if (lab) lab.textContent = pageStatus({ pages, page: next });
+      }
     });
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/cfa/sw.js", { scope: "/cfa/" }).catch(() => {});
+    }
 
     load().catch(() => {
       $("view-home").innerHTML = `<div class="empty">Could not load</div>`;

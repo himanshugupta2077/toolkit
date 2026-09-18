@@ -71,6 +71,7 @@ export function mapKind(value: string): RecurringKind | null {
   if (n === "loan emi" || n === "loan" || n === "emi") return "loan_emi";
   if (n === "lifestyle") return "lifestyle";
   if (n === "investment") return "investment";
+  if (n === "bill") return "bill";
   return null;
 }
 

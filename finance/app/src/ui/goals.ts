@@ -116,14 +116,14 @@ export function fundTodayWhy(input: {
 
   if (input.availableNow >= remaining) {
     if (aheadBit) {
-      return `Yes — ${input.bucketName} has ${formatInr(input.bucketBalance)}. ${aheadBit}, leaving ${formatInr(input.availableNow)} free. This goal needs ${formatInr(remaining)}.`;
+      return `Yes: ${input.bucketName} has ${formatInr(input.bucketBalance)}. ${aheadBit}, leaving ${formatInr(input.availableNow)} free. This goal needs ${formatInr(remaining)}.`;
     }
-    return `Yes — ${input.bucketName} has ${formatInr(input.bucketBalance)} and this goal needs ${formatInr(remaining)}.`;
+    return `Yes: ${input.bucketName} has ${formatInr(input.bucketBalance)} and this goal needs ${formatInr(remaining)}.`;
   }
   if (aheadBit) {
-    return `No — ${input.bucketName} has ${formatInr(input.bucketBalance)}. ${aheadBit}, leaving ${formatInr(input.availableNow)} free. This goal still needs ${formatInr(remaining)}.`;
+    return `No: ${input.bucketName} has ${formatInr(input.bucketBalance)}. ${aheadBit}, leaving ${formatInr(input.availableNow)} free. This goal still needs ${formatInr(remaining)}.`;
   }
-  return `No — ${input.bucketName} has ${formatInr(input.bucketBalance)} and this goal needs ${formatInr(remaining)}.`;
+  return `No: ${input.bucketName} has ${formatInr(input.bucketBalance)} and this goal needs ${formatInr(remaining)}.`;
 }
 
 export function fundTodayWhyFor(

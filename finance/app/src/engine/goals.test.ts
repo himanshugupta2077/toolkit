@@ -124,7 +124,7 @@ describe("goalAffordability — status pills (§5.10 / UX §3.6.4)", () => {
       { bucket: 0, expected: 1_000 },
     );
     expect(row?.status).toBe("behind");
-    expect(row?.label).toBe(`Behind — ${formatInr(rupeesToPaise(2_000))}/mo needed`);
+    expect(row?.label).toBe(`Behind: ${formatInr(rupeesToPaise(2_000))}/mo needed`);
   });
 
   it("marks achieved when remaining is 0", () => {

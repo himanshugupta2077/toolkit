@@ -15,12 +15,15 @@ import {
   type YearMonth,
 } from "./dates.ts";
 import { isPaise, ZERO_PAISE, type Paise } from "./money.ts";
+import { currentCycleStart, nextStatementDate } from "./reconcile.ts";
 import {
   EMI_CATEGORY_NAME,
   INVESTMENT_CATEGORY_NAME,
+  type LedgerEntry,
+  type OneTimePlan,
+  type RecurringFrequency,
   type RecurringKind,
   type RecurringPlan,
-  type OneTimePlan,
 } from "./types.ts";
 
 /** Recurring fields cash-due needs. Extra fields are allowed. */
@@ -34,6 +37,13 @@ export type RecurringDuePlan = Pick<
   | "endDate"
   | "active"
   | "kind"
+  | "payFromAccountId"
+>;
+
+/** Ledger fields card-statement EMI remaining needs. Extra fields are allowed. */
+export type CardEmiLedgerEntry = Pick<
+  LedgerEntry,
+  "date" | "amount" | "fromAccountId" | "categoryId"
 >;
 
 /** Recurring row identity so forecast cards can list which plans make up a kind. */
@@ -111,13 +121,14 @@ function categoryNameById(
 }
 
 /**
- * Effective Kind: stored kind, else EMIs → loan_emi, Investment → investment, else lifestyle.
- * Same as Planned Expenses helper column R.
+ * Effective Kind for forecast: stored kind, else EMIs → loan_emi, Investment →
+ * investment, else lifestyle. Bill counts as lifestyle.
  */
 export function resolveRecurringKind(
   kind: RecurringKind | null,
   categoryName: string | undefined,
 ): RecurringKind {
+  if (kind === "bill") return "lifestyle";
   if (kind) return kind;
   if (categoryName && nameMatches(categoryName, EMI_CATEGORY_NAME)) return "loan_emi";
   if (categoryName && nameMatches(categoryName, INVESTMENT_CATEGORY_NAME)) {
@@ -382,4 +393,234 @@ export function nextRecurringDueDate(plan: RecurringDuePlan, today: IsoDate): Is
     if (due >= asOf && (!end || due <= end)) return due;
   }
   return null;
+}
+
+export type UpcomingBillSource = "recurring" | "one_time";
+
+/** One-time fields the upcoming-payments list needs. Extra fields are allowed. */
+export type UpcomingOneTimePlan = Pick<
+  OneTimePlan,
+  "id" | "name" | "expectedDate" | "amount" | "status" | "kind"
+>;
+
+/**
+ * Next cash claim for a plan. Recurring rows contribute only their first
+ * due on or after `today` — a monthly rent on the 1st is one row, not this
+ * month and next month. Yearly and one-time rows appear when that first
+ * date is still ahead, even if it is months away.
+ */
+export type UpcomingBill = {
+  id: string;
+  source: UpcomingBillSource;
+  name: string;
+  amount: Paise;
+  dueDate: IsoDate;
+  kind: RecurringKind | null;
+  frequency: RecurringFrequency | null;
+};
+
+/**
+ * First upcoming instance of each live recurring plan, plus planned
+ * one-times on or after `today`. Every Kind is included. Sorted by due
+ * date, then name.
+ */
+export function upcomingBills(
+  today: IsoDate,
+  recurring: readonly RecurringLinePlan[],
+  oneTimes: readonly UpcomingOneTimePlan[],
+  categories: readonly CategoryName[],
+): UpcomingBill[] {
+  const asOf = requireIsoDate(today, "today");
+  const names = categoryNameById(categories);
+  const rows: UpcomingBill[] = [];
+
+  for (const plan of recurring) {
+    requirePaise(plan.amount, "recurring amount");
+    const due = nextRecurringDueDate(plan, asOf);
+    if (!due) continue;
+    rows.push({
+      id: plan.id,
+      source: "recurring",
+      name: plan.name,
+      amount: plan.amount,
+      dueDate: due,
+      kind: plan.kind ?? resolveRecurringKind(null, names.get(plan.categoryId)),
+      frequency: plan.frequency,
+    });
+  }
+
+  for (const plan of oneTimes) {
+    requirePaise(plan.amount, "one-time amount");
+    if (plan.status !== "planned") continue;
+    const expected = requireIsoDate(plan.expectedDate, "expected");
+    if (expected < asOf) continue;
+    rows.push({
+      id: plan.id,
+      source: "one_time",
+      name: plan.name,
+      amount: plan.amount,
+      dueDate: expected,
+      kind: plan.kind,
+      frequency: null,
+    });
+  }
+
+  rows.sort(
+    (a, b) => a.dueDate.localeCompare(b.dueDate) || a.name.localeCompare(b.name),
+  );
+  return rows;
+}
+
+export type EstimatedNextStatement = {
+  due: Paise;
+  unpostedEmi: Paise;
+  estimated: Paise;
+  nextStatementDate: IsoDate | null;
+};
+
+function dateInPeriod(
+  date: IsoDate,
+  start: IsoDate,
+  end: IsoDate,
+  inclusiveEnd: boolean,
+): boolean {
+  if (date < start) return false;
+  return inclusiveEnd ? date <= end : date < end;
+}
+
+function plannedLoanEmiOnCard(
+  accountId: string,
+  plans: readonly RecurringDuePlan[],
+  categories: readonly CategoryName[],
+  periodStart: IsoDate,
+  periodEnd: IsoDate,
+  inclusiveEnd: boolean,
+): Paise {
+  const names = categoryNameById(categories);
+  const lastDate = inclusiveEnd ? periodEnd : addDays(periodEnd, -1);
+  if (lastDate < periodStart) return ZERO_PAISE;
+
+  let total: Paise = ZERO_PAISE;
+  for (const plan of plans) {
+    requirePaise(plan.amount, "recurring amount");
+    if (!plan.active) continue;
+    if (plan.payFromAccountId !== accountId) continue;
+    const effective = resolveRecurringKind(plan.kind, names.get(plan.categoryId));
+    if (effective !== "loan_emi") continue;
+
+    if (plan.frequency === "weekly") {
+      const start = requireOptionalIsoDate(plan.startDate, "start");
+      const end = requireOptionalIsoDate(plan.endDate, "end");
+      if (!start) continue;
+      let cursor = start;
+      if (cursor < periodStart) {
+        const skip = Math.ceil(daysBetween(start, periodStart) / 7) * 7;
+        cursor = addDays(start, skip);
+        if (cursor < periodStart) cursor = addDays(cursor, 7);
+      }
+      while (dateInPeriod(cursor, periodStart, periodEnd, inclusiveEnd)) {
+        if (end && cursor > end) break;
+        if (cursor >= start) total += plan.amount;
+        cursor = addDays(cursor, 7);
+      }
+      continue;
+    }
+
+    let month = yearMonthFromIsoDate(periodStart);
+    const lastMonth = yearMonthFromIsoDate(lastDate);
+    while (month <= lastMonth) {
+      const amount = amountDueInMonth(plan, month);
+      if (amount !== ZERO_PAISE) {
+        let due = occurrenceInMonth(plan, month);
+        if (due) {
+          if (plan.startDate && due < plan.startDate) due = plan.startDate;
+          if (plan.endDate && due > plan.endDate) due = plan.endDate;
+          if (dateInPeriod(due, periodStart, periodEnd, inclusiveEnd)) {
+            total += amount;
+          }
+        }
+      }
+      month = addMonths(month, 1);
+    }
+  }
+  return total;
+}
+
+function postedEmiOnCard(
+  accountId: string,
+  entries: readonly CardEmiLedgerEntry[],
+  categories: readonly CategoryName[],
+  periodStart: IsoDate,
+  periodEnd: IsoDate,
+  inclusiveEnd: boolean,
+): Paise {
+  const names = categoryNameById(categories);
+  let total: Paise = ZERO_PAISE;
+  for (const entry of entries) {
+    if (entry.fromAccountId !== accountId) continue;
+    if (!isIsoDate(entry.date)) continue;
+    if (!dateInPeriod(entry.date, periodStart, periodEnd, inclusiveEnd)) continue;
+    const categoryName = names.get(entry.categoryId);
+    if (!categoryName || !nameMatches(categoryName, EMI_CATEGORY_NAME)) continue;
+    requirePaise(entry.amount, "ledger amount");
+    total += entry.amount;
+  }
+  return total;
+}
+
+/**
+ * Ledger due plus unposted loan_emi on this card before the next statement.
+ * Due is passed through unchanged (never fold EMI into the reconcile target).
+ * Statement window is (last statement, next statement] so a posting on the
+ * 12th belongs to that statement, not the following cycle.
+ * No statement day → remaining EMI this calendar month on this card only.
+ */
+export function estimatedNextStatement(
+  today: IsoDate,
+  statementDay: number | null,
+  accountId: string,
+  due: Paise,
+  plans: readonly RecurringDuePlan[],
+  categories: readonly CategoryName[],
+  entries: readonly CardEmiLedgerEntry[],
+): EstimatedNextStatement {
+  const asOf = requireIsoDate(today, "today");
+  requirePaise(due, "due");
+  const next = nextStatementDate(asOf, statementDay);
+  let periodStart: IsoDate;
+  let periodEnd: IsoDate;
+  let inclusiveEnd: boolean;
+  if (next) {
+    periodStart = addDays(currentCycleStart(asOf, statementDay), 1);
+    periodEnd = next;
+    inclusiveEnd = true;
+  } else {
+    const month = yearMonthFromIsoDate(asOf);
+    periodStart = monthStart(month);
+    periodEnd = monthEnd(month);
+    inclusiveEnd = true;
+  }
+  const planned = plannedLoanEmiOnCard(
+    accountId,
+    plans,
+    categories,
+    periodStart,
+    periodEnd,
+    inclusiveEnd,
+  );
+  const posted = postedEmiOnCard(
+    accountId,
+    entries,
+    categories,
+    periodStart,
+    periodEnd,
+    inclusiveEnd,
+  );
+  const unpostedEmi = Math.max(0, planned - posted);
+  return {
+    due,
+    unpostedEmi,
+    estimated: due + unpostedEmi,
+    nextStatementDate: next,
+  };
 }

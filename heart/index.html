@@ -1,0 +1,2310 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0f14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>Heart</title>
+  <style>
+
+    :root {
+      --bg: #0b0f14;
+      --surface: #141b24;
+      --surface2: #1c2633;
+      --border: #2a3648;
+      --text: #e8eef6;
+      --muted: #7f8fa6;
+      --accent: #fb7185;
+      --danger: #f07178;
+      --radius: 16px;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+
+    body {
+      background:
+        radial-gradient(ellipse 80% 50% at 50% 12%, rgba(244, 114, 182, 0.12), transparent 55%),
+        var(--bg);
+    }
+
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      padding: 0 16px calc(16px + var(--safe-b));
+      position: relative;
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(10px + var(--safe-t)) 0 12px;
+      background: rgba(11, 15, 20, 0.92);
+      backdrop-filter: blur(10px);
+    }
+
+    .back {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font: inherit;
+      font-size: 1.15rem;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .back:active { transform: scale(0.96); }
+    .wordmark {
+      font-size: 0.78rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+      min-height: 1em;
+    }
+    .header-spacer { width: 40px; height: 40px; }
+
+    #view-heart {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+    }
+
+    .hb-cat.bookmarks .hb-cat-icon {
+      background: rgba(244, 114, 182, 0.2);
+      border-color: rgba(244, 114, 182, 0.42);
+      color: #fb7185;
+    }
+
+    .hb-card-bm {
+      position: absolute;
+      top: 7px;
+      left: 7px;
+      z-index: 2;
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-size: 0.85rem;
+      background: rgba(8, 12, 18, 0.62);
+      color: rgba(243, 244, 246, 0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      user-select: none;
+    }
+    .hb-card-bm.on {
+      color: #fb7185;
+      background: rgba(244, 114, 182, 0.28);
+    }
+
+    .hb-bookmark-btn {
+      appearance: none;
+      width: 100%;
+      border: 1px solid rgba(244, 114, 182, 0.35);
+      background: rgba(244, 114, 182, 0.08);
+      color: #fbcfe8;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font: inherit;
+      font-weight: 650;
+      font-size: 0.95rem;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .hb-bookmark-btn.on {
+      border-color: rgba(244, 114, 182, 0.55);
+      background: rgba(244, 114, 182, 0.2);
+      color: #fce7f3;
+    }
+    .hb-bookmark-btn:active { transform: scale(0.985); }
+
+    .hb-bm-note {
+      background: var(--surface);
+      border: 1px solid rgba(244, 114, 182, 0.28);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .hb-bm-comment {
+      font-size: 0.9rem;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .hb-bm-comment.muted { color: var(--muted); }
+    .hb-bm-edit {
+      appearance: none;
+      align-self: flex-start;
+      border: none;
+      background: transparent;
+      color: #f9a8d4;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 650;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .hb-bm-sheet label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.75rem;
+      font-weight: 650;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .hb-bm-sheet textarea,
+    .hb-bm-sheet input[type="text"] {
+      width: 100%;
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      font-size: 0.95rem;
+      letter-spacing: normal;
+      text-transform: none;
+      font-weight: 400;
+      outline: none;
+    }
+    .hb-bm-sheet textarea {
+      min-height: 88px;
+      resize: vertical;
+    }
+    .hb-bm-sheet textarea:focus,
+    .hb-bm-sheet input[type="text"]:focus {
+      border-color: rgba(244, 114, 182, 0.55);
+      box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.15);
+    }
+    .hb-bm-tag-row {
+      display: flex;
+      gap: 8px;
+    }
+    .hb-bm-tag-row input { flex: 1; min-width: 0; }
+    .hb-bm-tag-add {
+      appearance: none;
+      border: 1px solid rgba(244, 114, 182, 0.4);
+      background: rgba(244, 114, 182, 0.12);
+      color: #fbcfe8;
+      border-radius: 12px;
+      padding: 0 14px;
+      font: inherit;
+      font-weight: 650;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .hb-chip.hb-bm-chip {
+      cursor: pointer;
+      border-color: rgba(244, 114, 182, 0.4);
+    }
+    .hb-bm-remove {
+      appearance: none;
+      border: none;
+      background: transparent;
+      color: var(--danger);
+      font: inherit;
+      font-weight: 650;
+      font-size: 0.85rem;
+      padding: 4px 0 0;
+      cursor: pointer;
+    }
+    .hb-bm-remove.hidden { display: none; }
+
+    /* Heart module — locked countdown + unlock */
+    #view-heart {
+      align-items: center;
+      justify-content: flex-start;
+      padding-top: 12px;
+      gap: 18px;
+      position: relative;
+    }
+
+    .heart-locked,
+    .heart-unlocked {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+    }
+
+    .heart-locked.hidden,
+    .heart-unlocked.hidden {
+      display: none;
+    }
+
+    .heart-pulse-btn.hidden,
+    .heart-countdown.hidden {
+      display: none;
+    }
+
+    .heart-pulse-btn {
+      appearance: none;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      padding: 8px;
+      line-height: 1;
+      font-size: 4.2rem;
+      color: #fb7185;
+      -webkit-text-fill-color: #fb7185;
+      filter: drop-shadow(0 0 22px rgba(251, 113, 133, 0.55));
+      animation: heart-pulse 1.6s ease-in-out infinite;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    .heart-pulse-btn:active {
+      transform: scale(0.94);
+      animation-play-state: paused;
+    }
+
+    @keyframes heart-pulse {
+      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 16px rgba(251, 113, 133, 0.4)); }
+      50% { transform: scale(1.07); filter: drop-shadow(0 0 28px rgba(251, 113, 133, 0.65)); }
+    }
+
+    .heart-lock-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: rgba(244, 114, 182, 0.95);
+      background: rgba(244, 114, 182, 0.1);
+      border: 1px solid rgba(244, 114, 182, 0.28);
+    }
+
+    .heart-countdown {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .heart-cd-cell {
+      appearance: none;
+      border: 1px solid rgba(244, 114, 182, 0.22);
+      background: var(--surface);
+      border-radius: 14px;
+      padding: 12px 6px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      color: inherit;
+      font: inherit;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+    }
+
+    .heart-cd-cell:active {
+      transform: scale(0.96);
+      background: var(--surface2);
+    }
+
+    .heart-cd-num {
+      font-size: 1.45rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.03em;
+      color: #f9a8d4;
+      min-height: 1.5em;
+    }
+
+    .heart-cd-label {
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+
+    .heart-date-line {
+      color: var(--muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+
+    .heart-date-line strong {
+      color: #f9a8d4;
+      font-weight: 600;
+    }
+
+    /* Heart browser — unlocked catalog UI (mobile-first) */
+    #view-heart.browser-mode {
+      align-items: stretch;
+      padding-top: 0;
+      gap: 0;
+    }
+
+    .heart-unlocked {
+      align-items: stretch;
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .hb {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .hb-level {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      width: 100%;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .hb-level.hidden { display: none; }
+
+    .hb-stats {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 2px 2px 0;
+    }
+
+    .hb-stats-count {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      font-variant-numeric: tabular-nums;
+      color: #f9a8d4;
+    }
+
+    .hb-stats-label {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+
+    .hb-search-wrap {
+      position: relative;
+    }
+
+    .hb-search {
+      width: 100%;
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 14px;
+      padding: 12px 14px 12px 40px;
+      font: inherit;
+      font-size: 0.95rem;
+      outline: none;
+    }
+
+    .hb-search:focus {
+      border-color: rgba(244, 114, 182, 0.45);
+      box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.12);
+    }
+
+    .hb-search::placeholder { color: var(--muted); }
+
+    .hb-search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--muted);
+      font-size: 0.85rem;
+      pointer-events: none;
+    }
+
+    .hb-cat-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-bottom: 8px;
+    }
+
+    .hb-cat {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 14px 14px 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      width: 100%;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .hb-cat:active {
+      transform: scale(0.985);
+      background: var(--surface2);
+    }
+
+    .hb-cat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 13px;
+      display: grid;
+      place-items: center;
+      font-size: 1.25rem;
+      flex-shrink: 0;
+      background: rgba(244, 114, 182, 0.1);
+      border: 1px solid rgba(244, 114, 182, 0.22);
+    }
+
+    .hb-cat-body {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .hb-cat-name {
+      font-size: 1rem;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+      text-transform: capitalize;
+    }
+
+    .hb-cat-sub {
+      color: var(--muted);
+      font-size: 0.75rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hb-cat-count {
+      font-variant-numeric: tabular-nums;
+      font-weight: 700;
+      font-size: 0.95rem;
+      color: #f9a8d4;
+      flex-shrink: 0;
+      min-width: 1.6em;
+      text-align: right;
+    }
+
+    .hb-cat-chev {
+      color: var(--muted);
+      font-size: 1.1rem;
+      flex-shrink: 0;
+      opacity: 0.65;
+    }
+
+    .hb-toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .hb-tags {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 2px 0 4px;
+      margin: 0 -2px;
+      padding-left: 2px;
+      padding-right: 2px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      scroll-snap-type: x proximity;
+    }
+
+    .hb-tags::-webkit-scrollbar { display: none; }
+
+    .hb-tag {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 7px 12px;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 600;
+      white-space: nowrap;
+      cursor: pointer;
+      flex-shrink: 0;
+      scroll-snap-align: start;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
+    }
+
+    .hb-tag.active {
+      color: #fce7f3;
+      border-color: rgba(244, 114, 182, 0.5);
+      background: rgba(244, 114, 182, 0.18);
+    }
+
+    .hb-tag:active { transform: scale(0.97); }
+
+    .hb-filter-meta {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      padding: 0 2px;
+    }
+
+    .hb-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding-bottom: 12px;
+    }
+
+    .hb-card {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      border-radius: 14px;
+      overflow: hidden;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      width: 100%;
+      -webkit-tap-highlight-color: transparent;
+      transition: border-color 0.15s ease, transform 0.1s ease;
+    }
+
+    .hb-card:active {
+      transform: scale(0.98);
+      border-color: rgba(244, 114, 182, 0.4);
+    }
+
+    .hb-card-media {
+      position: relative;
+      aspect-ratio: 1;
+      background: #0a0e14;
+      overflow: hidden;
+    }
+
+    .hb-card-media img,
+    .hb-card-media video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      background: #0a0e14;
+    }
+
+    .hb-card-ph {
+      width: 100%;
+      height: 100%;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 1.4rem;
+      opacity: 0.55;
+    }
+
+    .hb-card-badges {
+      position: absolute;
+      top: 7px;
+      right: 7px;
+      display: flex;
+      gap: 4px;
+    }
+
+    .hb-badge {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      padding: 3px 6px;
+      border-radius: 6px;
+      background: rgba(8, 12, 18, 0.72);
+      color: #f3f4f6;
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
+    .hb-card-body {
+      padding: 9px 10px 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-height: 52px;
+    }
+
+    .hb-card-title {
+      font-size: 0.78rem;
+      font-weight: 650;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .hb-card-sub {
+      color: var(--muted);
+      font-size: 0.68rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .hb-empty {
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+      padding: 36px 16px;
+      line-height: 1.45;
+    }
+
+    .hb-detail {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      padding-bottom: 20px;
+    }
+
+    .hb-detail-hero {
+      position: relative;
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #0a0e14;
+      aspect-ratio: 4 / 5;
+      max-height: 48vh;
+    }
+
+    .hb-detail-hero img,
+    .hb-detail-hero video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .hb-detail-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+    }
+
+    .hb-detail-summary {
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .hb-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .hb-chip {
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(244, 114, 182, 0.28);
+      background: rgba(244, 114, 182, 0.1);
+      color: #fbcfe8;
+    }
+
+    .hb-chip.muted {
+      border-color: var(--border);
+      background: var(--surface);
+      color: var(--muted);
+    }
+
+    .hb-meta-block {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .hb-meta-row {
+      display: flex;
+      gap: 10px;
+      font-size: 0.82rem;
+      line-height: 1.4;
+    }
+
+    .hb-meta-k {
+      color: var(--muted);
+      flex-shrink: 0;
+      min-width: 72px;
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      padding-top: 1px;
+    }
+
+    .hb-meta-v {
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    .hb-view-media {
+      appearance: none;
+      width: 100%;
+      border: 1px solid rgba(244, 114, 182, 0.45);
+      background: linear-gradient(145deg, rgba(244, 114, 182, 0.22), rgba(244, 114, 182, 0.1));
+      color: #fce7f3;
+      border-radius: 14px;
+      padding: 14px 16px;
+      font: inherit;
+      font-weight: 650;
+      font-size: 0.95rem;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .hb-view-media:active { transform: scale(0.985); }
+
+    /* Fullscreen media viewer */
+    .hb-media-viewer {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      background: #05070a;
+      display: flex;
+      flex-direction: column;
+      color: #f3f4f6;
+    }
+
+    .hb-media-viewer.hidden { display: none; }
+
+    .hb-media-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px calc(8px + env(safe-area-inset-top, 0px));
+      padding-top: max(12px, env(safe-area-inset-top, 0px));
+      flex-shrink: 0;
+    }
+
+    .hb-media-close,
+    .hb-media-nav {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.06);
+      color: #f3f4f6;
+      border-radius: 12px;
+      width: 42px;
+      height: 42px;
+      font-size: 1.15rem;
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .hb-media-close:active,
+    .hb-media-nav:active { background: rgba(255, 255, 255, 0.12); }
+
+    .hb-media-nav:disabled {
+      opacity: 0.3;
+      cursor: default;
+    }
+
+    .hb-media-counter {
+      font-size: 0.85rem;
+      font-variant-numeric: tabular-nums;
+      color: rgba(243, 244, 246, 0.7);
+      font-weight: 600;
+    }
+
+    .hb-media-stage {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px 12px 16px;
+      position: relative;
+    }
+
+    .hb-media-stage img,
+    .hb-media-stage video {
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
+      height: auto;
+      object-fit: contain;
+      border-radius: 8px;
+      background: #000;
+    }
+
+    .hb-media-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 8px 16px calc(16px + var(--safe-bottom));
+      flex-shrink: 0;
+    }
+
+    .heart-pass-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 16px 16px calc(16px + var(--safe-bottom));
+      background: rgba(5, 8, 12, 0.72);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+    }
+
+    .heart-pass-overlay.hidden { display: none; }
+
+    .heart-pass-sheet {
+      width: 100%;
+      max-width: 420px;
+      background: var(--surface);
+      border: 1px solid rgba(244, 114, 182, 0.3);
+      border-radius: 20px;
+      padding: 20px 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
+    }
+
+    .heart-pass-title {
+      font-size: 1.05rem;
+      font-weight: 650;
+    }
+
+    .heart-pass-hint {
+      color: var(--muted);
+      font-size: 0.82rem;
+      margin-top: -4px;
+    }
+
+    .heart-pass-input {
+      width: 100%;
+      appearance: none;
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 14px 14px;
+      font-size: 1.1rem;
+      letter-spacing: 0.12em;
+      font-variant-numeric: tabular-nums;
+      outline: none;
+    }
+
+    .heart-pass-input:focus {
+      border-color: rgba(244, 114, 182, 0.55);
+      box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.15);
+    }
+
+    .heart-pass-err {
+      color: var(--danger);
+      font-size: 0.82rem;
+      min-height: 1.2em;
+    }
+
+    .heart-pass-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 2px;
+    }
+
+    .heart-pass-actions .btn {
+      flex: 1;
+    }
+
+    .btn-heart {
+      appearance: none;
+      border: 1px solid rgba(244, 114, 182, 0.45);
+      background: rgba(244, 114, 182, 0.16);
+      color: #fbcfe8;
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-heart:active { transform: scale(0.98); }
+
+    .btn-ghost {
+      appearance: none;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .btn-ghost:active { transform: scale(0.98); }
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <button type="button" class="back" id="backBtn" aria-label="Back">←</button>
+      <span class="wordmark" id="headerTitle"></span>
+      <span class="header-spacer" aria-hidden="true"></span>
+    </header>
+    <main id="view-heart" class="active">
+      <div id="heartLocked" class="heart-locked">
+        <button
+          type="button"
+          class="heart-pulse-btn"
+          id="heartPulse"
+          data-seq="heart"
+          title="Heart"
+          aria-label="Heart"
+        >❤️</button>
+        <div class="heart-countdown" id="heartCountdown" role="timer" aria-live="polite" aria-atomic="true">
+          <button type="button" class="heart-cd-cell" data-seq="days" aria-label="Days remaining">
+            <span class="heart-cd-num" id="heartDays">—</span>
+            <span class="heart-cd-label">Days</span>
+          </button>
+          <button type="button" class="heart-cd-cell" data-seq="hours" aria-label="Hours remaining">
+            <span class="heart-cd-num" id="heartHours">—</span>
+            <span class="heart-cd-label">Hours</span>
+          </button>
+          <button type="button" class="heart-cd-cell" data-seq="minutes" aria-label="Minutes remaining">
+            <span class="heart-cd-num" id="heartMinutes">—</span>
+            <span class="heart-cd-label">Mins</span>
+          </button>
+          <button type="button" class="heart-cd-cell" data-seq="seconds" aria-label="Seconds remaining">
+            <span class="heart-cd-num" id="heartSeconds">—</span>
+            <span class="heart-cd-label">Secs</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="heartUnlocked" class="heart-unlocked hidden">
+        <div id="heartBrowser" class="hb">
+          <!-- Categories -->
+          <div id="hbLevelCats" class="hb-level">
+            <div class="hb-stats">
+              <div>
+                <div class="hb-stats-count" id="hbStatsCount">—</div>
+                <div class="hb-stats-label" id="hbStatsLabel">saved posts</div>
+              </div>
+            </div>
+            <div class="hb-search-wrap">
+              <span class="hb-search-icon" aria-hidden="true">⌕</span>
+              <input
+                type="search"
+                class="hb-search"
+                id="hbSearch"
+                placeholder="Search titles, tags, notes…"
+                enterkeyhint="search"
+                autocomplete="off"
+                autocapitalize="off"
+                spellcheck="false"
+              />
+            </div>
+            <div id="hbCatList" class="hb-cat-list" role="list"></div>
+          </div>
+
+          <!-- Posts in a category -->
+          <div id="hbLevelPosts" class="hb-level hidden">
+            <div class="hb-toolbar">
+              <div id="hbTags" class="hb-tags" role="tablist" aria-label="Tags"></div>
+              <div class="hb-filter-meta" id="hbFilterMeta"></div>
+            </div>
+            <div id="hbPostGrid" class="hb-grid" role="list"></div>
+          </div>
+
+          <!-- Post detail -->
+          <div id="hbLevelDetail" class="hb-level hidden">
+            <div id="hbDetail" class="hb-detail"></div>
+          </div>
+        </div>
+
+        <!-- Fullscreen media -->
+        <div id="hbMediaViewer" class="hb-media-viewer hidden" role="dialog" aria-modal="true" aria-label="Media viewer">
+          <div class="hb-media-top">
+            <button type="button" class="hb-media-close" id="hbMediaClose" aria-label="Close">✕</button>
+            <div class="hb-media-counter" id="hbMediaCounter">1 / 1</div>
+            <div style="width:42px" aria-hidden="true"></div>
+          </div>
+          <div class="hb-media-stage" id="hbMediaStage"></div>
+          <div class="hb-media-bottom">
+            <button type="button" class="hb-media-nav" id="hbMediaPrev" aria-label="Previous">‹</button>
+            <button type="button" class="hb-media-nav" id="hbMediaNext" aria-label="Next">›</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="heartPassOverlay" class="heart-pass-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="heartPassTitle">
+        <div class="heart-pass-sheet">
+          <div class="heart-pass-title" id="heartPassTitle">Enter passcode</div>
+          <p class="heart-pass-hint">Early access</p>
+          <input
+            type="password"
+            class="heart-pass-input"
+            id="heartPassInput"
+            inputmode="numeric"
+            autocomplete="off"
+            enterkeyhint="done"
+            maxlength="24"
+            placeholder="••••••"
+            aria-label="Passcode"
+          />
+          <div class="heart-pass-err" id="heartPassErr" aria-live="polite"></div>
+          <div class="heart-pass-actions">
+            <button type="button" class="btn-ghost" id="heartPassCancel">Cancel</button>
+            <button type="button" class="btn-heart" id="heartPassSubmit">Unlock</button>
+          </div>
+        </div>
+      </div>
+
+
+      <div id="hbBmOverlay" class="heart-pass-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="hbBmTitle">
+        <div class="heart-pass-sheet hb-bm-sheet">
+          <div class="heart-pass-title" id="hbBmTitle">Bookmark</div>
+          <p class="heart-pass-hint">Optional comment and your own tags</p>
+          <label>
+            Comment
+            <textarea id="hbBmComment" maxlength="2000" placeholder="Why you saved this…"></textarea>
+          </label>
+          <label>
+            Custom tags
+            <div class="hb-bm-tag-row">
+              <input type="text" id="hbBmTagInput" maxlength="32" placeholder="Add a tag" autocomplete="off" autocapitalize="off" spellcheck="false" />
+              <button type="button" class="hb-bm-tag-add" id="hbBmTagAdd">Add</button>
+            </div>
+          </label>
+          <div id="hbBmTagChips" class="hb-chip-row"></div>
+          <div class="heart-pass-err" id="hbBmErr" aria-live="polite"></div>
+          <div class="heart-pass-actions">
+            <button type="button" class="btn-ghost" id="hbBmCancel">Cancel</button>
+            <button type="button" class="btn-heart" id="hbBmSave">Save</button>
+          </div>
+          <button type="button" class="hb-bm-remove hidden" id="hbBmRemove">Remove bookmark</button>
+        </div>
+      </div>
+
+    </main>
+  </div>
+  <script>
+    /* ------------------------------------------------------------------ */
+    /* Heart module — countdown lock + secret sequence + passcode          */
+    /* Unlock sequence: heart → days → minutes → heart                     */
+    /* Passcode: 110926                                                    */
+    /* After 2026-09-11 local midnight, opens freely.                      */
+    /* ------------------------------------------------------------------ */
+    const HEART_UNLOCK_AT = new Date(2026, 8, 11, 0, 0, 0, 0); // 11 Sep 2026
+    const HEART_PASSCODE = "110926";
+    const HEART_SEQ = ["heart", "days", "minutes", "heart"];
+    const HEART_SEQ_TIMEOUT_MS = 4000;
+    const HEART_LS_KEY = "heart_unlocked_v1";
+
+    const HEART_CAT_META = {
+      fashion: { icon: "◇", label: "Fashion" },
+      relationships: { icon: "♡", label: "Relationships" },
+      travel: { icon: "◎", label: "Travel" },
+      art: { icon: "✧", label: "Art" },
+      entertainment: { icon: "◈", label: "Entertainment" },
+      food: { icon: "◉", label: "Food" },
+      home: { icon: "⌂", label: "Home" },
+      shopping: { icon: "▢", label: "Shopping" },
+      health: { icon: "✚", label: "Health" },
+      events: { icon: "✦", label: "Events" },
+      pets: { icon: "🐾", label: "Pets" },
+      other: { icon: "·", label: "Other" },
+    };
+
+    let heartTimer = 0;
+    let heartSeq = [];
+    let heartSeqTimer = 0;
+    let heartHandlersBound = false;
+
+    /* Browser state (unlocked) */
+    let hbCatalog = null;
+    let hbLoading = false;
+    let hbLevel = "cats"; // cats | posts | detail | media
+    let hbCategory = null;
+    let hbTag = null; // null = all
+    let hbSearch = "";
+    let hbPostId = null;
+    let hbMediaIndex = 0;
+    let hbSearchTimer = 0;
+    let hbBrowserBound = false;
+
+    function heartIsDateUnlocked() {
+      return Date.now() >= HEART_UNLOCK_AT.getTime();
+    }
+
+    function heartIsSessionUnlocked() {
+      try {
+        return localStorage.getItem(HEART_LS_KEY) === "1";
+      } catch (_) {
+        return false;
+      }
+    }
+
+    function heartIsOpen() {
+      return heartIsDateUnlocked() || heartIsSessionUnlocked();
+    }
+
+    function setHeartUnlockedPersist(on) {
+      try {
+        if (on) localStorage.setItem(HEART_LS_KEY, "1");
+        else localStorage.removeItem(HEART_LS_KEY);
+      } catch (_) { /* ignore */ }
+    }
+
+    function heartPad2(n) {
+      return String(Math.max(0, n)).padStart(2, "0");
+    }
+
+    function updateHeartCountdown() {
+      const daysEl = document.getElementById("heartDays");
+      const hoursEl = document.getElementById("heartHours");
+      const minsEl = document.getElementById("heartMinutes");
+      const secsEl = document.getElementById("heartSeconds");
+      if (!daysEl || !hoursEl || !minsEl || !secsEl) return;
+
+      const ms = HEART_UNLOCK_AT.getTime() - Date.now();
+      if (ms <= 0) {
+        daysEl.textContent = "0";
+        hoursEl.textContent = "00";
+        minsEl.textContent = "00";
+        secsEl.textContent = "00";
+        if (!heartIsSessionUnlocked()) setHeartUnlockedPersist(true);
+        renderHeartState();
+        return;
+      }
+
+      const totalSec = Math.floor(ms / 1000);
+      const days = Math.floor(totalSec / 86400);
+      const hours = Math.floor((totalSec % 86400) / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = totalSec % 60;
+
+      daysEl.textContent = String(days);
+      hoursEl.textContent = heartPad2(hours);
+      minsEl.textContent = heartPad2(mins);
+      secsEl.textContent = heartPad2(secs);
+    }
+
+    function renderHeartState() {
+      const locked = document.getElementById("heartLocked");
+      const unlocked = document.getElementById("heartUnlocked");
+      const view = document.getElementById("view-heart");
+      if (!locked || !unlocked) return;
+      const open = heartIsOpen();
+      locked.classList.toggle("hidden", open);
+      unlocked.classList.toggle("hidden", !open);
+      if (view) view.classList.toggle("browser-mode", open);
+      if (open) {
+        stopHeartCountdown();
+        closeHeartPasscode();
+        ensureHeartBrowser();
+      }
+      syncHeartHeader();
+    }
+
+    function startHeartCountdown() {
+      stopHeartCountdown();
+      updateHeartCountdown();
+      heartTimer = window.setInterval(updateHeartCountdown, 1000);
+    }
+
+    function stopHeartCountdown() {
+      if (heartTimer) {
+        clearInterval(heartTimer);
+        heartTimer = 0;
+      }
+    }
+
+    function resetHeartSeq() {
+      heartSeq = [];
+      if (heartSeqTimer) {
+        clearTimeout(heartSeqTimer);
+        heartSeqTimer = 0;
+      }
+    }
+
+    function bumpHeartSeqTimeout() {
+      if (heartSeqTimer) clearTimeout(heartSeqTimer);
+      heartSeqTimer = window.setTimeout(resetHeartSeq, HEART_SEQ_TIMEOUT_MS);
+    }
+
+    function onHeartSeqTap(key) {
+      if (heartIsOpen()) return;
+      heartSeq.push(key);
+      bumpHeartSeqTimeout();
+
+      for (let i = 0; i < heartSeq.length; i++) {
+        if (heartSeq[i] !== HEART_SEQ[i]) {
+          heartSeq = key === HEART_SEQ[0] ? [key] : [];
+          if (heartSeq.length) bumpHeartSeqTimeout();
+          else resetHeartSeq();
+          return;
+        }
+      }
+
+      if (heartSeq.length === HEART_SEQ.length) {
+        resetHeartSeq();
+        openHeartPasscode();
+      }
+    }
+
+    function openHeartPasscode() {
+      const overlay = document.getElementById("heartPassOverlay");
+      const input = document.getElementById("heartPassInput");
+      const err = document.getElementById("heartPassErr");
+      if (!overlay) return;
+      overlay.classList.remove("hidden");
+      if (err) err.textContent = "";
+      if (input) {
+        input.value = "";
+        setTimeout(() => input.focus(), 60);
+      }
+    }
+
+    function closeHeartPasscode() {
+      const overlay = document.getElementById("heartPassOverlay");
+      const input = document.getElementById("heartPassInput");
+      const err = document.getElementById("heartPassErr");
+      if (overlay) overlay.classList.add("hidden");
+      if (input) input.value = "";
+      if (err) err.textContent = "";
+    }
+
+    function submitHeartPasscode() {
+      const input = document.getElementById("heartPassInput");
+      const err = document.getElementById("heartPassErr");
+      const val = (input && input.value ? input.value : "").trim();
+      if (val === HEART_PASSCODE) {
+        setHeartUnlockedPersist(true);
+        closeHeartPasscode();
+        renderHeartState();
+        return;
+      }
+      if (err) err.textContent = "Wrong passcode";
+      if (input) {
+        input.value = "";
+        input.focus();
+      }
+    }
+
+    function enterHeartView() {
+      renderHeartState();
+      if (!heartIsOpen()) startHeartCountdown();
+      bindHeartHandlers();
+    }
+
+    function leaveHeartView() {
+      stopHeartCountdown();
+      resetHeartSeq();
+      closeHeartPasscode();
+      closeHbMedia();
+      // Keep catalog in memory; reset nav to categories next open
+      hbLevel = "cats";
+      hbCategory = null;
+      hbTag = null;
+      hbPostId = null;
+      const search = document.getElementById("hbSearch");
+      if (search && !hbSearch) search.value = "";
+      const view = document.getElementById("view-heart");
+      if (view) view.classList.remove("browser-mode");
+    }
+
+    function bindHeartHandlers() {
+      if (heartHandlersBound) return;
+      heartHandlersBound = true;
+
+      const pulse = document.getElementById("heartPulse");
+      if (pulse) {
+        pulse.addEventListener("click", (e) => {
+          e.preventDefault();
+          onHeartSeqTap("heart");
+        });
+      }
+
+      document.querySelectorAll("#heartCountdown .heart-cd-cell").forEach((el) => {
+        el.addEventListener("click", (e) => {
+          e.preventDefault();
+          const key = el.getAttribute("data-seq");
+          if (key) onHeartSeqTap(key);
+        });
+      });
+
+      const cancel = document.getElementById("heartPassCancel");
+      const submit = document.getElementById("heartPassSubmit");
+      const input = document.getElementById("heartPassInput");
+      const overlay = document.getElementById("heartPassOverlay");
+
+      if (cancel) cancel.addEventListener("click", closeHeartPasscode);
+      if (submit) submit.addEventListener("click", submitHeartPasscode);
+      if (input) {
+        input.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            submitHeartPasscode();
+          } else if (e.key === "Escape") {
+            e.preventDefault();
+            closeHeartPasscode();
+          }
+        });
+      }
+      if (overlay) {
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) closeHeartPasscode();
+        });
+      }
+    }
+
+
+    /* ---------- Bookmarks (comment + custom tags per post) ---------- */
+    const HB_BOOKMARKS_CAT = "__bookmarks__";
+    let hbBookmarks = {};
+    let hbBmDraftTags = [];
+    let hbBmPostId = null;
+    let hbBmBound = false;
+    let hbBmBusy = false;
+
+    function hbBookmark(postId) {
+      return (postId && hbBookmarks[postId]) || null;
+    }
+
+    function hbBookmarkedPosts() {
+      const posts = (hbCatalog && hbCatalog.posts) || [];
+      const byId = {};
+      posts.forEach((p) => {
+        byId[p.id] = p;
+      });
+      const items = Object.values(hbBookmarks);
+      items.sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+      const out = [];
+      items.forEach((b) => {
+        const p = byId[b.postId];
+        if (p) out.push(p);
+      });
+      return out;
+    }
+
+    async function loadHeartBookmarks() {
+      try {
+        const r = await fetch("/api/heart/bookmarks");
+        if (!r.ok) throw new Error("Failed to load bookmarks");
+        const data = await r.json();
+        const next = {};
+        (data.bookmarks || []).forEach((b) => {
+          if (b && b.postId) next[b.postId] = b;
+        });
+        hbBookmarks = next;
+      } catch (_) {
+        /* keep whatever we already have */
+      }
+    }
+
+    function apiError(data, fallback) {
+      const d = data && data.detail;
+      if (typeof d === "string" && d) return d;
+      if (Array.isArray(d) && d.length) {
+        const first = d[0];
+        if (first && first.msg) return first.msg;
+      }
+      return fallback;
+    }
+
+    async function saveHeartBookmark(postId, comment, tags) {
+      const r = await fetch("/api/heart/bookmarks", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ postId, comment, tags }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(apiError(data, "Could not save bookmark"));
+      hbBookmarks[data.postId] = data;
+      return data;
+    }
+
+    async function removeHeartBookmark(postId) {
+      const r = await fetch("/api/heart/bookmarks/" + encodeURIComponent(postId), {
+        method: "DELETE",
+      });
+      if (r.status === 404) {
+        delete hbBookmarks[postId];
+        return;
+      }
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(apiError(data, "Could not remove bookmark"));
+      delete hbBookmarks[postId];
+    }
+
+    function hbBookmarkNoteHtml(postId) {
+      const bm = hbBookmark(postId);
+      if (!bm) return "";
+      const tags = (bm.tags || [])
+        .map((t) => `<span class="hb-chip">${escapeHtml(t)}</span>`)
+        .join("");
+      return (
+        `<div class="hb-bm-note">` +
+        (bm.comment
+          ? `<p class="hb-bm-comment">${escapeHtml(bm.comment)}</p>`
+          : `<p class="hb-bm-comment muted">No comment yet</p>`) +
+        (tags ? `<div class="hb-chip-row">${tags}</div>` : "") +
+        `<button type="button" class="hb-bm-edit" id="hbBmEditBtn">Edit comment or tags</button>` +
+        `</div>`
+      );
+    }
+
+    function renderHbBmTagChips() {
+      const el = document.getElementById("hbBmTagChips");
+      if (!el) return;
+      if (!hbBmDraftTags.length) {
+        el.innerHTML = "";
+        return;
+      }
+      el.innerHTML = hbBmDraftTags
+        .map(
+          (t, i) =>
+            `<button type="button" class="hb-chip hb-bm-chip" data-i="${i}">${escapeHtml(t)} ×</button>`
+        )
+        .join("");
+    }
+
+    function addHbBmDraftTag(raw) {
+      const tag = String(raw || "").replace(/\s+/g, " ").trim().replace(/^#+/, "");
+      if (!tag) return;
+      const key = tag.toLowerCase();
+      if (hbBmDraftTags.some((t) => t.toLowerCase() === key)) return;
+      if (hbBmDraftTags.length >= 12) return;
+      hbBmDraftTags.push(tag.slice(0, 32));
+      renderHbBmTagChips();
+    }
+
+    function openHbBookmarkSheet(postId) {
+      if (!postId) return;
+      const overlay = document.getElementById("hbBmOverlay");
+      const comment = document.getElementById("hbBmComment");
+      const tagInput = document.getElementById("hbBmTagInput");
+      const err = document.getElementById("hbBmErr");
+      const removeBtn = document.getElementById("hbBmRemove");
+      const title = document.getElementById("hbBmTitle");
+      if (!overlay) return;
+      hbBmPostId = postId;
+      const bm = hbBookmark(postId);
+      hbBmDraftTags = bm && bm.tags ? bm.tags.slice() : [];
+      if (title) title.textContent = bm ? "Edit bookmark" : "Bookmark";
+      if (comment) comment.value = bm ? bm.comment || "" : "";
+      if (tagInput) tagInput.value = "";
+      if (err) err.textContent = "";
+      if (removeBtn) removeBtn.classList.toggle("hidden", !bm);
+      renderHbBmTagChips();
+      overlay.classList.remove("hidden");
+      setTimeout(() => {
+        if (comment) comment.focus();
+      }, 60);
+    }
+
+    function closeHbBookmarkSheet() {
+      const overlay = document.getElementById("hbBmOverlay");
+      const comment = document.getElementById("hbBmComment");
+      const tagInput = document.getElementById("hbBmTagInput");
+      const err = document.getElementById("hbBmErr");
+      if (overlay) overlay.classList.add("hidden");
+      if (comment) comment.value = "";
+      if (tagInput) tagInput.value = "";
+      if (err) err.textContent = "";
+      hbBmPostId = null;
+      hbBmDraftTags = [];
+      hbBmBusy = false;
+    }
+
+    async function submitHbBookmark() {
+      if (!hbBmPostId || hbBmBusy) return;
+      const commentEl = document.getElementById("hbBmComment");
+      const tagInput = document.getElementById("hbBmTagInput");
+      const err = document.getElementById("hbBmErr");
+      if (tagInput && tagInput.value.trim()) addHbBmDraftTag(tagInput.value);
+      if (tagInput) tagInput.value = "";
+      hbBmBusy = true;
+      if (err) err.textContent = "";
+      try {
+        await saveHeartBookmark(
+          hbBmPostId,
+          commentEl ? commentEl.value : "",
+          hbBmDraftTags.slice()
+        );
+        closeHbBookmarkSheet();
+        renderHbCurrent();
+      } catch (e) {
+        hbBmBusy = false;
+        if (err) err.textContent = e.message || "Could not save";
+      }
+    }
+
+    async function submitHbBookmarkRemove() {
+      if (!hbBmPostId || hbBmBusy) return;
+      const err = document.getElementById("hbBmErr");
+      hbBmBusy = true;
+      if (err) err.textContent = "";
+      try {
+        await removeHeartBookmark(hbBmPostId);
+        closeHbBookmarkSheet();
+        if (hbCategory === HB_BOOKMARKS_CAT && hbLevel === "detail") {
+          hbPostId = null;
+          renderHbPosts();
+        } else {
+          renderHbCurrent();
+        }
+      } catch (e) {
+        hbBmBusy = false;
+        if (err) err.textContent = e.message || "Could not remove";
+      }
+    }
+
+    function bindHeartBookmarkHandlers() {
+      if (hbBmBound) return;
+      hbBmBound = true;
+      const cancel = document.getElementById("hbBmCancel");
+      const save = document.getElementById("hbBmSave");
+      const removeBtn = document.getElementById("hbBmRemove");
+      const overlay = document.getElementById("hbBmOverlay");
+      const comment = document.getElementById("hbBmComment");
+      const tagInput = document.getElementById("hbBmTagInput");
+      const tagAdd = document.getElementById("hbBmTagAdd");
+      const chips = document.getElementById("hbBmTagChips");
+
+      if (cancel) cancel.addEventListener("click", closeHbBookmarkSheet);
+      if (save) save.addEventListener("click", submitHbBookmark);
+      if (removeBtn) removeBtn.addEventListener("click", submitHbBookmarkRemove);
+      if (overlay) {
+        overlay.addEventListener("click", (e) => {
+          if (e.target === overlay) closeHbBookmarkSheet();
+        });
+      }
+      if (tagAdd) {
+        tagAdd.addEventListener("click", () => {
+          if (!tagInput) return;
+          addHbBmDraftTag(tagInput.value);
+          tagInput.value = "";
+          tagInput.focus();
+        });
+      }
+      if (tagInput) {
+        tagInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter" || e.key === ",") {
+            e.preventDefault();
+            addHbBmDraftTag(tagInput.value);
+            tagInput.value = "";
+          }
+        });
+      }
+      if (chips) {
+        chips.addEventListener("click", (e) => {
+          const chip = e.target.closest(".hb-bm-chip");
+          if (!chip) return;
+          const i = Number(chip.getAttribute("data-i"));
+          if (!Number.isFinite(i)) return;
+          hbBmDraftTags.splice(i, 1);
+          renderHbBmTagChips();
+        });
+      }
+      if (comment) {
+        comment.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            closeHbBookmarkSheet();
+          }
+        });
+      }
+    }
+
+    /* ---------- Heart browser (catalog / media) ---------- */
+
+    function hbCatLabel(id) {
+      const m = HEART_CAT_META[id];
+      if (m) return m.label;
+      return (id || "Other").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    }
+
+    function hbCatIcon(id) {
+      const m = HEART_CAT_META[id];
+      return m ? m.icon : "·";
+    }
+
+    function hbMediaUrl(postId, filename) {
+      return (
+        "/api/heart/media/" +
+        encodeURIComponent(postId) +
+        "/" +
+        encodeURIComponent(filename)
+      );
+    }
+
+    function hbIsVideoFile(f) {
+      if (!f) return false;
+      const t = (f.type || "").toLowerCase();
+      const n = (f.name || "").toLowerCase();
+      return t.startsWith("video/") || /\.(mp4|webm|mov)$/.test(n);
+    }
+
+    function hbIsImageFile(f) {
+      if (!f) return false;
+      const t = (f.type || "").toLowerCase();
+      const n = (f.name || "").toLowerCase();
+      return t.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/.test(n);
+    }
+
+    function syncHeartHeader() {
+      const titleEl = document.getElementById("headerTitle");
+      if (!titleEl) return;
+      titleEl.textContent = "";
+    }
+
+    function hbShowLevel(level) {
+      hbLevel = level;
+      const cats = document.getElementById("hbLevelCats");
+      const posts = document.getElementById("hbLevelPosts");
+      const detail = document.getElementById("hbLevelDetail");
+      if (cats) cats.classList.toggle("hidden", level !== "cats");
+      if (posts) posts.classList.toggle("hidden", level !== "posts");
+      if (detail) detail.classList.toggle("hidden", level !== "detail");
+      syncHeartHeader();
+      window.scrollTo(0, 0);
+    }
+
+    async function ensureHeartBrowser() {
+      bindHeartBrowserHandlers();
+      bindHeartBookmarkHandlers();
+      const catList = document.getElementById("hbCatList");
+      if (!hbCatalog && !hbLoading) {
+        hbLoading = true;
+        if (catList) {
+          catList.innerHTML = `<div class="hb-empty">Loading collection…</div>`;
+        }
+        try {
+          const r = await fetch("/api/heart/catalog");
+          if (!r.ok) throw new Error("Failed to load catalog");
+          hbCatalog = await r.json();
+        } catch (e) {
+          if (catList) {
+            catList.innerHTML = `<div class="hb-empty">Could not load posts.<br/>${escapeHtml(String(e.message || e))}</div>`;
+          }
+          hbLoading = false;
+          return;
+        }
+        hbLoading = false;
+      }
+      await loadHeartBookmarks();
+      renderHbCurrent();
+    }
+
+    function renderHbCurrent() {
+      if (!hbCatalog) return;
+      if (hbLevel === "detail" && hbPostId) {
+        renderHbDetail(hbPostId);
+        return;
+      }
+      if (hbLevel === "posts" && hbCategory) {
+        renderHbPosts();
+        return;
+      }
+      renderHbCategories();
+    }
+
+    function hbPostsMatchingSearch(posts, q) {
+      const needle = (q || "").trim().toLowerCase();
+      if (!needle) return posts;
+      return posts.filter((p) => {
+        const hay = [
+          p.title,
+          p.summary,
+          p.category,
+          p.content_type,
+          ...(p.tags || []),
+          ...(p.suggested_tags || []),
+          ...(p.keywords || []),
+          ...(p.locations || []),
+          ...(p.primary_subjects || []),
+          ...(p.people || []),
+          ...(p.brands || []),
+          ...(((hbBookmark(p.id) || {}).tags) || []),
+          (hbBookmark(p.id) || {}).comment,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return hay.includes(needle);
+      });
+    }
+
+    function renderHbCategories() {
+      hbShowLevel("cats");
+      const posts = hbCatalog.posts || [];
+      const filtered = hbPostsMatchingSearch(posts, hbSearch);
+      const statsCount = document.getElementById("hbStatsCount");
+      const statsLabel = document.getElementById("hbStatsLabel");
+      if (statsCount) statsCount.textContent = String(filtered.length);
+      if (statsLabel) {
+        statsLabel.textContent = hbSearch.trim()
+          ? "matches"
+          : `analyzed · ${hbCatalog.analyzed || 0} of ${hbCatalog.total || 0}`;
+      }
+
+      // Build category counts from filtered posts
+      const counts = {};
+      filtered.forEach((p) => {
+        const c = p.category || "other";
+        counts[c] = (counts[c] || 0) + 1;
+      });
+
+      // Prefer catalog order, then any extras
+      const order = (hbCatalog.categories || []).map((c) => c.id);
+      Object.keys(counts).forEach((c) => {
+        if (!order.includes(c)) order.push(c);
+      });
+
+      const list = document.getElementById("hbCatList");
+      if (!list) return;
+
+      const bmPosts = hbPostsMatchingSearch(hbBookmarkedPosts(), hbSearch);
+      const bmRow =
+        `<button type="button" class="hb-cat bookmarks" data-cat="${HB_BOOKMARKS_CAT}" role="listitem">` +
+        `<span class="hb-cat-icon" aria-hidden="true">♥</span>` +
+        `<span class="hb-cat-body">` +
+        `<span class="hb-cat-name">Bookmarks</span>` +
+        `<span class="hb-cat-sub">${
+          bmPosts.length ? "your notes and tags" : "save a post to add a note"
+        }</span>` +
+        `</span>` +
+        `<span class="hb-cat-count">${bmPosts.length}</span>` +
+        `<span class="hb-cat-chev" aria-hidden="true">›</span>` +
+        `</button>`;
+
+      if (!filtered.length) {
+        const empty = `<div class="hb-empty">${
+          hbSearch.trim() ? "No posts match that search." : "No analyzed posts yet."
+        }</div>`;
+        list.innerHTML = bmRow + (bmPosts.length && hbSearch.trim() ? "" : empty);
+        return;
+      }
+
+      const rows = order
+        .filter((id) => counts[id])
+        .map((id) => {
+          const n = counts[id];
+          const catInfo = (hbCatalog.categories || []).find((c) => c.id === id);
+          const topTags = ((catInfo && catInfo.tags) || [])
+            .slice(0, 3)
+            .map((t) => t.id)
+            .join(" · ");
+          return (
+            `<button type="button" class="hb-cat" data-cat="${escapeHtml(id)}" role="listitem">` +
+            `<span class="hb-cat-icon" aria-hidden="true">${hbCatIcon(id)}</span>` +
+            `<span class="hb-cat-body">` +
+            `<span class="hb-cat-name">${escapeHtml(hbCatLabel(id))}</span>` +
+            `<span class="hb-cat-sub">${escapeHtml(topTags || n + " post" + (n === 1 ? "" : "s"))}</span>` +
+            `</span>` +
+            `<span class="hb-cat-count">${n}</span>` +
+            `<span class="hb-cat-chev" aria-hidden="true">›</span>` +
+            `</button>`
+          );
+        });
+      list.innerHTML = bmRow + rows.join("");
+    }
+
+    function openHbCategory(catId) {
+      hbCategory = catId;
+      hbTag = null;
+      hbPostId = null;
+      renderHbPosts();
+    }
+
+    function renderHbPosts() {
+      if (!hbCatalog || !hbCategory) {
+        renderHbCategories();
+        return;
+      }
+      hbShowLevel("posts");
+
+      const isBmCat = hbCategory === HB_BOOKMARKS_CAT;
+      let posts = isBmCat
+        ? hbBookmarkedPosts()
+        : (hbCatalog.posts || []).filter(
+            (p) => (p.category || "other") === hbCategory
+          );
+      posts = hbPostsMatchingSearch(posts, hbSearch);
+      if (hbTag) {
+        posts = posts.filter((p) => {
+          if (isBmCat) return ((hbBookmark(p.id) || {}).tags || []).includes(hbTag);
+          return (p.tags || []).includes(hbTag);
+        });
+      }
+
+      const catInfo = (hbCatalog.categories || []).find((c) => c.id === hbCategory);
+      const tagCounts = {};
+      posts.forEach((p) => {
+        const src = isBmCat ? ((hbBookmark(p.id) || {}).tags || []) : (p.tags || []);
+        src.forEach((t) => {
+          tagCounts[t] = (tagCounts[t] || 0) + 1;
+        });
+      });
+      const orderedTags = [];
+      if (!isBmCat && catInfo && catInfo.tags) {
+        catInfo.tags.forEach((t) => {
+          if (tagCounts[t.id]) orderedTags.push(t.id);
+        });
+      }
+      Object.keys(tagCounts)
+        .sort((a, b) => tagCounts[b] - tagCounts[a] || a.localeCompare(b))
+        .forEach((t) => {
+          if (!orderedTags.includes(t)) orderedTags.push(t);
+        });
+
+      const tagsEl = document.getElementById("hbTags");
+      if (tagsEl) {
+        const chips = [
+          `<button type="button" class="hb-tag${hbTag ? "" : " active"}" data-tag="">All</button>`,
+        ];
+        orderedTags.forEach((t) => {
+          chips.push(
+            `<button type="button" class="hb-tag${hbTag === t ? " active" : ""}" data-tag="${escapeHtml(t)}">${escapeHtml(t)} <span style="opacity:.65">${tagCounts[t] || 0}</span></button>`
+          );
+        });
+        tagsEl.innerHTML = chips.join("");
+      }
+
+      const meta = document.getElementById("hbFilterMeta");
+      if (meta) {
+        const parts = [`${posts.length} post${posts.length === 1 ? "" : "s"}`];
+        if (hbTag) parts.push(`tag · ${hbTag}`);
+        if (hbSearch.trim()) parts.push(`search · “${hbSearch.trim()}”`);
+        meta.textContent = parts.join("  ·  ");
+      }
+
+      const grid = document.getElementById("hbPostGrid");
+      if (!grid) return;
+      if (!posts.length) {
+        grid.innerHTML = `<div class="hb-empty" style="grid-column:1/-1">${
+          isBmCat
+            ? "No bookmarks yet. Open a post and tap Bookmark."
+            : "Nothing here yet."
+        }</div>`;
+        return;
+      }
+
+      grid.innerHTML = posts
+        .map((p) => {
+          const mediaInner = p.thumb
+            ? hbIsVideoFile({ name: p.thumb, type: "" }) && !p.has_image
+              ? `<video src="${escapeHtml(hbMediaUrl(p.id, p.thumb))}" muted playsinline preload="metadata"></video>`
+              : `<img src="${escapeHtml(hbMediaUrl(p.id, p.thumb))}" alt="" loading="lazy" decoding="async" />`
+            : `<div class="hb-card-ph">♥</div>`;
+          const badges = [];
+          const bm = hbBookmark(p.id);
+          if (p.has_video) badges.push(`<span class="hb-badge">Video</span>`);
+          if (p.file_count > 1) badges.push(`<span class="hb-badge">${p.file_count}</span>`);
+          const sub = (bm && bm.comment)
+            ? bm.comment
+            : ((bm && bm.tags) || []).slice(0, 2).join(" · ")
+              || (p.tags || []).slice(0, 2).join(" · ")
+              || p.content_type
+              || "";
+          return (
+            `<button type="button" class="hb-card" data-post="${escapeHtml(p.id)}" role="listitem">` +
+            `<div class="hb-card-media">${mediaInner}` +
+            `<span class="hb-card-bm${bm ? " on" : ""}" data-bm="${escapeHtml(p.id)}" role="button" aria-label="${bm ? "Edit bookmark" : "Bookmark"}">♥</span>` +
+            (badges.length
+              ? `<div class="hb-card-badges">${badges.join("")}</div>`
+              : "") +
+            `</div>` +
+            `<div class="hb-card-body">` +
+            `<div class="hb-card-title">${escapeHtml(p.title || p.id)}</div>` +
+            (sub ? `<div class="hb-card-sub">${escapeHtml(sub)}</div>` : "") +
+            `</div></button>`
+          );
+        })
+        .join("");
+    }
+
+    function hbFindPost(id) {
+      if (!hbCatalog || !id) return null;
+      return (hbCatalog.posts || []).find((p) => p.id === id) || null;
+    }
+
+    function openHbPost(postId) {
+      hbPostId = postId;
+      renderHbDetail(postId);
+    }
+
+    function renderHbDetail(postId) {
+      const p = hbFindPost(postId);
+      const root = document.getElementById("hbDetail");
+      if (!root) return;
+      if (!p) {
+        root.innerHTML = `<div class="hb-empty">Post not found.</div>`;
+        hbShowLevel("detail");
+        return;
+      }
+      hbShowLevel("detail");
+
+      const thumbFile = p.thumb
+        ? (p.files || []).find((f) => f.name === p.thumb) || { name: p.thumb, type: "" }
+        : (p.files || [])[0];
+      let hero = `<div class="hb-card-ph" style="min-height:200px">♥</div>`;
+      if (thumbFile) {
+        const url = hbMediaUrl(p.id, thumbFile.name);
+        if (hbIsVideoFile(thumbFile)) {
+          hero = `<video src="${escapeHtml(url)}" muted playsinline preload="metadata" controls></video>`;
+        } else {
+          hero = `<img src="${escapeHtml(url)}" alt="" />`;
+        }
+      }
+
+      const tags = (p.tags || [])
+        .map((t) => `<span class="hb-chip">${escapeHtml(t)}</span>`)
+        .join("");
+      const suggested = (p.suggested_tags || [])
+        .filter((t) => !(p.tags || []).includes(t))
+        .slice(0, 8)
+        .map((t) => `<span class="hb-chip muted">${escapeHtml(t)}</span>`)
+        .join("");
+
+      const metaRows = [];
+      const addRow = (k, v) => {
+        if (v == null || v === "" || (Array.isArray(v) && !v.length)) return;
+        const text = Array.isArray(v) ? v.join(", ") : String(v);
+        metaRows.push(
+          `<div class="hb-meta-row"><div class="hb-meta-k">${escapeHtml(k)}</div>` +
+            `<div class="hb-meta-v">${escapeHtml(text)}</div></div>`
+        );
+      };
+      addRow("Type", p.content_type);
+      addRow("Subjects", p.primary_subjects);
+      addRow("Also", p.secondary_subjects);
+      addRow("Places", p.locations);
+      addRow("People", p.people);
+      addRow("Brands", p.brands);
+      addRow("Objects", p.objects);
+      addRow("Keywords", (p.keywords || []).slice(0, 12));
+      if (p.text_visible && p.text_visible.length) {
+        addRow("Text", p.text_visible.slice(0, 6).join(" · "));
+      }
+      addRow("Files", `${p.file_count || 0}${p.has_video ? " · includes video" : ""}`);
+
+      root.innerHTML =
+        `<div class="hb-detail-hero">${hero}</div>` +
+        `<div class="hb-detail-title">${escapeHtml(p.title || p.id)}</div>` +
+        (p.summary
+          ? `<p class="hb-detail-summary">${escapeHtml(p.summary)}</p>`
+          : "") +
+        (tags || suggested
+          ? `<div class="hb-chip-row">${tags}${suggested}</div>`
+          : "") +
+        `<button type="button" class="hb-bookmark-btn${hbBookmark(p.id) ? " on" : ""}" id="hbBookmarkBtn">${
+          hbBookmark(p.id) ? "♥ Bookmarked" : "♡ Bookmark"
+        }</button>` +
+        hbBookmarkNoteHtml(p.id) +
+        `<button type="button" class="hb-view-media" id="hbViewMediaBtn">View media${
+          p.file_count > 1 ? ` · ${p.file_count}` : ""
+        }</button>` +
+        (metaRows.length
+          ? `<div class="hb-meta-block">${metaRows.join("")}</div>`
+          : "");
+    }
+
+    function openHbMedia(startIndex) {
+      const p = hbFindPost(hbPostId);
+      if (!p || !(p.files || []).length) return;
+      hbMediaIndex = Math.max(0, Math.min(startIndex || 0, p.files.length - 1));
+      hbLevel = "media";
+      const viewer = document.getElementById("hbMediaViewer");
+      if (viewer) viewer.classList.remove("hidden");
+      document.body.style.overflow = "hidden";
+      renderHbMediaSlide();
+      syncHeartHeader();
+    }
+
+    function closeHbMedia() {
+      const viewer = document.getElementById("hbMediaViewer");
+      if (viewer) viewer.classList.add("hidden");
+      const stage = document.getElementById("hbMediaStage");
+      if (stage) stage.innerHTML = "";
+      document.body.style.overflow = "";
+      if (hbLevel === "media") {
+        hbLevel = "detail";
+        syncHeartHeader();
+      }
+    }
+
+    function renderHbMediaSlide() {
+      const p = hbFindPost(hbPostId);
+      const stage = document.getElementById("hbMediaStage");
+      const counter = document.getElementById("hbMediaCounter");
+      const prev = document.getElementById("hbMediaPrev");
+      const next = document.getElementById("hbMediaNext");
+      if (!p || !stage) return;
+      const files = p.files || [];
+      if (!files.length) {
+        stage.innerHTML = `<div class="hb-empty">No media</div>`;
+        return;
+      }
+      hbMediaIndex = Math.max(0, Math.min(hbMediaIndex, files.length - 1));
+      const f = files[hbMediaIndex];
+      const url = hbMediaUrl(p.id, f.name);
+      if (hbIsVideoFile(f)) {
+        stage.innerHTML = `<video src="${escapeHtml(url)}" controls playsinline autoplay></video>`;
+      } else {
+        stage.innerHTML = `<img src="${escapeHtml(url)}" alt="" />`;
+      }
+      if (counter) counter.textContent = `${hbMediaIndex + 1} / ${files.length}`;
+      if (prev) prev.disabled = hbMediaIndex <= 0;
+      if (next) next.disabled = hbMediaIndex >= files.length - 1;
+    }
+
+    function hbMediaStep(delta) {
+      const p = hbFindPost(hbPostId);
+      if (!p) return;
+      const n = (p.files || []).length;
+      if (!n) return;
+      hbMediaIndex = Math.max(0, Math.min(n - 1, hbMediaIndex + delta));
+      renderHbMediaSlide();
+    }
+
+    function bindHeartBrowserHandlers() {
+      if (hbBrowserBound) return;
+      hbBrowserBound = true;
+
+      const search = document.getElementById("hbSearch");
+      if (search) {
+        search.addEventListener("input", () => {
+          if (hbSearchTimer) clearTimeout(hbSearchTimer);
+          hbSearchTimer = window.setTimeout(() => {
+            hbSearch = search.value || "";
+            if (hbLevel === "posts") renderHbPosts();
+            else if (hbLevel === "cats") renderHbCategories();
+          }, 160);
+        });
+      }
+
+      const catList = document.getElementById("hbCatList");
+      if (catList) {
+        catList.addEventListener("click", (e) => {
+          const btn = e.target.closest(".hb-cat");
+          if (!btn) return;
+          const id = btn.getAttribute("data-cat");
+          if (id) openHbCategory(id);
+        });
+      }
+
+      const tags = document.getElementById("hbTags");
+      if (tags) {
+        tags.addEventListener("click", (e) => {
+          const btn = e.target.closest(".hb-tag");
+          if (!btn) return;
+          const t = btn.getAttribute("data-tag");
+          hbTag = t || null;
+          renderHbPosts();
+        });
+      }
+
+      const grid = document.getElementById("hbPostGrid");
+      if (grid) {
+        grid.addEventListener("click", (e) => {
+          const bmEl = e.target.closest(".hb-card-bm");
+          if (bmEl) {
+            e.preventDefault();
+            e.stopPropagation();
+            const id = bmEl.getAttribute("data-bm");
+            if (id) openHbBookmarkSheet(id);
+            return;
+          }
+          const btn = e.target.closest(".hb-card");
+          if (!btn) return;
+          const id = btn.getAttribute("data-post");
+          if (id) openHbPost(id);
+        });
+      }
+
+      const detail = document.getElementById("hbDetail");
+      if (detail) {
+        detail.addEventListener("click", (e) => {
+          if (e.target.closest("#hbBookmarkBtn") || e.target.closest("#hbBmEditBtn")) {
+            openHbBookmarkSheet(hbPostId);
+            return;
+          }
+          if (e.target.closest("#hbViewMediaBtn")) {
+            openHbMedia(0);
+          }
+        });
+      }
+
+      const closeBtn = document.getElementById("hbMediaClose");
+      const prevBtn = document.getElementById("hbMediaPrev");
+      const nextBtn = document.getElementById("hbMediaNext");
+      if (closeBtn) closeBtn.addEventListener("click", closeHbMedia);
+      if (prevBtn) prevBtn.addEventListener("click", () => hbMediaStep(-1));
+      if (nextBtn) nextBtn.addEventListener("click", () => hbMediaStep(1));
+
+      // Swipe on media stage (basic)
+      const stage = document.getElementById("hbMediaStage");
+      if (stage) {
+        let touchX = null;
+        stage.addEventListener(
+          "touchstart",
+          (e) => {
+            if (e.changedTouches && e.changedTouches[0]) {
+              touchX = e.changedTouches[0].clientX;
+            }
+          },
+          { passive: true }
+        );
+        stage.addEventListener(
+          "touchend",
+          (e) => {
+            if (touchX == null || !e.changedTouches || !e.changedTouches[0]) return;
+            const dx = e.changedTouches[0].clientX - touchX;
+            touchX = null;
+            if (Math.abs(dx) < 48) return;
+            if (dx < 0) hbMediaStep(1);
+            else hbMediaStep(-1);
+          },
+          { passive: true }
+        );
+      }
+    }
+
+    function heartGoBack() {
+      const bmOverlay = document.getElementById("hbBmOverlay");
+      if (bmOverlay && !bmOverlay.classList.contains("hidden")) {
+        closeHbBookmarkSheet();
+        return true;
+      }
+      const overlay = document.getElementById("heartPassOverlay");
+      if (overlay && !overlay.classList.contains("hidden")) {
+        closeHeartPasscode();
+        return true;
+      }
+      if (!heartIsOpen()) {
+        window.location.href = "/";
+        return true;
+      }
+      if (hbLevel === "media") {
+        closeHbMedia();
+        return true;
+      }
+      if (hbLevel === "detail") {
+        hbPostId = null;
+        if (hbCategory) renderHbPosts();
+        else renderHbCategories();
+        return true;
+      }
+      if (hbLevel === "posts") {
+        if (hbTag) {
+          hbTag = null;
+          renderHbPosts();
+          return true;
+        }
+        hbCategory = null;
+        renderHbCategories();
+        return true;
+      }
+      window.location.href = "/";
+      return true;
+    }
+
+
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+    }
+
+    document.getElementById("backBtn").addEventListener("click", () => {
+      heartGoBack();
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      const bmOverlay = document.getElementById("hbBmOverlay");
+      if (bmOverlay && !bmOverlay.classList.contains("hidden")) {
+        e.preventDefault();
+        closeHbBookmarkSheet();
+        return;
+      }
+      const pass = document.getElementById("heartPassOverlay");
+      if (pass && !pass.classList.contains("hidden")) {
+        e.preventDefault();
+        closeHeartPasscode();
+        return;
+      }
+      if (hbLevel === "media") {
+        e.preventDefault();
+        closeHbMedia();
+      }
+    });
+
+    enterHeartView();
+
+  </script>
+</body>
+</html>

@@ -28,7 +28,6 @@ import {
   investAssets,
   investPlans,
   investThemeTiers,
-  settings,
 } from "../db/schema.ts";
 import { nowIso, uuidv7 } from "../ids.ts";
 import { slugId } from "../import/cells.ts";
@@ -400,7 +399,7 @@ export function replaceGoals(
 
 export type SeedTargetPatch = {
   savingsTargetPaise?: Paise;
-  efMonths?: number;
+  efTargetPaise?: Paise;
   sipBp?: number;
   dipReserveBp?: number;
   goldInactive?: boolean;
@@ -416,16 +415,17 @@ export function applySeedTargets(db: AppDb, patch: SeedTargetPatch, at = nowIso(
       .where(eq(buckets.id, DEFAULT_BUCKET_IDS.savingsBuffer))
       .run();
   }
-  if (patch.efMonths != null) {
-    if (!Number.isInteger(patch.efMonths) || patch.efMonths < 1) {
-      throw new Error("EF months must be an integer ≥ 1");
+  if (patch.efTargetPaise != null) {
+    if (!isPaise(patch.efTargetPaise) || patch.efTargetPaise < 0) {
+      throw new Error("EF target must be non-negative paise");
     }
-    db.update(settings)
-      .set({ efMonths: patch.efMonths, updatedAt: at })
-      .where(eq(settings.id, 1))
-      .run();
     db.update(buckets)
-      .set({ targetMonths: patch.efMonths, updatedAt: at })
+      .set({
+        targetRule: "fixed",
+        targetAmount: patch.efTargetPaise,
+        targetMonths: null,
+        updatedAt: at,
+      })
       .where(eq(buckets.id, DEFAULT_BUCKET_IDS.emergencyFund))
       .run();
   }

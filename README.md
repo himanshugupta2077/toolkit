@@ -2,15 +2,38 @@
 
 Personal **phone → laptop** tools on your Tailscale network.
 
-Home screen on the phone: audio notes, finance, food, CFA, AI usage, and a few private apps. Each module has its own path (`/finance`, `/food`, `/cfa`, …). Traffic stays on the tailnet. Recordings, ledger writes, and other data stay on this machine under `data/` (gitignored).
+Home screen on the phone: voice notes, finance, food, CFA, AI, and a few private apps. Each module has its own path (`/voice`, `/finance`, `/food`, `/cfa`, `/ai`, …). Traffic stays on the tailnet. Recordings, ledger writes, and other data stay on this machine under `data/` (gitignored).
 
-AI working in this repo: start at **[AGENTS.md](./AGENTS.md)**. Multi-file work goes through project workflows (`/toolkit-task`, `/review-changes`, `/verify-change`).
+AI working in this repo: start at **[AGENTS.md](./AGENTS.md)**. Whole Toolkit on the VPS: **[vps/README.md](./vps/README.md)**.
 
 ---
 
-## Audio notes
+## Voice (`/voice`)
 
-Record speech on your phone (or desktop), upload it over **Tailscale**, convert it on the laptop, run **Faster Whisper** (GPU), and save a transcript you can browse later.
+Record speech on your phone (or desktop), upload it over **Tailscale**, then transcribe **locally** (Faster Whisper on this machine) or in the **cloud** (OpenAI `whisper-1`). Pick Local / Cloud in the notes UI. A VPS host (`TOOLKIT_PROFILE=vps`) is cloud-only.
+
+Pages: `/voice/` recorder · `/voice/notes` list · `/voice/notes/{id}` transcript. After a new recording, Back returns to `/voice/`.
+
+Install it on the phone like Finance: open `/voice/`, then **Add to Home screen**. It has its own name (**Voice**) and mic icon. The Toolkit PWA stays a separate home-screen icon.
+
+---
+
+## AI (`/ai`)
+
+Control plane for every paid AI call in Toolkit (DeepSeek + OpenAI whisper-1). Open `/ai/`, then **Add to Home screen** if you want its own icon.
+
+- Home: all-time spend in **USD** and **INR**, module cards, model mix, recent calls
+- Module pages (Voice, Food, Finance): each use-case with on/off
+- Use-case page: which key, live prompt (editable) + variables, how it works, spend
+- Keys: DeepSeek / OpenAI status (never the secret) and optional USD/INR override
+
+Toggles are stored in `data/ai/config.json`. Usage stays in `data/ai/usage.jsonl`. `/finance` Quick Add can type or speak a money event; DeepSeek returns JSON and the app writes SQLite ledger rows (`source=ai`). Speak reuses Voice STT and saves a note. Receipts still go through `/old-finance`.
+
+---
+
+## CFA (`/cfa`)
+
+Level I readings tracker (93 readings across 4 books). Open `/cfa/`, then **Add to Home screen** — own name (**CFA**) and book icon, scoped like Voice. Progress is page-based; the daily plan uses weekday vs weekend hours and skips excluded days. Revision runs through the day before the exam.
 
 ---
 
@@ -22,37 +45,41 @@ Record speech on your phone (or desktop), upload it over **Tailscale**, convert 
 | Tailscale Serve | HTTPS on your tailnet so the phone can open the app + use the mic |
 | `server.py` | FastAPI: static UI + upload API + ffmpeg convert + Whisper + note storage |
 | `faster-whisper` | Local speech-to-text on the laptop (default: CUDA / RTX 3060) |
+| OpenAI `whisper-1` | Cloud speech-to-text when you pick **Cloud** (or on a VPS) |
 | `data/` | All recordings + transcripts stay on **your machine** |
 
-This is **not** a public cloud service. Traffic stays on your Tailscale network. Audio and notes are files under `data/` on the laptop.
+This is **not** a public product. Phone traffic stays on your Tailscale network. Recordings and notes stay under `data/` on this machine. **Cloud** speech sends that audio to OpenAI (`whisper-1`) using the server-side key.
 
 ---
 
 ## Features
 
 ### Web app
-- **Home** — tiles (🎙 notes · ₹ `/finance` · 🍛 `/food` · 📖 `/cfa` · …)
-- **Audio Notes** — big record / stop button, timer, level meter
+- **Home** — tiles (🎙 `/voice` · ₹ `/finance` · 🤖 `/ai` · 🍛 `/food` · 📖 `/cfa` · ❤️ `/heart` · 🔏 `/pact` · …)
+- **Pact** (`/pact`) — approve or deny Android override requests (1–15 min, once per app per day). Inbox is bound to one iPhone passkey.
+- **Voice** (`/voice`) — big record / stop button, timer, level meter
 - **Update ledger** switch on the recorder — after Whisper, DeepSeek fills **one Ledger row**
 - **Finance mic** (header) — opens recorder with Update ledger already on
 - **Safe recording** — MediaRecorder chunks checkpointed to IndexedDB every second
 - **Upload progress** — XHR progress bar while sending audio to the laptop
-- **Model picker** — `tiny` · `base` · `small` · `medium` · `large-v3`
+- **Local / Cloud** — local Faster Whisper, or OpenAI `whisper-1`. VPS locks Cloud.
+- **Model picker** — local only: `tiny` · `base` · `small` · `medium` · `large-v3`
 - **Translate toggle**
   - **Off (default):** transcribe *what you said* (English / Hindi / Hinglish as spoken)
   - **On:** Whisper `translate` task → English text
-- **Saved Notes** — list, open, play original audio, copy transcript, delete
+- **Saved Notes** — list, open, play original audio, copy transcript, delete. New recordings get a short DeepSeek title when `DEEPSEEK_API_KEY` is set; older notes and missing-key setups still show the transcript snippet.
 - **Re-transcribe** — re-run the same saved audio with a different model / translate mode
 - Preferences remembered in the browser (`localStorage`)
 
 ### Server pipeline
 1. Accept browser audio (usually `.webm` Opus from Chrome)
 2. **Atomic save** of original file under `data/audio/`
-3. **ffmpeg** convert → **16 kHz mono PCM WAV** (Whisper’s preferred input)
-   - Light loudness normalization for quiet phone mics
-4. Run **faster-whisper** (`transcribe` or `translate`)
-5. Save note as JSON + plain `.txt` under `data/notes/`
-6. Return transcript to the web UI
+3. **Speech engine** from the UI (or forced cloud on VPS):
+   - **Local:** ffmpeg → 16 kHz WAV → **faster-whisper**
+   - **Cloud:** send audio to OpenAI `/v1/audio/transcriptions` (`whisper-1`)
+4. Save note as JSON + plain `.txt` under `data/notes/`
+5. If `DEEPSEEK_API_KEY` is set and you did not type a title, DeepSeek names the note from the transcript (missing key → keep the old `Note <time>` title)
+6. Return the note to the web UI
 
 Original browser audio is kept even if transcription fails.
 
@@ -60,11 +87,10 @@ Original browser audio is kept even if transcription fails.
 
 ## AI agent rules
 
-See **[AGENTS.md](./AGENTS.md)** — especially finance sheet updates and project workflows:
+See **[AGENTS.md](./AGENTS.md)** — especially finance sheet updates:
 
 - surgical edits only on `/home/himanshu/Documents/Finance/Finance-Mng-V2.xlsx`
 - no full dashboard rebuild (`build_workbook.py --patch-live`) unless explicitly requested
-- multi-file work: `/toolkit-task`, `/review-changes`, `/verify-change`
 
 ## Project layout
 
@@ -72,9 +98,13 @@ See **[AGENTS.md](./AGENTS.md)** — especially finance sheet updates and projec
 toolkit/
 ├── README.md                 ← this file
 ├── AGENTS.md                 ← AI rules (surgical finance sheet updates, etc.)
-├── .grok/workflows/          ← /toolkit-task, /review-changes, /verify-change
-├── index.html                ← home + notes + old-finance + heart + AI
+├── index.html                ← home + `/voice` + old-finance
+├── ai/                       ← `/ai` spend, prompts, toggles
+├── voice/                    ← Voice PWA (manifest, icons, SW)
 ├── server.py                 ← FastAPI backend (`/finance` proxies the new app)
+├── stt.py                    ← local Faster Whisper vs OpenAI whisper-1
+├── notes_ai.py               ← optional DeepSeek titles for Voice notes
+├── env.sample                ← copy to gitignored `.env`
 ├── app_log.py                ← colored terminal tags + activity JSONL log
 ├── run.sh                    ← start server with whisper venv + env defaults
 ├── finance/
@@ -84,16 +114,34 @@ toolkit/
 │   ├── ai_docs/              ← model reference (sheet + task + examples)
 │   └── (blank template only; live book is under Documents/Finance/)
 ├── food/                     ← `/food`
-├── cfa/                      ← `/cfa`
+├── cfa/                      ← `/cfa/` readings tracker PWA
+├── heart/                    ← `/heart` (media catalog + bookmarks; `media/` and `results.jsonl` gitignored)
 ├── data/
 │   ├── audio/                ← original uploads (.webm/…) + converted (.wav)
 │   ├── notes/                ← {id}.json metadata + {id}.txt plain transcript
 │   ├── finance/entries.jsonl ← phone/AI entry log
+│   ├── ai/usage.jsonl        ← LLM/STT spend log
+│   ├── heart/bookmarks.json  ← Heart post bookmarks (comment + custom tags)
 │   └── logs/activity.jsonl   ← pipeline activity (upload/ffmpeg/whisper/finance…)
 └── whisper/
     ├── transcribe.py         ← standalone CLI (original simple script)
     └── .venv/                ← Python env: faster-whisper, fastapi, openai, etc.
 ```
+
+### API keys
+
+```bash
+cp env.sample .env
+chmod 600 .env
+# fill OPENAI_API_KEY (cloud notes) and DEEPSEEK_API_KEY (finance/food)
+./run.sh
+```
+
+`.env` is gitignored. The browser never receives the keys.
+
+- **OpenAI `whisper-1`:** cloud transcription (`OPENAI_API_KEY`)
+- **DeepSeek:** ledger + food text AI + optional Voice note titles (`DEEPSEEK_API_KEY`)
+- **VPS:** set `TOOLKIT_PROFILE=vps` so Local is disabled
 
 ### Finance AI (DeepSeek)
 

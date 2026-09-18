@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0E0D0B" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Pact" />
+  <title>Pact</title>
+  <style>
+    :root {
+      --bg: #0e0d0b;
+      --card: #1c1a16;
+      --line: #3a352e;
+      --paper: #f4efe6;
+      --muted: #c9c1b4;
+      --rust: #c45c26;
+      --sage: #8fa382;
+      --danger: #c4543a;
+      --safe-t: env(safe-area-inset-top, 0px);
+      --safe-b: env(safe-area-inset-bottom, 0px);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; }
+    body {
+      background:
+        radial-gradient(90% 50% at 50% -8%, rgba(196, 92, 38, 0.16), transparent 52%),
+        var(--bg);
+      color: var(--paper);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+    .app {
+      max-width: 480px;
+      margin: 0 auto;
+      min-height: 100dvh;
+      padding: 0 16px calc(24px + var(--safe-b));
+    }
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 8;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: calc(10px + var(--safe-t)) 0 12px;
+      background: rgba(14, 13, 11, 0.92);
+      backdrop-filter: blur(10px);
+    }
+    .back {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--card);
+      color: var(--paper);
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font: inherit;
+      font-size: 1.15rem;
+      text-decoration: none;
+    }
+    .back:active { transform: scale(0.96); }
+    .wordmark {
+      font-size: 0.78rem;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    .spacer { width: 40px; height: 40px; }
+    h1 {
+      font-family: Palatino, "Iowan Old Style", Georgia, serif;
+      font-size: 1.8rem;
+      font-weight: 400;
+      margin: 8px 0 6px;
+    }
+    .lede {
+      color: var(--muted);
+      font-size: 0.95rem;
+      line-height: 1.45;
+      margin-bottom: 22px;
+    }
+    .kicker {
+      font-size: 0.72rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin: 8px 0 10px;
+    }
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 16px;
+      padding: 22px 16px;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.45;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .app-name {
+      font-size: 1.25rem;
+      font-family: Palatino, "Iowan Old Style", Georgia, serif;
+    }
+    .meta {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-top: 4px;
+    }
+    .kind {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .comment {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 12px;
+      background: rgba(244, 239, 230, 0.06);
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+    .time {
+      margin-top: 14px;
+    }
+    .time-label {
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .chip {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-size: 0.85rem;
+      font-weight: 650;
+    }
+    .chip.on {
+      background: var(--rust);
+      border-color: var(--rust);
+      color: var(--paper);
+    }
+    .custom {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .custom input {
+      width: 88px;
+      min-height: 42px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: var(--bg);
+      color: var(--paper);
+      font: inherit;
+      padding: 0 12px;
+    }
+    .custom span { color: var(--muted); font-size: 0.9rem; }
+    .actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    button {
+      appearance: none;
+      font: inherit;
+      border: 0;
+      cursor: pointer;
+    }
+    .btn {
+      flex: 1;
+      min-height: 48px;
+      border-radius: 14px;
+      font-weight: 650;
+      font-size: 0.95rem;
+    }
+    .btn:active { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.55; }
+    .approve { background: var(--rust); color: var(--paper); }
+    .deny {
+      background: transparent;
+      color: var(--paper);
+      border: 1px solid var(--line);
+    }
+    .pill {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 0.75rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    .pill.ok { color: var(--sage); }
+    .pill.no { color: var(--danger); }
+    .err {
+      color: var(--danger);
+      font-size: 0.9rem;
+      margin: 0 0 12px;
+    }
+    .history .comment { font-size: 0.92rem; color: var(--muted); }
+    #gate .btn { width: 100%; margin-top: 12px; }
+    #inbox[hidden], #gate[hidden] { display: none; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <a class="back" href="/" aria-label="Back">‹</a>
+      <div class="wordmark">Pact</div>
+      <div class="spacer"></div>
+    </header>
+    <div id="error" class="err" hidden></div>
+    <div id="gate" hidden>
+      <h1 id="gateTitle">Pact</h1>
+      <p class="lede" id="gateLede"></p>
+      <button class="btn approve" id="gateBtn" type="button" hidden>Continue</button>
+    </div>
+    <div id="inbox" hidden>
+      <h1>Override inbox</h1>
+      <p class="lede">Approve an app, a group, or a settings change. You pick how long it lasts.</p>
+      <div class="kicker">Pending</div>
+      <div id="pending"></div>
+      <div class="kicker">Today</div>
+      <div id="recent" class="history"></div>
+    </div>
+  </div>
+  <script>
+    const pendingEl = document.getElementById("pending");
+    const recentEl = document.getElementById("recent");
+    const errorEl = document.getElementById("error");
+    const gateEl = document.getElementById("gate");
+    const inboxEl = document.getElementById("inbox");
+    const gateTitle = document.getElementById("gateTitle");
+    const gateLede = document.getElementById("gateLede");
+    const gateBtn = document.getElementById("gateBtn");
+    const CHIPS = [1, 5, 10, 15, 30, 60];
+    let maxApprove = 240;
+    let busy = new Set();
+    let pollTimer = null;
+    let gateMode = "";
+    let cachedOptions = null;
+
+    function apiMessage(data) {
+      if (!data) return "Could not update.";
+      if (typeof data.message === "string" && data.message) return data.message;
+      const d = data.detail;
+      if (typeof d === "string" && d) return d;
+      if (d && typeof d.message === "string" && d.message) return d.message;
+      return "Could not update.";
+    }
+
+    function esc(s) {
+      return String(s ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function when(ms) {
+      const n = Number(ms);
+      if (!n) return "";
+      const d = new Date(n);
+      return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+
+    function kindLabel(kind) {
+      if (kind === "group") return "Group";
+      if (kind === "settings") return "Settings";
+      return "App";
+    }
+
+    function chipsHtml(selected) {
+      return CHIPS.map((n) =>
+        `<button type="button" class="chip${n === selected ? " on" : ""}" data-chip="${n}">${n}m</button>`
+      ).join("");
+    }
+
+    function renderPending(rows) {
+      if (!rows.length) {
+        pendingEl.innerHTML = `<div class="empty">No pending requests.</div>`;
+        return;
+      }
+      pendingEl.innerHTML = rows.map((r) => {
+        const asked = Number(r.requested_minutes || r.minutes) || 5;
+        return `
+        <article class="card" data-id="${esc(r.id)}">
+          <div class="app-name">${esc(r.app_label || r.package_name)}</div>
+          <div class="kind">${esc(kindLabel(r.kind))}</div>
+          <div class="meta">Asked for ${esc(asked)} min · ${esc(when(r.created_at_ms))}</div>
+          <div class="comment">${esc(r.comment)}</div>
+          <div class="time">
+            <div class="time-label">Grant</div>
+            <div class="chips">${chipsHtml(asked)}</div>
+            <div class="custom">
+              <input data-min type="number" min="1" max="${maxApprove}" value="${esc(asked)}" />
+              <span>min (up to ${maxApprove})</span>
+            </div>
+          </div>
+          <div class="actions">
+            <button class="btn approve" data-act="approve">Approve</button>
+            <button class="btn deny" data-act="deny">Deny</button>
+          </div>
+        </article>
+      `;
+      }).join("");
+    }
+
+    function statusLabel(r) {
+      if (r.status === "approved" && r.live) return ["ok", `Approved · live ${r.minutes} min`];
+      if (r.status === "approved") return ["ok", "Approved · expired"];
+      if (r.status === "denied") return ["no", "Denied"];
+      if (r.status === "expired") return ["no", "Expired"];
+      return ["", r.status];
+    }
+
+    function renderRecent(rows) {
+      const today = rows.filter((r) => true).slice(0, 20);
+      if (!today.length) {
+        recentEl.innerHTML = `<div class="empty">Nothing decided yet today.</div>`;
+        return;
+      }
+      recentEl.innerHTML = today.map((r) => {
+        const [cls, label] = statusLabel(r);
+        const asked = Number(r.requested_minutes || r.minutes) || 0;
+        const granted = Number(r.minutes) || 0;
+        const extra = r.status === "approved" && asked && granted !== asked
+          ? ` · asked ${asked}m`
+          : "";
+        return `
+          <article class="card">
+            <div class="app-name">${esc(r.app_label || r.package_name)}</div>
+            <div class="kind">${esc(kindLabel(r.kind))}</div>
+            <div class="meta">${esc(granted)} min${esc(extra)} · ${esc(when(r.decided_at_ms || r.created_at_ms))}</div>
+            <div class="comment">${esc(r.comment)}</div>
+            <div class="pill ${cls}">${esc(label)}</div>
+          </article>
+        `;
+      }).join("");
+    }
+
+    function b64urlToBuf(s) {
+      const pad = "=".repeat((4 - (s.length % 4)) % 4);
+      const b = atob(String(s).replaceAll("-", "+").replaceAll("_", "/"));
+      const out = new Uint8Array(b.length);
+      for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i);
+      return out.buffer;
+    }
+
+    function bufToB64url(buf) {
+      const bytes = new Uint8Array(buf);
+      let s = "";
+      bytes.forEach((n) => { s += String.fromCharCode(n); });
+      return btoa(s).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
+    }
+
+    function parseCreation(options) {
+      if (typeof PublicKeyCredential.parseCreationOptionsFromJSON === "function") {
+        return PublicKeyCredential.parseCreationOptionsFromJSON(options);
+      }
+      return {
+        ...options,
+        challenge: b64urlToBuf(options.challenge),
+        user: { ...options.user, id: b64urlToBuf(options.user.id) },
+      };
+    }
+
+    function parseRequest(options) {
+      if (typeof PublicKeyCredential.parseRequestOptionsFromJSON === "function") {
+        return PublicKeyCredential.parseRequestOptionsFromJSON(options);
+      }
+      return {
+        ...options,
+        challenge: b64urlToBuf(options.challenge),
+        allowCredentials: (options.allowCredentials || []).map((c) => ({
+          ...c,
+          id: b64urlToBuf(c.id),
+        })),
+      };
+    }
+
+    async function credToJSON(cred) {
+      if (cred && typeof cred.toJSON === "function") return cred.toJSON();
+      const resp = cred.response;
+      const out = {
+        id: cred.id,
+        rawId: bufToB64url(cred.rawId),
+        type: cred.type,
+        response: {
+          clientDataJSON: bufToB64url(resp.clientDataJSON),
+        },
+        clientExtensionResults: cred.getClientExtensionResults
+          ? cred.getClientExtensionResults()
+          : {},
+      };
+      if (resp.attestationObject) out.response.attestationObject = bufToB64url(resp.attestationObject);
+      if (resp.authenticatorData) out.response.authenticatorData = bufToB64url(resp.authenticatorData);
+      if (resp.signature) out.response.signature = bufToB64url(resp.signature);
+      if (resp.userHandle) out.response.userHandle = bufToB64url(resp.userHandle);
+      if (resp.getTransports) out.response.transports = resp.getTransports();
+      return out;
+    }
+
+    function isIPhone() {
+      return /iPhone|iPod/i.test(navigator.userAgent || "");
+    }
+
+    function canWebAuthn() {
+      return !!(window.PublicKeyCredential && navigator.credentials);
+    }
+
+    function showError(msg) {
+      errorEl.hidden = false;
+      errorEl.textContent = msg || "Something went wrong.";
+    }
+
+    function clearError() {
+      errorEl.hidden = true;
+      errorEl.textContent = "";
+    }
+
+    function stopPoll() {
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    function startPoll() {
+      if (pollTimer) return;
+      pollTimer = setInterval(load, 3000);
+    }
+
+    function showGate(mode, title, lede, btnLabel) {
+      stopPoll();
+      inboxEl.hidden = true;
+      gateEl.hidden = false;
+      gateMode = mode;
+      gateTitle.textContent = title;
+      gateLede.textContent = lede;
+      if (btnLabel) {
+        gateBtn.hidden = false;
+        gateBtn.disabled = false;
+        gateBtn.textContent = btnLabel;
+      } else {
+        gateBtn.hidden = true;
+      }
+    }
+
+    function showInbox() {
+      gateEl.hidden = true;
+      inboxEl.hidden = false;
+      gateMode = "inbox";
+      startPoll();
+    }
+
+    async function fetchJSON(url, opts) {
+      const res = await fetch(url, { cache: "no-store", ...opts });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(apiMessage(data));
+      return data;
+    }
+
+    async function prefetch() {
+      cachedOptions = null;
+      if (!canWebAuthn() || gateBtn.hidden) return;
+      try {
+        const path = gateMode === "bind"
+          ? "/api/pact/auth/register/options"
+          : "/api/pact/auth/assert/options";
+        cachedOptions = await fetchJSON(path, { method: "POST" });
+      } catch {
+        cachedOptions = null;
+      }
+    }
+
+    async function boot() {
+      try {
+        const st = await fetchJSON("/api/pact/auth");
+        clearError();
+        if (st.unlocked) {
+          showInbox();
+          await load();
+          return;
+        }
+        if (!st.bound) {
+          if (!isIPhone()) {
+            showGate(
+              "wait",
+              "Bind her iPhone",
+              "This inbox has no reviewer yet. Open this page in Safari on her iPhone, then tap Bind. After that, only that passkey can open it — including iCloud copies on her other Apple devices.",
+              "",
+            );
+            return;
+          }
+          if (!canWebAuthn()) {
+            showGate(
+              "wait",
+              "Need Safari",
+              "Passkeys need Safari on this iPhone. Open this page there to bind.",
+              "",
+            );
+            return;
+          }
+          showGate(
+            "bind",
+            "Bind this iPhone",
+            "Do this once, on her phone. Face ID creates a passkey. After that, nobody else on the tailnet — including this laptop — can open the inbox.",
+            "Bind with Face ID",
+          );
+          prefetch();
+          return;
+        }
+        if (!canWebAuthn()) {
+          showGate(
+            "wait",
+            "Locked",
+            "This inbox is bound to one iPhone. Unlock it in Safari on that phone.",
+            "",
+          );
+          return;
+        }
+        showGate(
+          "unlock",
+          "Locked",
+          "This inbox is bound to one iPhone. Unlock with Face ID.",
+          "Unlock",
+        );
+        prefetch();
+      } catch (err) {
+        showError(err.message || "Could not reach Pact.");
+      }
+    }
+
+    async function load() {
+      try {
+        const res = await fetch("/api/pact", { cache: "no-store" });
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          await boot();
+          return;
+        }
+        if (!res.ok) throw new Error(apiMessage(data));
+        clearError();
+        if (Number(data.max_approve_minutes) > 0) maxApprove = Number(data.max_approve_minutes);
+        renderPending(data.pending || []);
+        renderRecent(data.recent || []);
+      } catch (err) {
+        showError(err.message || "Could not reach Pact.");
+      }
+    }
+
+    gateBtn.addEventListener("click", async () => {
+      if (gateBtn.disabled) return;
+      if (!canWebAuthn()) {
+        showError("This browser cannot use a passkey.");
+        return;
+      }
+      gateBtn.disabled = true;
+      clearError();
+      const bind = gateMode === "bind";
+      try {
+        let options = cachedOptions;
+        cachedOptions = null;
+        if (!options) {
+          const path = bind
+            ? "/api/pact/auth/register/options"
+            : "/api/pact/auth/assert/options";
+          options = await fetchJSON(path, { method: "POST" });
+        }
+        const cred = bind
+          ? await navigator.credentials.create({ publicKey: parseCreation(options) })
+          : await navigator.credentials.get({ publicKey: parseRequest(options) });
+        if (!cred) throw new Error("Cancelled.");
+        const path = bind ? "/api/pact/auth/register" : "/api/pact/auth/assert";
+        await fetchJSON(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(await credToJSON(cred)),
+        });
+        showInbox();
+        await load();
+      } catch (err) {
+        const name = err && err.name;
+        if (name === "NotAllowedError") showError("Cancelled.");
+        else showError(err.message || "Could not continue.");
+        gateBtn.disabled = false;
+        prefetch();
+      }
+    });
+
+    pendingEl.addEventListener("click", async (ev) => {
+      const chip = ev.target.closest("[data-chip]");
+      if (chip) {
+        const card = chip.closest("[data-id]");
+        const input = card && card.querySelector("input[data-min]");
+        const n = Number(chip.getAttribute("data-chip"));
+        if (input && Number.isFinite(n)) {
+          input.value = String(n);
+          card.querySelectorAll("[data-chip]").forEach((el) => {
+            el.classList.toggle("on", Number(el.getAttribute("data-chip")) === n);
+          });
+        }
+        return;
+      }
+      const btn = ev.target.closest("button[data-act]");
+      if (!btn) return;
+      const card = btn.closest("[data-id]");
+      const id = card && card.getAttribute("data-id");
+      const act = btn.getAttribute("data-act");
+      if (!id || busy.has(id)) return;
+      const input = card.querySelector("input[data-min]");
+      const minutes = Math.max(1, Math.min(maxApprove, Number(input && input.value) || 0));
+      busy.add(id);
+      card.querySelectorAll("button").forEach((b) => { b.disabled = true; });
+      try {
+        const opts = { method: "POST" };
+        if (act === "approve") {
+          opts.headers = { "Content-Type": "application/json" };
+          opts.body = JSON.stringify({ minutes });
+        }
+        const res = await fetch(`/api/pact/requests/${encodeURIComponent(id)}/${act}`, opts);
+        const data = await res.json().catch(() => ({}));
+        if (res.status === 401) {
+          await boot();
+          return;
+        }
+        if (!res.ok) {
+          throw new Error(apiMessage(data));
+        }
+        await load();
+      } catch (err) {
+        errorEl.hidden = false;
+        errorEl.textContent = err.message || "Could not update.";
+        card.querySelectorAll("button").forEach((b) => { b.disabled = false; });
+      } finally {
+        busy.delete(id);
+      }
+    });
+
+    pendingEl.addEventListener("input", (ev) => {
+      const input = ev.target.closest("input[data-min]");
+      if (!input) return;
+      const card = input.closest("[data-id]");
+      const n = Number(input.value);
+      card.querySelectorAll("[data-chip]").forEach((el) => {
+        el.classList.toggle("on", Number(el.getAttribute("data-chip")) === n);
+      });
+    });
+
+    boot();
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        if (gateMode === "inbox") load();
+        else boot();
+      }
+    });
+  </script>
+</body>
+</html>

@@ -41,17 +41,17 @@ export function BottomSheet({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={`absolute inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[1.75rem] border-t border-line bg-sheet shadow-[0_-12px_40px_rgba(0,0,0,0.25)] ${
-          tall ? "h-[min(92dvh,760px)]" : "max-h-[min(92dvh,760px)]"
+        className={`sheet-frame absolute inset-x-0 bottom-0 z-50 flex flex-col rounded-t-[1.75rem] border-t border-line bg-sheet shadow-[0_-12px_40px_rgba(0,0,0,0.25)] ${
+          tall ? "sheet-tall h-[min(92dvh,760px)]" : "max-h-[min(92dvh,760px)]"
         }`}
       >
         <div className="shrink-0 px-5 pt-2.5">
-          <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-line-strong" />
+          <div className="sheet-handle mx-auto mb-3 h-1.5 w-10 rounded-full bg-line-strong" />
           <div className="mb-3 flex items-center justify-between gap-3">
             <h2 id={titleId} className="text-lg font-semibold tracking-tight text-ink">
               {title}
             </h2>
-            <button type="button" onClick={onClose} className="btn-quiet -mr-3">
+            <button type="button" onClick={onClose} className="btn-close -mr-3">
               Close
             </button>
           </div>

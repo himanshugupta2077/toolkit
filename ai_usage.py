@@ -20,12 +20,13 @@ from __future__ import annotations
 import json
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent
-DATA_DIR = ROOT / "data" / "ai"
+from paths import data_root
+
+DATA_DIR = data_root() / "ai"
 USAGE_PATH = DATA_DIR / "usage.jsonl"
 
 _lock = threading.Lock()
@@ -51,6 +52,12 @@ PRICING_USD_PER_M: dict[str, dict[str, float]] = {
 
 # Fallback if model id is unknown / alias
 DEFAULT_PRICING = PRICING_USD_PER_M["deepseek-v4-flash"]
+
+# OpenAI whisper-1 is billed per audio minute, not tokens.
+# https://developers.openai.com/api/docs/models/whisper-1
+WHISPER_USD_PER_MINUTE: dict[str, float] = {
+    "whisper-1": 0.006,
+}
 
 # Keep enough precision for sub-cent DeepSeek costs without float noise.
 _COST_DECIMALS = 10
@@ -129,12 +136,28 @@ def estimate_cost_usd(
     completion_tokens: int | None = None,
     cache_hit_tokens: int | None = None,
     cache_miss_tokens: int | None = None,
+    duration_sec: float | None = None,
 ) -> float | None:
     """
-    Estimate USD cost from token counts (DeepSeek billing rules).
+    Estimate USD cost from token counts (DeepSeek) or audio minutes (whisper-1).
 
-    None if there is no billable token data.
+    None if there is no billable token/duration data.
     """
+    mid = (model or "").strip().lower()
+    if mid in WHISPER_USD_PER_MINUTE:
+        if duration_sec is None:
+            return None
+        try:
+            seconds = float(duration_sec)
+        except (TypeError, ValueError):
+            return None
+        if seconds <= 0:
+            return None
+        return round(
+            (seconds / 60.0) * WHISPER_USD_PER_MINUTE[mid],
+            _COST_DECIMALS,
+        )
+
     ct = int(completion_tokens or 0)
     pt, hit, miss = _resolve_hit_miss(
         prompt_tokens=prompt_tokens,
@@ -244,6 +267,7 @@ def log_call(
     extra: dict[str, Any] | None = None,
     ts: str | None = None,
     call_id: str | None = None,
+    duration_sec: float | None = None,
 ) -> dict[str, Any]:
     """
     Append one AI API call to the usage log. Returns the stored record.
@@ -277,6 +301,7 @@ def log_call(
         completion_tokens=completion_tokens,
         cache_hit_tokens=cache_hit_tokens,
         cache_miss_tokens=cache_miss_tokens,
+        duration_sec=duration_sec,
     )
     record: dict[str, Any] = {
         "id": (call_id or uuid.uuid4().hex[:12]),
@@ -291,6 +316,7 @@ def log_call(
         "cache_hit_tokens": cache_hit_tokens,
         "cache_miss_tokens": cache_miss_tokens,
         "total_tokens": total_tokens,
+        "duration_sec": duration_sec,
         "cost_usd": cost,
         "latency_sec": latency_sec,
         "error": (str(error)[:300] if error else None),
@@ -389,6 +415,7 @@ def _cost_for_row(r: dict[str, Any]) -> float | None:
         completion_tokens=r.get("completion_tokens"),
         cache_hit_tokens=r.get("cache_hit_tokens"),
         cache_miss_tokens=r.get("cache_miss_tokens"),
+        duration_sec=r.get("duration_sec"),
     )
     if recomputed is not None:
         return recomputed
@@ -398,77 +425,118 @@ def _cost_for_row(r: dict[str, Any]) -> float | None:
     return None
 
 
+def _canonical_module(module: str | None) -> str:
+    raw = (module or "unknown").strip() or "unknown"
+    if raw == "notes":
+        return "voice"
+    return raw
+
+
+def _new_spend_bucket(**extra: Any) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "calls": 0,
+        "ok_calls": 0,
+        "cost_usd": 0.0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "cache_hit_tokens": 0,
+        "cache_miss_tokens": 0,
+    }
+    out.update(extra)
+    return out
+
+
+def _add_to_bucket(bucket: dict[str, Any], *, cost: float | None, ok: bool, pt: Any, ct: Any, hit: Any, miss: Any) -> None:
+    bucket["calls"] += 1
+    if ok:
+        bucket["ok_calls"] += 1
+    if cost is not None:
+        bucket["cost_usd"] = round(float(bucket["cost_usd"]) + float(cost), 8)
+    if isinstance(pt, int):
+        bucket["prompt_tokens"] += pt
+    if isinstance(ct, int):
+        bucket["completion_tokens"] += ct
+    if isinstance(hit, int):
+        bucket["cache_hit_tokens"] += hit
+    if isinstance(miss, int):
+        bucket["cache_miss_tokens"] += miss
+    elif isinstance(pt, int) and isinstance(hit, int):
+        bucket["cache_miss_tokens"] += max(0, pt - hit)
+
+
+def _finish_buckets(groups: dict[Any, dict[str, Any]]) -> None:
+    for b in groups.values():
+        b["cost_usd"] = round(float(b["cost_usd"]), _COST_DECIMALS)
+
+
 def usage_summary(*, limit: int = 100) -> dict[str, Any]:
     """Payload for GET /api/ai/usage — totals over all time, recent list capped."""
     all_rows = _read_all()
-    total_cost = 0.0
-    total_prompt = 0
-    total_completion = 0
-    total_cache_hit = 0
-    total_cache_miss = 0
-    total_calls = 0
-    ok_calls = 0
+    totals = _new_spend_bucket()
+    this_month = _new_spend_bucket()
     by_module: dict[str, dict[str, Any]] = {}
+    by_action: dict[tuple[str, str], dict[str, Any]] = {}
+    by_model: dict[str, dict[str, Any]] = {}
+    by_provider: dict[str, dict[str, Any]] = {}
 
-    # Enrich each row with live cost (for UI) without rewriting the log file.
+    now = datetime.now(timezone.utc)
+    month_prefix = now.strftime("%Y-%m")
+    day_ids = [(now.date() - timedelta(days=i)).isoformat() for i in range(13, -1, -1)]
+    by_day: dict[str, dict[str, Any]] = {
+        d: _new_spend_bucket(day=d) for d in day_ids
+    }
+
     enriched: list[dict[str, Any]] = []
     for r in all_rows:
-        total_calls += 1
-        if r.get("ok"):
-            ok_calls += 1
         c = _cost_for_row(r)
-        if c is not None:
-            total_cost += float(c)
+        ok = bool(r.get("ok"))
         pt = r.get("prompt_tokens")
         ct = r.get("completion_tokens")
         hit = r.get("cache_hit_tokens")
         miss = r.get("cache_miss_tokens")
-        if isinstance(pt, int):
-            total_prompt += pt
-        if isinstance(ct, int):
-            total_completion += ct
-        if isinstance(hit, int):
-            total_cache_hit += hit
-        if isinstance(miss, int):
-            total_cache_miss += miss
-        elif isinstance(pt, int) and isinstance(hit, int):
-            total_cache_miss += max(0, pt - hit)
+        kwargs = dict(cost=c, ok=ok, pt=pt, ct=ct, hit=hit, miss=miss)
 
-        mod = str(r.get("module") or "unknown")
-        bucket = by_module.setdefault(
-            mod,
-            {
-                "module": mod,
-                "calls": 0,
-                "cost_usd": 0.0,
-                "prompt_tokens": 0,
-                "completion_tokens": 0,
-                "cache_hit_tokens": 0,
-                "cache_miss_tokens": 0,
-            },
+        _add_to_bucket(totals, **kwargs)
+
+        ts = str(r.get("ts") or "")
+        if ts.startswith(month_prefix):
+            _add_to_bucket(this_month, **kwargs)
+        day = ts[:10]
+        if day in by_day:
+            _add_to_bucket(by_day[day], **kwargs)
+
+        mod = _canonical_module(str(r.get("module") or "unknown"))
+        act = str(r.get("action") or "API call").strip() or "API call"
+        model = str(r.get("model") or "unknown").strip() or "unknown"
+        provider = str(r.get("provider") or "unknown").strip() or "unknown"
+
+        _add_to_bucket(
+            by_module.setdefault(mod, _new_spend_bucket(module=mod)), **kwargs
         )
-        bucket["calls"] += 1
-        if c is not None:
-            bucket["cost_usd"] = round(bucket["cost_usd"] + float(c), 8)
-        if isinstance(pt, int):
-            bucket["prompt_tokens"] += pt
-        if isinstance(ct, int):
-            bucket["completion_tokens"] += ct
-        if isinstance(hit, int):
-            bucket["cache_hit_tokens"] += hit
-        if isinstance(miss, int):
-            bucket["cache_miss_tokens"] += miss
-        elif isinstance(pt, int) and isinstance(hit, int):
-            bucket["cache_miss_tokens"] += max(0, pt - hit)
+        _add_to_bucket(
+            by_action.setdefault((mod, act), _new_spend_bucket(module=mod, action=act)),
+            **kwargs,
+        )
+        _add_to_bucket(
+            by_model.setdefault(model, _new_spend_bucket(model=model)), **kwargs
+        )
+        _add_to_bucket(
+            by_provider.setdefault(provider, _new_spend_bucket(provider=provider)),
+            **kwargs,
+        )
 
         row = dict(r)
         if c is not None:
-            # Match estimate_cost_usd precision (DeepSeek micro-costs).
             row["cost_usd"] = round(float(c), _COST_DECIMALS)
         enriched.append(row)
 
-    for b in by_module.values():
-        b["cost_usd"] = round(float(b["cost_usd"]), _COST_DECIMALS)
+    _finish_buckets(by_module)
+    _finish_buckets(by_action)
+    _finish_buckets(by_model)
+    _finish_buckets(by_provider)
+    _finish_buckets(by_day)
+    totals["cost_usd"] = round(float(totals["cost_usd"]), _COST_DECIMALS)
+    this_month["cost_usd"] = round(float(this_month["cost_usd"]), _COST_DECIMALS)
 
     lim = max(1, min(int(limit or 100), 500))
     recent = list(reversed(enriched))[:lim]
@@ -476,18 +544,14 @@ def usage_summary(*, limit: int = 100) -> dict[str, Any]:
     return {
         "ok": True,
         "path": str(USAGE_PATH),
-        "totals": {
-            "calls": total_calls,
-            "ok_calls": ok_calls,
-            "cost_usd": round(total_cost, _COST_DECIMALS),
-            "prompt_tokens": total_prompt,
-            "completion_tokens": total_completion,
-            "cache_hit_tokens": total_cache_hit,
-            "cache_miss_tokens": total_cache_miss,
-        },
+        "totals": totals,
+        "this_month": this_month,
         "by_module": sorted(by_module.values(), key=lambda x: -x["cost_usd"]),
-        "pricing": {
-            m: dict(rates) for m, rates in PRICING_USD_PER_M.items()
-        },
+        "by_action": sorted(by_action.values(), key=lambda x: -x["cost_usd"]),
+        "by_model": sorted(by_model.values(), key=lambda x: -x["cost_usd"]),
+        "by_provider": sorted(by_provider.values(), key=lambda x: -x["cost_usd"]),
+        "by_day": [by_day[d] for d in day_ids],
+        "pricing": {m: dict(rates) for m, rates in PRICING_USD_PER_M.items()},
+        "whisper_pricing": dict(WHISPER_USD_PER_MINUTE),
         "calls": recent,
     }

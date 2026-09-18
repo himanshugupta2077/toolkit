@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import { getWealth, putBuckets, type WealthBucketCard } from "../api/store.ts";
 import {
+  DEFAULT_BUCKET_IDS,
   FILL_MODES,
   runWaterfall,
   TARGET_RULES,
@@ -123,59 +124,48 @@ function BucketFields({
         <span className="text-sm text-ink">Active</span>
       </label>
 
-      <label className="mt-3 block">
-        <FieldLabel>Target rule</FieldLabel>
-        <select
-          value={bucket.targetRule}
-          onChange={(e) => {
-            const targetRule = e.target.value as TargetRule;
-            onChange({
-              targetRule,
-              targetAmount: targetRule === "fixed" ? bucket.targetAmount : null,
-              targetMonths: targetRule === "months_of_essentials" ? bucket.targetMonths : null,
-            });
-          }}
-          className={selectClass()}
-        >
-          {TARGET_RULES.map((rule) => (
-            <option key={rule} value={rule}>
-              {TARGET_RULE_LABELS[rule]}
-            </option>
-          ))}
-        </select>
-      </label>
+      {bucket.id === DEFAULT_BUCKET_IDS.emergencyFund ? (
+        <Link to="/emergency" className="btn-ghost mt-3 -ml-3">
+          Edit target on Emergency Fund
+        </Link>
+      ) : (
+        <>
+          <label className="mt-3 block">
+            <FieldLabel>Target rule</FieldLabel>
+            <select
+              value={bucket.targetRule}
+              onChange={(e) => {
+                const targetRule = e.target.value as TargetRule;
+                onChange({
+                  targetRule,
+                  targetAmount: targetRule === "fixed" ? bucket.targetAmount : null,
+                  targetMonths: null,
+                });
+              }}
+              className={selectClass()}
+            >
+              {TARGET_RULES.filter((rule) => rule !== "months_of_essentials").map((rule) => (
+                <option key={rule} value={rule}>
+                  {TARGET_RULE_LABELS[rule]}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      {bucket.targetRule === "fixed" ? (
-        <label className="mt-3 block">
-          <FieldLabel>Target ₹</FieldLabel>
-          <input
-            inputMode="decimal"
-            value={rupeesInput(bucket.targetAmount)}
-            onChange={(e) => onChange({ targetAmount: parseRupeesInput(e.target.value) })}
-            className="field mt-1 tabular-nums"
-            aria-label={`${bucket.name} target rupees`}
-          />
-        </label>
-      ) : null}
-
-      {bucket.targetRule === "months_of_essentials" ? (
-        <label className="mt-3 block">
-          <FieldLabel>Months</FieldLabel>
-          <input
-            inputMode="numeric"
-            value={bucket.targetMonths ?? ""}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              onChange({
-                targetMonths:
-                  e.target.value === "" || !Number.isInteger(n) || n < 1 ? null : n,
-              });
-            }}
-            className="field mt-1 tabular-nums"
-            aria-label={`${bucket.name} target months`}
-          />
-        </label>
-      ) : null}
+          {bucket.targetRule === "fixed" ? (
+            <label className="mt-3 block">
+              <FieldLabel>Target ₹</FieldLabel>
+              <input
+                inputMode="decimal"
+                value={rupeesInput(bucket.targetAmount)}
+                onChange={(e) => onChange({ targetAmount: parseRupeesInput(e.target.value) })}
+                className="field mt-1 tabular-nums"
+                aria-label={`${bucket.name} target rupees`}
+              />
+            </label>
+          ) : null}
+        </>
+      )}
 
       <label className="mt-3 block">
         <FieldLabel>Fill mode</FieldLabel>
@@ -332,7 +322,7 @@ export function BucketEditorScreen() {
   }
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page">
       <div className="flex items-center gap-2">
         <Link
           to="/wealth"
@@ -341,7 +331,7 @@ export function BucketEditorScreen() {
           ← Wealth
         </Link>
       </div>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">Bucket rules</h1>
+      <h1 className="page-title mt-2">Bucket rules</h1>
       <p className="mt-1 text-sm text-muted">
         Changing a target does not post a ledger row. Confirm transfers on Allocate.
       </p>

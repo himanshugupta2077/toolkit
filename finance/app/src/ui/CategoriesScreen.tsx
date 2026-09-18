@@ -89,12 +89,12 @@ export function CategoriesScreen() {
   }
 
   return (
-    <section className="px-5 pb-8">
-      <Link to="/more" className="btn-ghost">
+    <section className="page">
+      <Link to="/more" className="back-link btn-ghost">
         ← More
       </Link>
       <div className="mt-2 flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Categories</h1>
+        <h1 className="page-title">Categories</h1>
         <button
           type="button"
           onClick={() => setAddOpen(true)}
@@ -114,7 +114,7 @@ export function CategoriesScreen() {
       ) : rows.length === 0 ? (
         <p className="mt-8 text-sm text-muted">No categories yet. Add one to start logging.</p>
       ) : (
-        <div className="mt-4">
+        <div className="mt-4 desk:grid desk:grid-cols-2 desk:gap-x-10 desk:gap-y-2">
           {sections.map((section) => (
             <section key={section.group} className="mb-5">
               <h2 className="kicker">
@@ -135,7 +135,6 @@ export function CategoriesScreen() {
                         </span>
                         <span className="block text-xs text-muted">
                           {usageLabel(row.usageCount)}
-                          {row.isEssential ? " · essential" : ""}
                         </span>
                       </button>
                       <button

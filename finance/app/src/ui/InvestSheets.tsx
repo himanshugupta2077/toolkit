@@ -1,18 +1,10 @@
 import { useState } from "react";
 import type { InvestAccountLine } from "../api/store.ts";
 import { formatInr, type InvestAsset, type InvestAssetKind, type Paise } from "../engine/index.ts";
+import { FieldLabel, FormSelect } from "./formFields.tsx";
 import { Amount } from "./Privacy.tsx";
 import { parseRupeesInput, rupeesInput } from "./wealth.ts";
 import { formToAsset, type AssetFormValue } from "./invest.ts";
-
-const inputClass =
-  "mt-1 field";
-
-function FieldLabel({ children }: { children: string }) {
-  return (
-    <span className="kicker">{children}</span>
-  );
-}
 
 export function AssetFormSheet({
   mode,
@@ -32,65 +24,65 @@ export function AssetFormSheet({
   const canSave = parsed != null && form.name.trim() !== "" && !saving;
 
   return (
-    <div className="pb-4">
-      <label className="block">
-        <FieldLabel>Name</FieldLabel>
-        <input
-          value={form.name}
-          onChange={(e) => setForm({ ...form, name: e.target.value })}
-          className={inputClass}
-        />
-      </label>
-      <label className="mt-4 block">
-        <FieldLabel>Kind</FieldLabel>
-        <select
+    <div className="pb-1">
+      <div className="space-y-4">
+        <label className="block">
+          <FieldLabel>Name</FieldLabel>
+          <input
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="mt-1 field"
+          />
+        </label>
+        <FormSelect
+          label="Kind"
           value={form.kind}
-          onChange={(e) => setForm({ ...form, kind: e.target.value as InvestAssetKind })}
-          className={inputClass}
+          onChange={(v) => setForm({ ...form, kind: v as InvestAssetKind })}
+          options={[
+            { value: "core", label: "Core" },
+            { value: "theme", label: "Theme" },
+          ]}
+        />
+        <label className="block">
+          <FieldLabel>Target %</FieldLabel>
+          <input
+            value={form.targetPct}
+            onChange={(e) => setForm({ ...form, targetPct: e.target.value })}
+            inputMode="decimal"
+            className="mt-1 field"
+          />
+        </label>
+        <label className="block">
+          <FieldLabel>Dip priority</FieldLabel>
+          <input
+            value={form.dipPriority}
+            onChange={(e) => setForm({ ...form, dipPriority: e.target.value })}
+            inputMode="numeric"
+            placeholder="blank = not in dip order"
+            className="mt-1 field"
+          />
+        </label>
+        <label className="block">
+          <FieldLabel>Instrument note</FieldLabel>
+          <input
+            value={form.instrumentNote}
+            onChange={(e) => setForm({ ...form, instrumentNote: e.target.value })}
+            className="mt-1 field"
+          />
+        </label>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={form.active}
+          aria-label="Asset active"
+          onClick={() => setForm({ ...form, active: !form.active })}
+          className={`min-h-11 rounded-full px-4 text-sm font-medium ${
+            form.active ? "bg-accent text-accent-fg" : "border border-line text-muted"
+          }`}
         >
-          <option value="core">Core</option>
-          <option value="theme">Theme</option>
-        </select>
-      </label>
-      <label className="mt-4 block">
-        <FieldLabel>Target %</FieldLabel>
-        <input
-          value={form.targetPct}
-          onChange={(e) => setForm({ ...form, targetPct: e.target.value })}
-          inputMode="decimal"
-          className={inputClass}
-        />
-      </label>
-      <label className="mt-4 block">
-        <FieldLabel>Dip priority</FieldLabel>
-        <input
-          value={form.dipPriority}
-          onChange={(e) => setForm({ ...form, dipPriority: e.target.value })}
-          inputMode="numeric"
-          placeholder="blank = not in dip order"
-          className={inputClass}
-        />
-      </label>
-      <label className="mt-4 block">
-        <FieldLabel>Instrument note</FieldLabel>
-        <input
-          value={form.instrumentNote}
-          onChange={(e) => setForm({ ...form, instrumentNote: e.target.value })}
-          className={inputClass}
-        />
-      </label>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={form.active}
-        aria-label="Asset active"
-        onClick={() => setForm({ ...form, active: !form.active })}
-        className={`mt-4 min-h-11 rounded-full px-4 text-sm font-medium ${
-          form.active ? "bg-accent text-accent-fg" : "border border-line text-muted"
-        }`}
-      >
-        {form.active ? "Active" : "Inactive"}
-      </button>
+          {form.active ? "Active" : "Inactive"}
+        </button>
+      </div>
       <button
         type="button"
         disabled={!canSave}
@@ -98,7 +90,7 @@ export function AssetFormSheet({
           const asset = formToAsset(form, assetId ?? "");
           if (asset) onSave(asset);
         }}
-        className="mt-4 btn-primary w-full rounded-full text-sm"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : mode === "add" ? "Add asset" : "Save asset"}
       </button>
@@ -163,42 +155,24 @@ export function DeploySheet({
           }}
           inputMode="decimal"
           aria-label="Deploy amount rupees"
-          className={inputClass}
+          className="mt-1 field"
         />
       </label>
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <label>
-          <FieldLabel>From</FieldLabel>
-          <select
-            className={inputClass}
-            value={fromAccountId}
-            onChange={(e) => onChangeFrom(e.target.value)}
-            aria-label="Dip from account"
-          >
-            <option value="">Choose…</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <FieldLabel>To</FieldLabel>
-          <select
-            className={inputClass}
-            value={toAccountId}
-            onChange={(e) => onChangeTo(e.target.value)}
-            aria-label="Dip to account"
-          >
-            <option value="">Choose…</option>
-            {accounts.map((account) => (
-              <option key={account.id} value={account.id}>
-                {account.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <FormSelect
+          label="From"
+          value={fromAccountId}
+          onChange={onChangeFrom}
+          placeholder="Choose…"
+          options={accounts.map((account) => ({ value: account.id, label: account.name }))}
+        />
+        <FormSelect
+          label="To"
+          value={toAccountId}
+          onChange={onChangeTo}
+          placeholder="Choose…"
+          options={accounts.map((account) => ({ value: account.id, label: account.name }))}
+        />
       </div>
       <ul className="mt-4 space-y-2">
         {lines.map((row) => (
@@ -213,7 +187,7 @@ export function DeploySheet({
                 }}
                 inputMode="decimal"
                 aria-label={`${row.name} dip rupees`}
-                className={inputClass}
+                className="mt-1 field"
               />
             </label>
           </li>

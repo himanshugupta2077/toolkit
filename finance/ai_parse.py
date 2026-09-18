@@ -29,6 +29,16 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in _sys.path:
     _sys.path.insert(0, str(_REPO_ROOT))
 import ai_usage  # noqa: E402
+from ai.features import (  # noqa: E402
+    FINANCE_LEDGER,
+    FINANCE_RECEIPT,
+    is_on as feature_on,
+)
+from ai.prompts import (  # noqa: E402
+    apply_user_template,
+    get as prompt_get,
+    render_template,
+)
 
 AI_DOCS_DIR = Path(__file__).resolve().parent / "ai_docs"
 # Module tag for shared AI usage log (phone AI status view)
@@ -45,6 +55,41 @@ IMAGE_DOC_FILES = (
     "PARSE_TASK.md",
     "IMAGE_PARSE.md",
     "IMAGE_EXAMPLES.md",
+)
+
+LEDGER_SYSTEM_PREFIX = (
+    "You are a precise finance parser for a personal Indian Rupee ledger. "
+    "Follow the documentation below exactly. Output ONLY valid JSON.\n\n"
+)
+RECEIPT_SYSTEM_PREFIX = (
+    "You are a precise finance parser for a personal Indian Rupee ledger. "
+    "Follow the documentation below exactly. Output ONLY valid JSON. "
+    "This request is a receipt/screenshot upload: return at most ONE entry. "
+    "User note is optional — extract from the image(s) when the note is empty. "
+    "For notes: always include the app/merchant if visible (Blinkit, Zepto, Amazon, "
+    "Swiggy, Zomato, etc.) plus ordered/purchased item names when readable. "
+    "Format: 'Merchant: item1, item2'. Never use vague notes like 'Grocery order'.\n\n"
+)
+LEDGER_USER_TEMPLATE = (
+    "Today (local): {today}\n"
+    "Timezone: {timezone}\n\n"
+    "ALLOWED TYPES:\n{types}\n\n"
+    "ALLOWED CATEGORIES:\n{categories}\n\n"
+    "ALLOWED ACCOUNTS:\n{accounts}\n\n"
+    "TRANSCRIPT:\n{transcript}\n\n"
+    "Return ONLY the JSON object described in PARSE_TASK.md."
+)
+RECEIPT_USER_TEMPLATE = (
+    "Today (local): {today}\n"
+    "Timezone: {timezone}\n"
+    "Images attached: {image_count}\n\n"
+    "ALLOWED TYPES:\n{types}\n\n"
+    "ALLOWED CATEGORIES:\n{categories}\n\n"
+    "ALLOWED ACCOUNTS:\n{accounts}\n\n"
+    "USER NOTE (typed and/or voice):\n{note}\n"
+    "{ocr_section}\n\n"
+    "Return ONLY the JSON object from IMAGE_PARSE.md. "
+    "Exactly one entry max — multiple images are the same purchase."
 )
 
 DEFAULT_MODEL = "deepseek-v4-flash"
@@ -117,16 +162,22 @@ def _load_docs(
     names: tuple[str, ...],
     *,
     fallback: str,
+    overrides: dict[str, str] | None = None,
 ) -> str:
     parts: list[str] = []
+    ov = overrides or {}
     for name in names:
-        p = AI_DOCS_DIR / name
-        if not p.is_file():
-            continue
-        try:
-            text = p.read_text(encoding="utf-8").strip()
-        except OSError:
-            continue
+        text = ""
+        if name in ov and str(ov[name]).strip():
+            text = str(ov[name]).strip()
+        else:
+            p = AI_DOCS_DIR / name
+            if not p.is_file():
+                continue
+            try:
+                text = p.read_text(encoding="utf-8").strip()
+            except OSError:
+                continue
         if text:
             parts.append(f"### {name}\n\n{text}")
     if not parts:
@@ -175,6 +226,49 @@ def load_image_system_docs(*, force: bool = False) -> str:
     return _image_docs_cache
 
 
+def ledger_system() -> str:
+    ov = prompt_get(FINANCE_LEDGER)
+    custom = ov.get("system")
+    if isinstance(custom, str) and custom.strip():
+        return custom
+    docs = ov.get("docs") or {}
+    body = (
+        _load_docs(
+            DOC_FILES,
+            fallback=(
+                "You extract finance Ledger JSON from speech. "
+                "Return only valid JSON with an entries array."
+            ),
+            overrides=docs,
+        )
+        if docs
+        else load_system_docs()
+    )
+    return LEDGER_SYSTEM_PREFIX + body
+
+
+def receipt_system() -> str:
+    ov = prompt_get(FINANCE_RECEIPT)
+    custom = ov.get("system")
+    if isinstance(custom, str) and custom.strip():
+        return custom
+    docs = ov.get("docs") or {}
+    body = (
+        _load_docs(
+            IMAGE_DOC_FILES,
+            fallback=(
+                "You extract exactly one finance Ledger JSON entry from "
+                "receipt screenshots and an optional user note. "
+                "Return only valid JSON with an entries array of length 0 or 1."
+            ),
+            overrides=docs,
+        )
+        if docs
+        else load_image_system_docs()
+    )
+    return RECEIPT_SYSTEM_PREFIX + body
+
+
 def build_user_prompt(
     transcript: str,
     *,
@@ -184,14 +278,17 @@ def build_user_prompt(
     today: str,
     timezone: str,
 ) -> str:
-    return (
-        f"Today (local): {today}\n"
-        f"Timezone: {timezone}\n\n"
-        f"ALLOWED TYPES:\n{json.dumps(types, ensure_ascii=False)}\n\n"
-        f"ALLOWED CATEGORIES:\n{json.dumps(categories, ensure_ascii=False)}\n\n"
-        f"ALLOWED ACCOUNTS:\n{json.dumps(accounts, ensure_ascii=False)}\n\n"
-        f"TRANSCRIPT:\n{transcript.strip()}\n\n"
-        "Return ONLY the JSON object described in PARSE_TASK.md."
+    tmpl = apply_user_template(FINANCE_LEDGER, LEDGER_USER_TEMPLATE)
+    return render_template(
+        tmpl,
+        {
+            "today": today,
+            "timezone": timezone,
+            "types": json.dumps(types, ensure_ascii=False),
+            "categories": json.dumps(categories, ensure_ascii=False),
+            "accounts": json.dumps(accounts, ensure_ascii=False),
+            "transcript": transcript.strip(),
+        },
     )
 
 
@@ -213,17 +310,19 @@ def build_receipt_text_prompt(
             parts.append(f"--- image {i} OCR ---\n{block.strip()}")
         ocr_section = "\n\nOCR TEXT (noisy):\n" + "\n\n".join(parts)
     note_s = (note or "").strip() or "(none)"
-    return (
-        f"Today (local): {today}\n"
-        f"Timezone: {timezone}\n"
-        f"Images attached: {image_count}\n\n"
-        f"ALLOWED TYPES:\n{json.dumps(types, ensure_ascii=False)}\n\n"
-        f"ALLOWED CATEGORIES:\n{json.dumps(categories, ensure_ascii=False)}\n\n"
-        f"ALLOWED ACCOUNTS:\n{json.dumps(accounts, ensure_ascii=False)}\n\n"
-        f"USER NOTE (typed and/or voice):\n{note_s}\n"
-        f"{ocr_section}\n\n"
-        "Return ONLY the JSON object from IMAGE_PARSE.md. "
-        "Exactly one entry max — multiple images are the same purchase."
+    tmpl = apply_user_template(FINANCE_RECEIPT, RECEIPT_USER_TEMPLATE)
+    return render_template(
+        tmpl,
+        {
+            "today": today,
+            "timezone": timezone,
+            "image_count": str(image_count),
+            "types": json.dumps(types, ensure_ascii=False),
+            "categories": json.dumps(categories, ensure_ascii=False),
+            "accounts": json.dumps(accounts, ensure_ascii=False),
+            "note": note_s,
+            "ocr_section": ocr_section,
+        },
     )
 
 
@@ -653,6 +752,11 @@ def parse_transcript(
         ok, entries: [normalized raw payloads], parsed, meta, error?
       }
     """
+    if not feature_on(FINANCE_LEDGER):
+        raise AIParseError(
+            "Ledger AI is turned off in the AI app.",
+            status="config",
+        )
     text = (transcript or "").strip()
     if not text:
         raise AIParseError("Empty transcript", status="empty")
@@ -664,11 +768,7 @@ def parse_transcript(
     today = str(opts.get("today") or finance_sync.today_iso())
     timezone = str(opts.get("timezone") or finance_sync.DEFAULT_TZ)
 
-    system = (
-        "You are a precise finance parser for a personal Indian Rupee ledger. "
-        "Follow the documentation below exactly. Output ONLY valid JSON.\n\n"
-        + load_system_docs()
-    )
+    system = ledger_system()
     user = build_user_prompt(
         text,
         types=types,
@@ -771,6 +871,11 @@ def parse_receipt(
     Note is always optional. Always at most **one** entry.
     Flow: OCR (best-effort) → multimodal DeepSeek; if vision unsupported → OCR/text.
     """
+    if not feature_on(FINANCE_RECEIPT):
+        raise AIParseError(
+            "Receipt AI is turned off in the AI app.",
+            status="config",
+        )
     prepared = prepare_receipt_images(images)
     note_text = (note or "").strip()  # optional — never required
 
@@ -781,16 +886,7 @@ def parse_receipt(
     today = str(opts.get("today") or finance_sync.today_iso())
     timezone = str(opts.get("timezone") or finance_sync.DEFAULT_TZ)
 
-    system = (
-        "You are a precise finance parser for a personal Indian Rupee ledger. "
-        "Follow the documentation below exactly. Output ONLY valid JSON. "
-        "This request is a receipt/screenshot upload: return at most ONE entry. "
-        "User note is optional — extract from the image(s) when the note is empty. "
-        "For notes: always include the app/merchant if visible (Blinkit, Zepto, Amazon, "
-        "Swiggy, Zomato, etc.) plus ordered/purchased item names when readable. "
-        "Format: 'Merchant: item1, item2'. Never use vague notes like 'Grocery order'.\n\n"
-        + load_image_system_docs()
-    )
+    system = receipt_system()
 
     mode = _receipt_mode()
 
@@ -1012,10 +1108,12 @@ def status_payload() -> dict[str, Any]:
     key_set = bool(
         (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("DEEPSEEK_KEY") or "").strip()
     )
+    ledger_on = feature_on(FINANCE_LEDGER)
+    receipt_on = feature_on(FINANCE_RECEIPT)
     docs_ok = all((AI_DOCS_DIR / n).is_file() for n in DOC_FILES)
     image_docs_ok = all((AI_DOCS_DIR / n).is_file() for n in IMAGE_DOC_FILES)
     return {
-        "enabled": key_set,
+        "enabled": key_set and (ledger_on or receipt_on),
         "model": _model(),
         "base_url": _base_url(),
         "thinking": "disabled",
@@ -1026,4 +1124,6 @@ def status_payload() -> dict[str, Any]:
         "tesseract": bool(shutil.which("tesseract")),
         "max_receipt_images": MAX_RECEIPT_IMAGES,
         "api_key_set": key_set,
+        "ledger_on": ledger_on,
+        "receipt_on": receipt_on,
     }

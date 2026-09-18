@@ -11,6 +11,7 @@ export default defineConfig({
     // Vite blocks unknown Host headers; Tailscale Serve sends *.ts.net.
     allowedHosts: [".ts.net"],
     proxy: {
+      "/api/finance-os": "http://127.0.0.1:8000",
       "/api": "http://127.0.0.1:8787",
       "/finance/api": {
         target: "http://127.0.0.1:8787",

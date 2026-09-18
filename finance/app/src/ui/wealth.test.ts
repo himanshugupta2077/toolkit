@@ -13,10 +13,14 @@ import {
   formatFillPct,
   monthsCaption,
   moveBucket,
+  nextFdName,
   parseRupeesInput,
   ringPercent,
   rupeesInput,
   shortBucketName,
+  withEmergencyFundTarget,
+  netWorthTrendCaption,
+  netWorthYDomain,
 } from "./wealth.ts";
 
 const EF = DEFAULT_BUCKET_IDS.emergencyFund;
@@ -46,6 +50,25 @@ function card(partial: Partial<WealthBucketCard> & Pick<WealthBucketCard, "id" |
 }
 
 describe("wealth copy", () => {
+  it("writes a fixed EF target onto the bucket list", () => {
+    const rows = [
+      card({ id: EF, name: "Emergency Fund", targetRule: "months_of_essentials", targetMonths: 6 }),
+      card({ id: SAVINGS, name: "Savings" }),
+    ];
+    const writes = withEmergencyFundTarget(rows, rupeesToPaise(40_000));
+    const ef = writes.find((row) => row.id === EF);
+    expect(ef?.targetRule).toBe("fixed");
+    expect(ef?.targetAmount).toBe(rupeesToPaise(40_000));
+    expect(ef?.targetMonths).toBeNull();
+    expect(writes.find((row) => row.id === SAVINGS)?.targetRule).toBe("fixed");
+  });
+
+  it("names the next FD FD1, FD2, …", () => {
+    expect(nextFdName([])).toBe("FD1");
+    expect(nextFdName([{ name: "FD1" }])).toBe("FD2");
+    expect(nextFdName([{ name: "FD" }, { name: "FD1" }])).toBe("FD2");
+  });
+
   it("shortens the default three names", () => {
     expect(shortBucketName("Emergency Fund", EF)).toBe("EF");
     expect(shortBucketName("Savings buffer", SAVINGS)).toBe("Savings");
@@ -63,17 +86,27 @@ describe("wealth copy", () => {
     expect(ringPercent(null)).toBe(0);
   });
 
-  it("captions EF with months and Investment as invested cost", () => {
+  it("captions EF as current / target and Investment as invested cost", () => {
     expect(
       bucketHeroCaption({
         current: rupeesToPaise(20_000),
         target: rupeesToPaise(40_000),
         fillPct: 0.5,
-        monthsFilled: 4.7,
-        targetRule: "months_of_essentials",
-        targetMonths: 6,
+        monthsFilled: null,
+        targetRule: "fixed",
+        targetMonths: null,
       }),
-    ).toBe("₹20,000.00 / ₹40,000.00 (50%) · ≈ 4.7 of 6 months");
+    ).toBe("₹20,000.00 / ₹40,000.00 (50%)");
+    expect(
+      bucketHeroCaption({
+        current: rupeesToPaise(20_000),
+        target: 0,
+        fillPct: null,
+        monthsFilled: null,
+        targetRule: "fixed",
+        targetMonths: null,
+      }),
+    ).toBe("₹20,000.00 · no target yet");
     expect(
       bucketHeroCaption({
         current: rupeesToPaise(50_000),
@@ -127,5 +160,30 @@ describe("bucket editor helpers", () => {
     const moved = applyAccountToggle(rows, SAVINGS, "acc_fd", true);
     expect(moved[0]?.accountIds).toEqual([]);
     expect(moved[1]?.accountIds).toEqual(["acc_icici", "acc_fd"]);
+  });
+});
+
+describe("net worth chart", () => {
+  it("does not stretch a tiny wobble across the full plot", () => {
+    const value = rupeesToPaise(33_515.89);
+    const domain = netWorthYDomain([value, value + 50]);
+    expect(domain.max - domain.min).toBeGreaterThan(rupeesToPaise(2_000));
+    expect(value).toBeGreaterThan(domain.min);
+    expect(value).toBeLessThan(domain.max);
+  });
+
+  it("labels the change from the first snapshot", () => {
+    expect(
+      netWorthTrendCaption([
+        { date: "2026-07-01", netWorth: rupeesToPaise(30_000) },
+        { date: "2026-09-17", netWorth: rupeesToPaise(33_515.89) },
+      ]),
+    ).toBe("Up ₹3,515.89 since 1 Jul");
+    expect(
+      netWorthTrendCaption([
+        { date: "2026-09-01", netWorth: rupeesToPaise(40_000) },
+        { date: "2026-09-17", netWorth: rupeesToPaise(33_515.89) },
+      ]),
+    ).toBe("Down ₹6,484.11 since 1 Sep");
   });
 });

@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { rupeesToPaise } from "../engine/money.ts";
-import type { HomeReconRow } from "../api/store.ts";
 import type { MonthSummary } from "../engine/budget.ts";
 import {
   calendarDaysLeft,
@@ -11,21 +10,15 @@ import {
   monthTiles,
   nextDueDate,
   paceHeadline,
+  savingsMonthBars,
   stackedMonthBars,
+  upcomingBillHref,
+  upcomingBillSubline,
+  upcomingBillsTotal,
+  upcomingDueCaption,
 } from "./home.ts";
 
 const TODAY = "2026-09-06";
-
-function recon(partial: Partial<HomeReconRow> & Pick<HomeReconRow, "id" | "name">): HomeReconRow {
-  return {
-    type: "asset",
-    group: "savings",
-    isArchived: false,
-    lastReconciledAt: null,
-    daysSinceReconcile: null,
-    ...partial,
-  };
-}
 
 const summary: MonthSummary = {
   month: "2026-09",
@@ -42,7 +35,7 @@ const summary: MonthSummary = {
 describe("pace copy", () => {
   it("uses the empty-month headline when spent is 0", () => {
     expect(paceHeadline({ spent: 0, safePerDay: rupeesToPaise(1240) })).toBe(
-      "No spending yet — ₹1,240.00 / day",
+      "No spending yet: ₹1,240.00 / day",
     );
     expect(paceHeadline({ spent: 100, safePerDay: rupeesToPaise(1215) })).toBe(
       "Safe to spend today ₹1,215.00 / day",
@@ -109,45 +102,76 @@ describe("stacked month bars", () => {
   });
 });
 
-describe("home action cards", () => {
-  it("shows unverified import instead of a never-reconciled duplicate", () => {
-    const cards = homeActionCards({
-      lastImport: "2026-09-01T00:00:00+05:30",
-      recon: [recon({ id: "acc_hdfc", name: "HDFC Savings" })],
-      free: rupeesToPaise(-100),
-    });
-    expect(cards.map((row) => row.kind)).toEqual(["unverified_import", "negative_free"]);
+describe("savings bars", () => {
+  it("scales height to the largest absolute month", () => {
+    const bars = savingsMonthBars([
+      { month: "2026-07", savings: 200 },
+      { month: "2026-08", savings: 100 },
+      { month: "2026-09", savings: -50 },
+    ]);
+    expect(bars[0]?.height).toBe(1);
+    expect(bars[1]?.height).toBe(0.5);
+    expect(bars[2]?.height).toBe(0.25);
+  });
+});
+
+describe("upcoming payments copy", () => {
+  it("links recurring to Plan Recurring and one-time to Plan One-time", () => {
+    expect(upcomingBillHref({ source: "recurring" })).toBe("/plan?tab=recurring");
+    expect(upcomingBillHref({ source: "one_time" })).toBe("/plan?tab=one-time");
   });
 
-  it("nudges the stalest reconciled account and offers allocate when free is positive", () => {
+  it("labels due relative to today and names the kind or cadence", () => {
+    expect(upcomingDueCaption(TODAY, TODAY)).toBe("today");
+    expect(upcomingDueCaption(TODAY, "2026-09-07")).toBe("tomorrow");
+    expect(upcomingDueCaption(TODAY, "2026-10-01")).toBe("in 25 days");
+    expect(
+      upcomingBillSubline(
+        { source: "recurring", frequency: "monthly", dueDate: "2026-10-01" },
+        TODAY,
+      ),
+    ).toBe("1 Oct · Monthly · in 25 days");
+    expect(
+      upcomingBillSubline(
+        {
+          source: "recurring",
+          frequency: "monthly",
+          dueDate: "2026-10-01",
+          kind: "investment",
+        },
+        TODAY,
+      ),
+    ).toBe("1 Oct · Investment · in 25 days");
+    expect(
+      upcomingBillSubline(
+        { source: "recurring", frequency: "yearly", dueDate: "2026-12-01" },
+        TODAY,
+      ),
+    ).toBe("1 Dec · Yearly · in 86 days");
+    expect(
+      upcomingBillSubline(
+        { source: "one_time", frequency: null, dueDate: "2026-09-20", kind: null },
+        TODAY,
+      ),
+    ).toBe("20 Sep · One-time · in 14 days");
+    expect(upcomingBillsTotal([{ amount: 100 }, { amount: 50 }])).toBe(150);
+  });
+});
+
+describe("home action cards", () => {
+  it("flags negative free cash and skips reconcile nags", () => {
     const cards = homeActionCards({
-      lastImport: null,
-      recon: [
-        recon({
-          id: "acc_icici",
-          name: "ICICI Savings",
-          lastReconciledAt: "2026-08-16",
-          daysSinceReconcile: 21,
-        }),
-        recon({
-          id: "acc_cash",
-          name: "Cash",
-          lastReconciledAt: "2026-09-06",
-          daysSinceReconcile: 0,
-        }),
-        recon({
-          id: "acc_exp",
-          name: "Expense",
-          type: "virtual",
-          group: "virtual",
-        }),
-      ],
+      free: rupeesToPaise(-100),
+    });
+    expect(cards.map((row) => row.kind)).toEqual(["negative_free"]);
+  });
+
+  it("offers allocate when free is positive", () => {
+    const cards = homeActionCards({
       free: rupeesToPaise(22400),
     });
-    expect(cards.map((row) => row.kind)).toEqual(["unreconciled", "allocate"]);
-    expect(cards[0]?.title).toBe("ICICI Savings not reconciled in 21 days");
-    expect(cards[0]?.href).toBe("/more/accounts/acc_icici/reconcile");
-    expect(cards[1]?.disabled).toBe(false);
-    expect(cards[1]?.href).toBe("/wealth/allocate");
+    expect(cards.map((row) => row.kind)).toEqual(["allocate"]);
+    expect(cards[0]?.disabled).toBe(false);
+    expect(cards[0]?.href).toBe("/wealth/allocate");
   });
 });

@@ -11,7 +11,6 @@ import { BottomSheet } from "./BottomSheet.tsx";
 import {
   accountFlags,
   formatBalanceHero,
-  formatUtilisation,
   lastReconciledLabel,
 } from "./accounts.ts";
 import {
@@ -86,14 +85,14 @@ export function AccountDetailScreen() {
 
   if (detailQ.isPending) {
     return (
-      <section className="px-5">
+      <section className="page">
         <p className="text-sm text-muted">Loading account…</p>
       </section>
     );
   }
   if (detailQ.error) {
     return (
-      <section className="px-5">
+      <section className="page">
         <Link to="/more/accounts" className="btn-ghost">
           ← Accounts
         </Link>
@@ -103,7 +102,7 @@ export function AccountDetailScreen() {
   }
   if (!account || !data) {
     return (
-      <section className="px-5">
+      <section className="page">
         <Link to="/more/accounts" className="btn-ghost">
           ← Accounts
         </Link>
@@ -115,12 +114,19 @@ export function AccountDetailScreen() {
   const hero = formatBalanceHero(account, data.balance);
   const recon = lastReconciledLabel(data.lastReconciledAt, today);
   const flags = accountFlags(account);
-  const util = formatUtilisation(data.utilisation);
+  const est = data.estimatedNextStatement;
+  const showEst = account.group === "credit_card" && est != null;
+  const estHint = [
+    showEst && est !== data.balance ? "includes unposted EMI" : null,
+    data.nextStatementDate,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   const ledgerMonth = yearMonthFromIsoDate(today);
   const ledgerHref = `/ledger?month=${ledgerMonth}&account=${account.id}`;
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page desk:max-w-3xl">
       <Link
         to="/more/accounts"
         className="btn-ghost"
@@ -131,32 +137,23 @@ export function AccountDetailScreen() {
       <p className="mt-2 text-sm text-muted">{account.name}</p>
       <p className="kicker">{hero.label}</p>
       <p className="text-4xl font-semibold tracking-tight tabular-nums text-ink">{hero.amount}</p>
+      {account.group === "credit_card" && est != null ? (
+        <div className="mt-2">
+          <p className="text-sm text-muted">
+            Est. next statement{" "}
+            <span className="font-medium tabular-nums text-ink">{formatInr(est)}</span>
+          </p>
+          {estHint ? <p className="text-xs text-muted">{estHint}</p> : null}
+        </div>
+      ) : null}
       <p className="mt-2 text-sm text-muted">
         {flags.join(" · ")}
         {account.isArchived ? " · archived" : ""}
       </p>
       <p className="mt-1 text-xs text-muted">
         Opening {formatInr(account.openingBalance)} on {account.openingDate}. Calculated from
-        the ledger — there is no balance field to type.
+        the ledger: there is no balance field to type.
       </p>
-
-      {account.group === "credit_card" ? (
-        <div className="mt-4 grid grid-cols-2 gap-2">
-          <div className="card p-3">
-            <p className="text-xs text-muted">Limit</p>
-            <p className="text-base font-medium tabular-nums">
-              {account.creditLimit == null ? "—" : formatInr(account.creditLimit)}
-            </p>
-          </div>
-          <div className="card p-3">
-            <p className="text-xs text-muted">Available</p>
-            <p className="text-base font-medium tabular-nums">
-              {data.available == null ? "—" : formatInr(data.available)}
-            </p>
-            {util ? <p className="text-xs text-muted">{util} used</p> : null}
-          </div>
-        </div>
-      ) : null}
 
       <div className="mt-4 card p-3">
         <p className="text-xs text-muted">This cycle spend</p>
@@ -247,7 +244,7 @@ export function AccountDetailScreen() {
         </ul>
       )}
 
-      <BottomSheet open={editOpen} title="Edit account" tall onClose={() => setEditOpen(false)}>
+      <BottomSheet open={editOpen} title="Edit account" onClose={() => setEditOpen(false)}>
         <AccountFormSheet
           key={account.id}
           mode="edit"

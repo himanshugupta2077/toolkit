@@ -47,7 +47,8 @@ export function LockScreen({ onUnlocked, webauthnId }: LockScreenProps) {
   }
 
   return (
-    <div className="absolute inset-0 z-[60] flex flex-col bg-app px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+    <div className="lock-screen absolute inset-0 z-[60] flex flex-col bg-app px-5 pt-[max(2rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+      <div className="lock-panel flex min-h-0 flex-1 flex-col">
       <p className="kicker">Locked</p>
       <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">Finance OS</h1>
       <p className="mt-2 text-sm text-muted">Enter your PIN. Numbers stay on the laptop.</p>
@@ -96,6 +97,7 @@ export function LockScreen({ onUnlocked, webauthnId }: LockScreenProps) {
         >
           Unlock
         </button>
+      </div>
       </div>
     </div>
   );

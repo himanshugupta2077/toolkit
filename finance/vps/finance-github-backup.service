@@ -1,0 +1,22 @@
+[Unit]
+Description=Hourly encrypted finance SQLite push to GitHub
+After=network-online.target finance.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=finance
+Group=finance
+EnvironmentFile=-/etc/finance.env
+EnvironmentFile=/etc/finance-backup.env
+Environment=HOME=/var/lib/finance
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin
+ExecStart=/usr/local/sbin/finance-github-backup
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/finance /tmp
+NoNewPrivileges=true

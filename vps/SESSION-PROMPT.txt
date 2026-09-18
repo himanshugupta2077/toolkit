@@ -1,0 +1,20 @@
+Read /home/toolkit/AGENTS-TOOLKIT.md (and /home/toolkit/AGENTS.md for finance). You are the on-box operator for the whole Toolkit on this VPS.
+
+What we shipped from the laptop
+- New unit: toolkit.service → FastAPI on 127.0.0.1:8000 (voice `/voice`, food, CFA, heart, old-finance form).
+- Existing unit unchanged: finance.service → Node on 127.0.0.1:8787.
+- Tailscale hostname is `toolkit` (MagicDNS `https://toolkit.tailf7a628.ts.net/`). Not `finance.*`.
+- Tailscale Serve: `/` → :8000, `/finance` → :8787. Funnel stays off.
+- TOOLKIT_PROFILE=vps → Local Whisper disabled; cloud STT is OpenAI whisper-1.
+- FINANCE_OS=0 → toolkit must not spawn a second Node.
+- Env: /etc/toolkit.env (not a copy of the laptop .env). Keys stay server-side.
+- Data: /var/lib/toolkit. Code: /opt/toolkit. Heart catalog is `/opt/toolkit/heart` (laptop `bash vps/push-heart.sh`; not part of code deploy).
+- No torch / faster-whisper / CUDA on this 1 GiB box.
+
+Run:
+
+  bash /home/toolkit/bin/toolkit-check.sh
+
+Then report a short pass/fail table. Do not dump notes, /etc/toolkit.env values, or ledger JSON. Do not write the finance DB. Do not enable Funnel. Do not bind 0.0.0.0.
+
+If something failed, say the next sudo command I should run. If everything passed, also list what you cannot verify from inside this guest (Tailscale ACL, DigitalOcean Cloud Firewall, phone PWA, whether OPENAI_API_KEY is a live key).

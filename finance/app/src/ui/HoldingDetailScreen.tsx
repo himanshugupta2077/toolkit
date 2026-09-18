@@ -7,6 +7,7 @@ import type { AppShellOutlet } from "./AppShell.tsx";
 import { BottomSheet } from "./BottomSheet.tsx";
 import { apiErrorText } from "./copy.ts";
 import { FetchError } from "./FetchError.tsx";
+import { FieldLabel, FormSelect, namedOptions } from "./formFields.tsx";
 import { gainCaption, holdingValueCaption, parseNavRupees } from "./portfolio.ts";
 import { Amount } from "./Privacy.tsx";
 import { parseRupeesInput, rupeesInput } from "./wealth.ts";
@@ -83,14 +84,14 @@ export function HoldingDetailScreen() {
   const holding = data?.holding;
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page desk:max-w-2xl">
       <p className="text-sm text-muted">
         <Link to="/wealth/portfolio" className="text-accent">
           Portfolio
         </Link>
         {holding ? ` · ${holding.assetName}` : ""}
       </p>
-      <h1 className="text-2xl font-semibold tracking-tight text-ink">
+      <h1 className="page-title">
         {holding?.assetName ?? "Holding"}
       </h1>
 
@@ -177,77 +178,73 @@ export function HoldingDetailScreen() {
       ) : null}
 
       <BottomSheet open={navOpen} title="Update NAV" onClose={() => setNavOpen(false)}>
-        <label className="block">
-          <span className="kicker">NAV (₹ / unit)</span>
-          <input
-            inputMode="decimal"
-            value={navDraft}
-            onChange={(e) => setNavDraft(e.target.value)}
-            placeholder="150.25"
-            className="mt-1 field"
-          />
-        </label>
-        <button
-          type="button"
-          className="mt-6 btn-primary min-h-12 w-full rounded-2xl"
-          disabled={parseNavRupees(navDraft) == null || navMut.isPending}
-          onClick={() => navMut.mutate()}
-        >
-          Save NAV
-        </button>
+        <div className="space-y-4 pb-1">
+          <label className="block">
+            <FieldLabel>NAV (₹ / unit)</FieldLabel>
+            <input
+              inputMode="decimal"
+              value={navDraft}
+              onChange={(e) => setNavDraft(e.target.value)}
+              placeholder="150.25"
+              className="mt-1 field"
+            />
+          </label>
+          <button
+            type="button"
+            className="btn-primary w-full"
+            disabled={parseNavRupees(navDraft) == null || navMut.isPending}
+            onClick={() => navMut.mutate()}
+          >
+            Save NAV
+          </button>
+        </div>
       </BottomSheet>
 
       <BottomSheet open={buyOpen} title="Record buy" onClose={() => setBuyOpen(false)}>
-        <label className="block">
-          <span className="kicker">Amount (₹)</span>
-          <input
-            inputMode="decimal"
-            value={buyAmount}
-            onChange={(e) => setBuyAmount(e.target.value)}
-            className="mt-1 field"
-          />
-        </label>
-        <label className="mt-4 block">
-          <span className="kicker">NAV (₹ / unit)</span>
-          <input
-            inputMode="decimal"
-            value={buyNav}
-            onChange={(e) => setBuyNav(e.target.value)}
-            className="mt-1 field"
-          />
-        </label>
-        <label className="mt-4 block">
-          <span className="kicker">From</span>
-          <select
+        <div className="space-y-4 pb-1">
+          <label className="block">
+            <FieldLabel>Amount (₹)</FieldLabel>
+            <input
+              inputMode="decimal"
+              value={buyAmount}
+              onChange={(e) => setBuyAmount(e.target.value)}
+              className="mt-1 field"
+            />
+          </label>
+          <label className="block">
+            <FieldLabel>NAV (₹ / unit)</FieldLabel>
+            <input
+              inputMode="decimal"
+              value={buyNav}
+              onChange={(e) => setBuyNav(e.target.value)}
+              className="mt-1 field"
+            />
+          </label>
+          <FormSelect
+            label="From"
             value={fromAccountId}
-            onChange={(e) => setFromAccountId(e.target.value)}
-            className="mt-1 field"
+            onChange={setFromAccountId}
+            options={namedOptions(
+              (data?.accounts ?? []).filter((row) => row.id !== holding?.accountId),
+            )}
+          />
+          <p className="text-xs text-muted">
+            Writes an Investment ledger row to {holding?.accountName ?? "this account"}.
+          </p>
+          <button
+            type="button"
+            className="btn-primary w-full"
+            disabled={
+              parseRupeesInput(buyAmount) == null ||
+              parseNavRupees(buyNav) == null ||
+              !fromAccountId ||
+              buyMut.isPending
+            }
+            onClick={() => buyMut.mutate()}
           >
-            {(data?.accounts ?? [])
-              .filter((row) => row.id !== holding?.accountId)
-              .map((row) => (
-                <option key={row.id} value={row.id}>
-                  {row.name}
-                </option>
-              ))}
-          </select>
-        </label>
-        <p className="mt-3 text-xs text-muted">
-          Writes an Investment ledger row to {holding?.accountName ?? "this account"}.
-        </p>
-        <button
-          type="button"
-          className="mt-6 btn-primary min-h-12 w-full rounded-2xl"
-          disabled={
-            parseRupeesInput(buyAmount) == null ||
-            parseNavRupees(buyNav) == null ||
-            !fromAccountId ||
-            buyMut.isPending
-          }
-          onClick={() => buyMut.mutate()}
-        >
-          Save buy
-        </button>
+            Save buy
+          </button>
+        </div>
       </BottomSheet>
     </section>
   );

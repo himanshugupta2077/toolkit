@@ -59,29 +59,32 @@ function LedgerRow({
   return (
     <Link
       to={to}
-      className="flex min-h-11 items-center gap-3 py-2 [content-visibility:auto] [contain-intrinsic-size:auto_3.5rem]"
+      className="flex min-h-11 items-center gap-3 py-2 [content-visibility:auto] [contain-intrinsic-size:auto_3.5rem] desk:grid desk:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_8.5rem] desk:gap-4"
     >
-      <span
-        aria-hidden="true"
-        className="avatar"
-      >
-        {categoryInitial(category?.name ?? title)}
-      </span>
-      <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-base text-ink">{title}</span>
-        <span className="flex items-center gap-1.5 text-[13px] text-muted">
-          <span className="truncate">{chip}</span>
-          {entry.inBudget ? (
-            <span
-              title="In budget"
-              className="inline-flex size-4 items-center justify-center rounded bg-card-2 text-[10px] font-semibold text-muted"
-            >
-              B
-            </span>
-          ) : null}
+      <span className="flex min-w-0 items-center gap-3">
+        <span
+          aria-hidden="true"
+          className="avatar"
+        >
+          {categoryInitial(category?.name ?? title)}
+        </span>
+        <span className="min-w-0 flex-1 text-left">
+          <span className="block truncate text-base text-ink">{title}</span>
+          <span className="flex items-center gap-1.5 text-[13px] text-muted desk:hidden">
+            <span className="truncate">{chip}</span>
+            {entry.inBudget ? (
+              <span
+                title="In budget"
+                className="inline-flex size-4 items-center justify-center rounded bg-card-2 text-[10px] font-semibold text-muted"
+              >
+                B
+              </span>
+            ) : null}
+          </span>
         </span>
       </span>
-      <span className={`shrink-0 text-base font-semibold tabular-nums ${amountClass(kind)}`}>
+      <span className="hidden truncate text-sm text-muted desk:block">{chip}</span>
+      <span className={`shrink-0 text-base font-semibold tabular-nums ${amountClass(kind)} desk:text-right`}>
         {formatInr(entry.amount)}
       </span>
     </Link>
@@ -286,8 +289,8 @@ export function LedgerScreen() {
   const canNext = month < thisMonth;
 
   return (
-    <section className="px-5">
-      <div ref={barRef} className="sticky top-0 z-10 -mx-5 bg-app px-5 pt-1 pb-3">
+    <section className="page">
+      <div ref={barRef} className="sticky top-0 z-10 -mx-5 bg-app px-5 pt-1 pb-3 desk:mx-0 desk:mb-4 desk:rounded-2xl desk:border desk:border-line desk:bg-card desk:px-5 desk:py-4">
         <div className="flex items-center gap-1">
           <button
             type="button"
@@ -297,7 +300,7 @@ export function LedgerScreen() {
           >
             ←
           </button>
-          <h1 className="min-w-0 flex-1 text-center text-lg font-semibold tracking-tight text-ink">
+          <h1 className="min-w-0 flex-1 text-center text-lg font-semibold tracking-tight text-ink desk:text-xl">
             {formatMonthTitle(month)}
           </h1>
           <button
@@ -338,8 +341,7 @@ export function LedgerScreen() {
           </button>
         </div>
 
-        {searchOpen || filters.q ? (
-          <label className="mt-2 block">
+        <label className={searchOpen || filters.q ? "mt-2 block" : "mt-2 hidden desk:block"}>
             <span className="sr-only">Search</span>
             <input
               type="search"
@@ -349,7 +351,6 @@ export function LedgerScreen() {
               className="field"
             />
           </label>
-        ) : null}
 
         <p className="mt-3 text-sm tabular-nums text-muted">
           In <span className="font-medium text-ok">{formatInr(strip.inflow)}</span>
@@ -367,16 +368,21 @@ export function LedgerScreen() {
       ) : entries.length === 0 ? (
         <div className="py-10">
           <p className="text-lg font-medium text-ink">Nothing yet. Add your first one.</p>
-          <p className="mt-1 text-sm text-muted">The + button opens Quick Add. Rows live on the laptop, not this phone.</p>
+          <p className="mt-1 text-sm text-muted">Quick Add opens a new row. Rows live on the laptop.</p>
         </div>
       ) : visible.length === 0 ? (
         <p className="py-10 text-sm text-muted">No matches for this filter.</p>
       ) : (
-        <div className="pb-8">
+        <div className="pb-8 desk:card desk:px-5 desk:pt-2">
+          <div className="data-head desk:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_8.5rem] desk:pt-3">
+            <span>Entry</span>
+            <span>Account</span>
+            <span className="text-right">Amount</span>
+          </div>
           {groups.map((group) => (
             <section key={group.date} className="mb-4">
               <h2
-                className="sticky z-[1] -mx-5 bg-app px-5 py-1.5 text-[13px] font-semibold text-muted"
+                className="sticky z-[1] -mx-5 bg-app px-5 py-1.5 text-[13px] font-semibold text-muted desk:mx-0 desk:rounded-lg desk:px-2"
                 style={{ top: barH }}
               >
                 {dayHeaderText(group)}

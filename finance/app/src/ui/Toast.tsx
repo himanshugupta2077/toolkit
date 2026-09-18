@@ -17,7 +17,7 @@ export function Toast({ message, onDismiss }: ToastProps) {
   return (
     <div
       role="status"
-      className="absolute left-4 right-4 top-[max(0.75rem,env(safe-area-inset-top))] z-50 rounded-2xl bg-ink px-4 py-3 text-sm font-medium tabular-nums text-app shadow-lg"
+      className="absolute top-[max(0.75rem,env(safe-area-inset-top))] right-4 left-4 z-50 rounded-2xl bg-ink px-4 py-3 text-sm font-medium tabular-nums text-app shadow-lg desk:top-6 desk:right-8 desk:left-auto desk:w-auto desk:min-w-80 desk:max-w-md"
     >
       {message}
     </div>

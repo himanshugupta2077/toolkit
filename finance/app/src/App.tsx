@@ -8,6 +8,8 @@ import { AccountsScreen } from "./ui/AccountsScreen.tsx";
 import { AppShell } from "./ui/AppShell.tsx";
 import { AllocateScreen } from "./ui/AllocateScreen.tsx";
 import { BucketEditorScreen } from "./ui/BucketEditorScreen.tsx";
+import { DebtScreen } from "./ui/DebtScreen.tsx";
+import { EmergencyFundScreen } from "./ui/EmergencyFundScreen.tsx";
 import { GoalDetailScreen } from "./ui/GoalDetailScreen.tsx";
 import { GoalsScreen } from "./ui/GoalsScreen.tsx";
 import { HoldingDetailScreen } from "./ui/HoldingDetailScreen.tsx";
@@ -20,12 +22,8 @@ import { PrivacyProvider } from "./ui/Privacy.tsx";
 import { ReconcileScreen } from "./ui/ReconcileScreen.tsx";
 import { SettingsScreen } from "./ui/SettingsScreen.tsx";
 import { WealthScreen } from "./ui/WealthScreen.tsx";
-import {
-  HomeScreen,
-  LedgerScreen,
-  MoreScreen,
-  PlanScreen,
-} from "./ui/screens.tsx";
+import { HomeDetailedScreen, HomeScreen } from "./ui/HomeScreen.tsx";
+import { LedgerScreen, MoreScreen, PlanScreen } from "./ui/screens.tsx";
 import { appBasename } from "./basePath.ts";
 
 export default function App() {
@@ -55,11 +53,15 @@ export default function App() {
           >
             <Route path="/" element={<Navigate to="/home" replace />} />
             <Route path="/home" element={<HomeScreen />} />
+            <Route path="/home/detailed" element={<HomeDetailedScreen />} />
             <Route path="/ledger" element={<LedgerScreen />} />
             <Route path="/ledger/:entryId" element={<LedgerDetailScreen />} />
             <Route path="/plan" element={<PlanScreen />} />
+            <Route path="/emergency" element={<EmergencyFundScreen />} />
+            <Route path="/debt" element={<DebtScreen />} />
             <Route path="/wealth" element={<WealthScreen />} />
             <Route path="/wealth/allocate" element={<AllocateScreen />} />
+            <Route path="/wealth/emergency" element={<Navigate to="/emergency" replace />} />
             <Route path="/wealth/buckets" element={<BucketEditorScreen />} />
             <Route path="/wealth/goals" element={<GoalsScreen />} />
             <Route path="/wealth/goals/:goalId" element={<GoalDetailScreen />} />

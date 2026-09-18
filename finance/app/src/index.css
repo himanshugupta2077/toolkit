@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant desk (@media (min-width: 60rem));
+
 @theme {
   --font-sans: "Segoe UI", ui-sans-serif, system-ui, sans-serif;
 
@@ -114,14 +116,27 @@ a {
   -webkit-tap-highlight-color: transparent;
 }
 
-* {
-  scrollbar-width: none;
+@media (max-width: 59.99rem) {
+  * {
+    scrollbar-width: none;
+  }
+
+  *::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+    display: none;
+  }
 }
 
-*::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+@media (min-width: 60rem) {
+  body {
+    background: var(--app);
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
 }
 
 :focus-visible {
@@ -148,7 +163,7 @@ a {
     @apply text-[13px] font-medium text-muted;
   }
   .hero-num {
-    @apply text-[2rem] leading-none font-semibold tracking-tight tabular-nums text-ink;
+    @apply text-[2rem] leading-none font-semibold tracking-tight tabular-nums text-ink desk:text-[2.6rem];
   }
   .field {
     @apply min-h-11 w-full rounded-xl border border-line-strong bg-card px-3 text-base text-ink placeholder:text-muted;
@@ -164,6 +179,9 @@ a {
   }
   .btn-quiet {
     @apply inline-flex min-h-11 items-center justify-center rounded-xl px-3 text-sm font-medium text-muted transition-opacity active:opacity-70 disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-close {
+    @apply inline-flex min-h-11 items-center justify-center rounded-xl border border-danger/40 bg-danger-soft px-3 text-sm font-medium text-danger transition-opacity active:opacity-70 disabled:pointer-events-none disabled:opacity-40;
   }
   .btn-danger {
     @apply inline-flex min-h-11 items-center justify-center rounded-xl bg-danger px-4 text-base font-medium text-danger-fg transition-[opacity,transform] active:scale-[0.98] active:opacity-90 disabled:pointer-events-none disabled:opacity-40;
@@ -182,5 +200,77 @@ a {
   }
   .avatar {
     @apply flex size-9 shrink-0 items-center justify-center rounded-full bg-card-2 text-sm font-medium text-ink;
+  }
+  .page {
+    @apply px-5 pb-8 desk:w-full desk:max-w-none desk:px-0 desk:pb-12;
+  }
+  .back-link {
+    @apply desk:hidden;
+  }
+  .chip-row {
+    @apply -mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1 desk:mx-0 desk:flex-wrap desk:overflow-visible desk:px-0;
+  }
+  .desk-stack {
+    @apply flex flex-col gap-3 desk:grid desk:grid-cols-2 desk:items-start desk:gap-5;
+  }
+  .desk-dash {
+    @apply flex flex-col gap-3 desk:grid desk:grid-cols-12 desk:items-start desk:gap-5;
+  }
+  .page-title {
+    @apply text-2xl font-semibold tracking-tight text-ink desk:text-[1.85rem];
+  }
+  .tab-row {
+    @apply -mx-5 mt-3 flex gap-2 overflow-x-auto px-5 pb-1 desk:mx-0 desk:mt-6 desk:gap-0 desk:overflow-visible desk:border-b desk:border-line desk:px-0 desk:pb-0;
+  }
+  .tab {
+    @apply inline-flex min-h-11 shrink-0 items-center rounded-full px-3.5 text-sm font-medium transition-opacity active:opacity-80 desk:rounded-none desk:border-0 desk:border-b-2 desk:bg-transparent desk:px-4;
+  }
+  .tab-on {
+    @apply bg-ink text-app desk:border-accent desk:bg-transparent desk:text-accent;
+  }
+  .tab-off {
+    @apply border border-line-strong bg-card text-ink desk:border-transparent desk:bg-transparent desk:text-muted desk:hover:text-ink;
+  }
+  .data-head {
+    @apply hidden text-[11px] font-semibold tracking-wider text-muted uppercase desk:grid desk:gap-4 desk:px-1 desk:pb-2;
+  }
+}
+
+@media (min-width: 60rem) {
+  .sheet-frame {
+    inset: auto;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: min(36rem, calc(100vw - 4rem));
+    max-height: min(85vh, 760px);
+    transform: translate(-50%, -50%);
+    border-radius: 1.25rem;
+    border: 1px solid var(--line);
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
+  }
+
+  .sheet-frame.sheet-tall {
+    height: min(44rem, 85vh);
+  }
+
+  .sheet-handle {
+    display: none;
+  }
+
+  .lock-screen {
+    align-items: center;
+    justify-content: center;
+    background: var(--page);
+  }
+
+  .lock-panel {
+    flex: none;
+    width: min(24rem, calc(100% - 2rem));
+    border: 1px solid var(--line);
+    border-radius: 1.5rem;
+    background: var(--app);
+    padding: 2rem 1.5rem 1.5rem;
   }
 }

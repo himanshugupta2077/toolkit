@@ -125,7 +125,7 @@ describe("synthetic investment import", () => {
     const put = await first.app.request("/api/seed/invest", {
       method: "PUT",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ savingsRupees: 12_000, efMonths: 6, sipPct: 70 }),
+      body: JSON.stringify({ savingsRupees: 12_000, efRupees: 0, sipPct: 70 }),
     });
     expect(put.status).toBe(200);
     const putBody = (await put.json()) as { summary: { savingsTarget: number } };

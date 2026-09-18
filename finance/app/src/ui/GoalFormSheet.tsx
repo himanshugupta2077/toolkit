@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { GoalPatchBody, GoalWriteBody } from "../api/store.ts";
 import type { GoalCard } from "../engine/index.ts";
+import { FieldLabel, FormSelect, namedOptions } from "./formFields.tsx";
 import { FILL_TARGET_PROMPT } from "./goals.ts";
 import { parseRupeesInput, rupeesInput } from "./wealth.ts";
 
@@ -13,15 +14,6 @@ type GoalFormSheetProps = {
   onSaveAdd: (body: GoalWriteBody) => void;
   onSaveEdit: (body: GoalPatchBody) => void;
 };
-
-function FieldLabel({ children }: { children: string }) {
-  return (
-    <span className="kicker">{children}</span>
-  );
-}
-
-const inputClass =
-  "mt-1 field";
 
 export function GoalFormSheet({
   mode,
@@ -57,68 +49,62 @@ export function GoalFormSheet({
   const targetInvalid = target.trim() !== "" && parseRupeesInput(target) == null;
 
   return (
-    <div className="pb-4">
-      <label className="block">
-        <FieldLabel>Name</FieldLabel>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          className={inputClass}
-        />
-      </label>
-      <label className="mt-4 block">
-        <FieldLabel>Target ₹</FieldLabel>
-        <input
-          value={target}
-          onChange={(e) => setTarget(e.target.value)}
-          inputMode="decimal"
-          placeholder={FILL_TARGET_PROMPT}
-          className={inputClass}
-        />
-      </label>
-      {goalNeedsBlankHint(goal, target) ? (
-        <p className="mt-1 text-sm text-warn">{FILL_TARGET_PROMPT}</p>
-      ) : null}
-      {targetInvalid ? (
-        <p className="mt-1 text-sm text-danger">Enter a positive rupee amount, or leave blank.</p>
-      ) : null}
-      <label className="mt-4 block">
-        <FieldLabel>Target date</FieldLabel>
-        <input
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          className={inputClass}
-        />
-      </label>
-      <label className="mt-4 block">
-        <FieldLabel>Funding bucket</FieldLabel>
-        <select
+    <div className="pb-1">
+      <div className="space-y-4">
+        <label className="block">
+          <FieldLabel>Name</FieldLabel>
+          <input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="mt-1 field"
+          />
+        </label>
+        <label className="block">
+          <FieldLabel>Target ₹</FieldLabel>
+          <input
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            inputMode="decimal"
+            placeholder={FILL_TARGET_PROMPT}
+            className="mt-1 field"
+          />
+        </label>
+        {goalNeedsBlankHint(goal, target) ? (
+          <p className="-mt-2 text-sm text-warn">{FILL_TARGET_PROMPT}</p>
+        ) : null}
+        {targetInvalid ? (
+          <p className="-mt-2 text-sm text-danger">Enter a positive rupee amount, or leave blank.</p>
+        ) : null}
+        <label className="block">
+          <FieldLabel>Target date</FieldLabel>
+          <input
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+            className="mt-1 field"
+          />
+        </label>
+        <FormSelect
+          label="Funding bucket"
           value={bucketId}
-          onChange={(e) => setBucketId(e.target.value)}
-          className={inputClass}
-        >
-          {buckets.map((bucket) => (
-            <option key={bucket.id} value={bucket.id}>
-              {bucket.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="mt-4 block">
-        <FieldLabel>Notes</FieldLabel>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={3}
-          className="field mt-1 py-2"
+          onChange={setBucketId}
+          options={namedOptions(buckets)}
         />
-      </label>
+        <label className="block">
+          <FieldLabel>Notes</FieldLabel>
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={3}
+            className="field mt-1 py-2"
+          />
+        </label>
+      </div>
       <button
         type="button"
         disabled={!canSave || targetInvalid}
         onClick={save}
-        className="mt-4 btn-primary w-full rounded-full text-sm"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : mode === "add" ? "Add goal" : "Save"}
       </button>

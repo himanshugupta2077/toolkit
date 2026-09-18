@@ -1,8 +1,10 @@
 import { Link } from "react-router-dom";
 
 const LINKS = [
+  { to: "/plan", label: "Budget" },
   { to: "/ledger", label: "Ledger" },
-  { to: "/plan", label: "Plan" },
+  { to: "/emergency", label: "Emergency" },
+  { to: "/debt", label: "Debt" },
   { to: "/more/accounts", label: "Accounts" },
   { to: "/more/categories", label: "Categories" },
   { to: "/more/settings", label: "Settings" },
@@ -10,11 +12,11 @@ const LINKS = [
 
 export function MoreScreen() {
   return (
-    <section className="px-5">
+    <section className="page">
       <a href="/" className="text-sm text-muted">
         ← Toolkit
       </a>
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight text-ink">More</h1>
+      <h1 className="page-title mt-3">More</h1>
       <nav className="card mt-5 divide-y divide-line overflow-hidden">
         {LINKS.map((row) => (
           <Link

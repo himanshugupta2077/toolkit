@@ -21,8 +21,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-ROOT = Path(__file__).resolve().parent
-LOG_DIR = ROOT / "data" / "logs"
+from paths import data_root
+
+LOG_DIR = data_root() / "logs"
 ACTIVITY_PATH = LOG_DIR / "activity.jsonl"
 
 _lock = threading.Lock()
@@ -44,9 +45,11 @@ _TAG_STYLE: dict[str, tuple[str, str]] = {
     "finance:ai": ("🤖", "\033[92m"),      # bright green
     "finance:manual": ("✋", "\033[94m"),  # bright blue
     "server": ("🖥", "\033[97m"),          # bright white
+    "auth": ("🔑", "\033[96m"),            # cyan
     "ai": ("✨", "\033[96m"),              # cyan
     "food": ("🍛", "\033[93m"),            # yellow
     "food:ai": ("🤖", "\033[92m"),         # green
+    "heart": ("❤️", "\033[95m"),           # magenta
     "queue": ("📬", "\033[93m"),           # yellow
     "error": ("❌", "\033[91m"),           # bright red
     "warn": ("⚠", "\033[93m"),             # yellow

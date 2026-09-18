@@ -111,6 +111,36 @@ export function currentCycleStart(
   );
 }
 
+/**
+ * Next statement date after today. Today on the statement day rolls forward.
+ * No statement day → null (do not invent a cycle).
+ */
+export function nextStatementDate(
+  today: IsoDate,
+  statementDay: number | null,
+): IsoDate | null {
+  if (!isIsoDate(today)) {
+    throw new Error(`invalid cycle today: ${today}`);
+  }
+  if (statementDay == null || statementDay < 1) {
+    return null;
+  }
+  const ym = yearMonthFromIsoDate(today);
+  const { year, month } = parseYearMonth(ym);
+  const todayDay = Number(today.slice(8, 10));
+  const thisMonthDay = clampDayOfMonth(year, month, statementDay);
+  if (todayDay < thisMonthDay) {
+    return isoDateFromParts(year, month, thisMonthDay);
+  }
+  const next = addMonths(ym, 1);
+  const following = parseYearMonth(next);
+  return isoDateFromParts(
+    following.year,
+    following.month,
+    clampDayOfMonth(following.year, following.month, statementDay),
+  );
+}
+
 export type CycleSpendEntry = Pick<
   LedgerEntry,
   "date" | "amount" | "fromAccountId" | "toAccountId" | "type"

@@ -13,8 +13,9 @@ from typing import Any
 
 from zoneinfo import ZoneInfo
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data" / "food"
+from paths import data_root
+
+DATA_DIR = data_root() / "food"
 ITEMS_PATH = DATA_DIR / "items.json"
 LOGS_PATH = DATA_DIR / "logs.json"
 PLANS_PATH = DATA_DIR / "plans.json"

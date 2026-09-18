@@ -1,21 +1,25 @@
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import type { QuickAddPrefill } from "./AppShell.tsx";
+import { apiErrorText } from "./copy.ts";
 import { FetchError } from "./FetchError.tsx";
 import { amountDraftFromPaise } from "./ledger.ts";
 import {
   getBooks,
+  parseOsLedger,
+  postCategory,
   postLedger,
+  postOsVoice,
   type BooksResponse,
   type LedgerPostBody,
   type MonthResponse,
+  type OsParsedEntry,
 } from "../api/store.ts";
 import {
   addDays,
   formatInr,
   isIsoDate,
   nowTimeIst,
-  resolveBudgetCap,
   todayIst,
   yearMonthFromIsoDate,
   type Books,
@@ -23,23 +27,38 @@ import {
   type LedgerEntry,
   type LedgerType,
 } from "../engine/index.ts";
-import { Keypad } from "./Keypad.tsx";
+import {
+  AmountField,
+  categoryOptions,
+  chipClass,
+  FormSelect,
+  namedOptions,
+} from "./formFields.tsx";
+import { AiAddPanel } from "./AiAddPanel.tsx";
+import {
+  ADD_MODE_LABELS,
+  catalogFromBooks,
+  readAddMode,
+  toLedgerPostBody,
+  voiceSttPrefs,
+  writeAddMode,
+  type AddMode,
+} from "./ledgerParse.ts";
 import {
   accountsForSlot,
-  amountExpression,
   amountPaise,
-  applyAmountKey,
   categoriesForType,
   defaultAccounts,
+  defaultCategoryGroup,
   defaultCategoryId,
   EMPTY_AMOUNT,
+  filterCategories,
   groupCategories,
+  hasExactCategory,
   lastNoteForCategory,
   QUICK_ADD_TYPES,
   quickAddHints,
-  recentCategoryIds,
   showsInBudget,
-  sortRecentFirst,
   visibleAccountSlots,
   type AmountDraft,
 } from "./quickAdd.ts";
@@ -52,13 +71,8 @@ type QuickAddSheetProps = {
 };
 
 type DateChoice = "today" | "yesterday" | "pick";
-type Picker = "from" | "to" | "category" | null;
 
 const BOOKS_SINCE_DAYS = 180;
-
-function chipClass(on: boolean): string {
-  return `chip ${on ? "chip-on" : "chip-off"}`;
-}
 
 function resolveDate(today: IsoDate, choice: DateChoice, picked: string): IsoDate {
   if (choice === "today") return today;
@@ -171,12 +185,18 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
   const [dateChoice, setDateChoice] = useState<DateChoice>("today");
   const [pickedDate, setPickedDate] = useState("");
   const [notes, setNotes] = useState("");
-  const [noteFocused, setNoteFocused] = useState(false);
-  const [picker, setPicker] = useState<Picker>(null);
+  const [picker, setPicker] = useState<"category" | null>(null);
+  const [categoryQuery, setCategoryQuery] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [saving, setSaving] = useState(false);
   const [hydrated, setHydrated] = useState(false);
   const [goalId, setGoalId] = useState<string | null>(null);
   const [goalName, setGoalName] = useState<string | null>(null);
+  const [addMode, setAddMode] = useState<AddMode>("form");
+  const [aiText, setAiText] = useState("");
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiStatus, setAiStatus] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const booksQ = useQuery({
     queryKey: ["books", since],
@@ -186,7 +206,16 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
   });
   const books = booksQ.data?.books;
 
-  if (books && !hydrated) {
+  if (!open && hydrated) {
+    setHydrated(false);
+    setAiText("");
+    setAiBusy(false);
+    setAiStatus(null);
+    setAiError(null);
+    setPicker(null);
+  }
+
+  if (books && open && !hydrated) {
     const nextType = prefill?.type ?? "expense";
     const next = applyDefaults(nextType, books);
     setType(nextType);
@@ -204,35 +233,24 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
     setNotes(prefill?.notes ?? "");
     setGoalId(prefill?.goalId ?? null);
     setGoalName(prefill?.goalName ?? null);
+    setAddMode(prefill ? "form" : readAddMode());
+    setAiText("");
+    setAiBusy(false);
+    setAiStatus(null);
+    setAiError(null);
     setHydrated(true);
   }
 
   const paise = amountPaise(amount);
   const date = books ? resolveDate(books.today, dateChoice, pickedDate) : todayIst();
   const slots = visibleAccountSlots(type);
-  const fromAccount = books?.accounts.find((row) => row.id === fromId);
-  const toAccount = books?.accounts.find((row) => row.id === toId);
   const category = books?.categories.find((row) => row.id === categoryId);
   const typeCategories = books ? categoriesForType(type, books.categories) : [];
-  const recentCats = books
-    ? recentCategoryIds(books.entries, type)
-        .map((id) => typeCategories.find((row) => row.id === id))
-        .filter((row) => row != null)
-    : [];
-  const categoryChips =
-    recentCats.length > 0
-      ? recentCats
-      : typeCategories.slice(0, 8);
+  const fromOptions = books ? namedOptions(accountsForSlot(type, "from", books.accounts)) : [];
+  const toOptions = books ? namedOptions(accountsForSlot(type, "to", books.accounts)) : [];
   const notePlaceholder = books
     ? lastNoteForCategory(books.entries, categoryId) || "Note"
     : "Note";
-  const cap = books
-    ? resolveBudgetCap(
-        yearMonthFromIsoDate(date),
-        books.monthBudgets,
-        books.settings.defaultBudget,
-      )
-    : 0;
 
   const hints = books
     ? quickAddHints(
@@ -266,6 +284,141 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
     const row = books?.categories.find((c) => c.id === id);
     if (row && showsInBudget(type)) setInBudget(row.defaultInBudget);
     setPicker(null);
+    setCategoryQuery("");
+  }
+
+  async function createCategoryFromQuery() {
+    const name = categoryQuery.trim();
+    if (!name || creatingCategory) return;
+    setCreatingCategory(true);
+    try {
+      const res = await postCategory({
+        name,
+        group: defaultCategoryGroup(type),
+        defaultInBudget: showsInBudget(type),
+      });
+      const created = res.category;
+      if (!created) throw new Error("Category was not created.");
+      qc.setQueryData<BooksResponse>(["books", since], (prev) => {
+        if (!prev) return prev;
+        if (prev.books.categories.some((row) => row.id === created.id)) return prev;
+        return {
+          ...prev,
+          books: {
+            ...prev.books,
+            categories: [...prev.books.categories, created],
+          },
+        };
+      });
+      void qc.invalidateQueries({ queryKey: ["categories"] });
+      onToast(`${created.name} added`);
+      selectCategory(created.id);
+    } catch (err) {
+      onToast(apiErrorText(err));
+    } finally {
+      setCreatingCategory(false);
+    }
+  }
+
+  function selectAddMode(next: AddMode) {
+    setAddMode(next);
+    writeAddMode(next);
+    setAiError(null);
+    setAiStatus(null);
+  }
+
+  async function saveAiEntries(entries: OsParsedEntry[]) {
+    if (!books || entries.length === 0) return;
+    const bodies = entries.map((entry) => toLedgerPostBody(entry, books.today));
+    const first = bodies[0];
+    if (!first) return;
+    const firstCat =
+      books.categories.find((row) => row.id === first.categoryId)?.name ?? first.type;
+    onToast(
+      bodies.length === 1
+        ? `${formatInr(first.amount)} · ${firstCat}`
+        : `${bodies.length} entries`,
+    );
+    setSaving(true);
+    onClose();
+    void (async () => {
+      const snaps = [];
+      try {
+        for (const body of bodies) {
+          snaps.push(await writeOptimistic(qc, since, body));
+          await postLedger(body);
+        }
+        const last = bodies[bodies.length - 1];
+        const catName =
+          last != null
+            ? (books.categories.find((row) => row.id === last.categoryId)?.name ?? last.type)
+            : firstCat;
+        onToast(
+          bodies.length === 1
+            ? `${formatInr(first.amount)} · ${catName} · saved`
+            : `${bodies.length} entries · saved`,
+        );
+      } catch (err) {
+        for (const snap of snaps.reverse()) rollbackOptimistic(qc, snap);
+        onToast(apiErrorText(err) || "not saved");
+      } finally {
+        setSaving(false);
+        refetchAfterSave(qc);
+      }
+    })();
+  }
+
+  async function submitAiText() {
+    if (!books || aiBusy || saving) return;
+    const text = aiText.trim();
+    if (!text) {
+      setAiError("Type a money event first.");
+      return;
+    }
+    setAiBusy(true);
+    setAiError(null);
+    setAiStatus("Reading…");
+    try {
+      const result = await parseOsLedger({
+        text,
+        catalog: catalogFromBooks(books),
+      });
+      if (!result.ok || !result.entries?.length) {
+        setAiError(result.error || "No transaction found.");
+        setAiStatus(null);
+        return;
+      }
+      await saveAiEntries(result.entries);
+    } catch (err) {
+      setAiError(apiErrorText(err));
+      setAiStatus(null);
+    } finally {
+      setAiBusy(false);
+    }
+  }
+
+  async function submitAiVoice(blob: Blob, filename: string) {
+    if (!books || aiBusy || saving) return;
+    setAiBusy(true);
+    setAiError(null);
+    setAiStatus("Transcribing…");
+    try {
+      const result = await postOsVoice(blob, filename, catalogFromBooks(books), voiceSttPrefs());
+      const heard = (result.transcript || result.note?.transcript || "").trim();
+      if (heard) setAiText(heard);
+      if (!result.ok || !result.entries?.length) {
+        setAiError(result.error || "Heard that, but no transaction found. Edit the text and add.");
+        setAiStatus(null);
+        selectAddMode("type");
+        return;
+      }
+      await saveAiEntries(result.entries);
+    } catch (err) {
+      setAiError(apiErrorText(err));
+      setAiStatus(null);
+    } finally {
+      setAiBusy(false);
+    }
   }
 
   function submit() {
@@ -323,88 +476,122 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
     return <p className="pb-4 text-sm text-muted">Loading accounts…</p>;
   }
 
-  if (picker) {
-    const title =
-      picker === "from" ? "From" : picker === "to" ? "To" : "Category";
-    const accountRows =
-      picker === "category"
-        ? []
-        : sortRecentFirst(
-            accountsForSlot(type, picker, books.accounts),
-            books.entries
-              .filter((e) => e.type === type)
-              .map((e) => (picker === "from" ? e.fromAccountId : e.toAccountId)),
-          );
-    const grouped = picker === "category" ? groupCategories(typeCategories) : [];
+  if (picker === "category") {
+    const filteredCats = filterCategories(typeCategories, categoryQuery);
+    const grouped = groupCategories(filteredCats);
+    const canCreateCategory =
+      categoryQuery.trim() !== "" && !hasExactCategory(typeCategories, categoryQuery);
     return (
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="mb-3 flex items-center gap-2">
           <button
             type="button"
-            onClick={() => setPicker(null)}
+            onClick={() => {
+              setPicker(null);
+              setCategoryQuery("");
+            }}
             className="btn-ghost -ml-3"
           >
             Back
           </button>
-          <p className="text-base font-semibold text-ink">{title}</p>
+          <p className="text-base font-semibold text-ink">Category</p>
         </div>
+        <label className="mb-3 block">
+          <span className="kicker">Search</span>
+          <input
+            type="search"
+            value={categoryQuery}
+            onChange={(e) => setCategoryQuery(e.target.value)}
+            placeholder="Find or create"
+            className="mt-1 field"
+            autoFocus
+          />
+        </label>
         <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-          {picker === "category"
-            ? grouped.map((g) => (
-                <section key={g.group} className="mb-4">
-                  <h3 className="kicker mb-2">
-                    {g.group}
-                  </h3>
-                  <div className="flex flex-col gap-1">
-                    {g.rows.map((row) => (
-                      <button
-                        type="button"
-                        key={row.id}
-                        onClick={() => selectCategory(row.id)}
-                        className={`min-h-11 rounded-xl px-3 text-left text-base transition-colors active:bg-card-2 ${
-                          row.id === categoryId ? "bg-accent-soft font-medium text-ink" : "text-ink"
-                        }`}
-                      >
-                        {row.name}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              ))
-            : accountRows.map((row) => (
-                <button
-                  type="button"
-                  key={row.id}
-                  onClick={() => {
-                    if (picker === "from") setFromId(row.id);
-                    else setToId(row.id);
-                    setPicker(null);
-                  }}
-                  className={`mb-1 min-h-11 w-full rounded-xl px-3 text-left text-base transition-colors active:bg-card-2 ${
-                    row.id === (picker === "from" ? fromId : toId)
-                      ? "bg-accent-soft font-medium text-ink"
-                      : "text-ink"
-                  }`}
-                >
-                  {row.name}
-                </button>
-              ))}
+          {canCreateCategory ? (
+            <button
+              type="button"
+              disabled={creatingCategory}
+              onClick={() => void createCategoryFromQuery()}
+              className="mb-3 min-h-11 w-full rounded-xl bg-accent-soft px-3 text-left text-base font-medium text-ink"
+            >
+              {creatingCategory ? "Creating…" : `Create “${categoryQuery.trim()}”`}
+            </button>
+          ) : null}
+          {grouped.length === 0 && !canCreateCategory ? (
+            <p className="text-sm text-muted">No categories match.</p>
+          ) : null}
+          {grouped.map((g) => (
+            <section key={g.group} className="mb-4">
+              <h3 className="kicker mb-2">{g.group}</h3>
+              <div className="flex flex-col gap-1">
+                {g.rows.map((row) => (
+                  <button
+                    type="button"
+                    key={row.id}
+                    onClick={() => selectCategory(row.id)}
+                    className={`min-h-11 rounded-xl px-3 text-left text-base transition-colors active:bg-card-2 ${
+                      row.id === categoryId ? "bg-accent-soft font-medium text-ink" : "text-ink"
+                    }`}
+                  >
+                    {row.name}
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       </div>
     );
   }
 
-  const expr = amountExpression(amount);
-  const amountLabel =
-    amount.parts.length > 0 ? formatInr(paise) : amount.buffer ? `₹${amount.buffer}` : "₹0";
+  const modeSwitch = (
+    <div
+      role="radiogroup"
+      aria-label="How"
+      className="-mx-1 mb-4 flex gap-2 overflow-x-auto px-1"
+    >
+      {(["form", "type", "speak"] as const).map((mode) => (
+        <button
+          key={mode}
+          type="button"
+          role="radio"
+          aria-checked={addMode === mode}
+          onClick={() => selectAddMode(mode)}
+          className={chipClass(addMode === mode)}
+        >
+          {ADD_MODE_LABELS[mode]}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (addMode !== "form") {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {modeSwitch}
+        <AiAddPanel
+          mode={addMode}
+          busy={aiBusy || saving}
+          status={aiStatus}
+          error={aiError}
+          text={aiText}
+          onText={setAiText}
+          onSubmitText={() => void submitAiText()}
+          onSubmitVoice={(blob, filename) => void submitAiVoice(blob, filename)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      {modeSwitch}
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pb-2">
         <div
           role="radiogroup"
           aria-label="Type"
-          className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-3"
+          className="-mx-1 flex gap-2 overflow-x-auto px-1"
         >
           {QUICK_ADD_TYPES.map((row) => {
             const selected = type === row.id;
@@ -424,79 +611,59 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
         </div>
 
         {goalName ? (
-          <p className="mb-3 rounded-xl bg-accent-soft px-3 py-2 text-sm text-ink">
+          <p className="rounded-xl bg-accent-soft px-3 py-2 text-sm text-ink">
             This save also funds {goalName}.
           </p>
         ) : null}
 
-        <p className="kicker">Amount</p>
-        <p className="mt-1 text-[2.5rem] leading-none font-semibold tracking-tight tabular-nums text-ink" aria-live="polite">
-          {amountLabel}
-        </p>
-        {amount.parts.length > 0 ? (
-          <p className="mt-1.5 text-sm tabular-nums text-muted">{expr}</p>
-        ) : null}
+        <AmountField amount={amount} onChange={setAmount} />
 
-        <div className={`mt-4 grid gap-2 ${slots.from && slots.to ? "grid-cols-2" : "grid-cols-1"}`}>
+        <div className={`grid gap-2 ${slots.from && slots.to ? "grid-cols-2" : "grid-cols-1"}`}>
           {slots.from ? (
-            <button
-              type="button"
-              onClick={() => setPicker("from")}
-              className="min-h-11 rounded-xl border border-line-strong bg-card px-3 py-2 text-left transition-colors active:bg-card-2"
-            >
-              <span className="block text-[13px] text-muted">From</span>
-              <span className="block text-base font-medium text-ink">
-                {fromAccount?.name ?? "Pick account"}
-              </span>
-            </button>
+            <FormSelect
+              label="From"
+              value={fromId}
+              onChange={setFromId}
+              placeholder="Pick account"
+              options={fromOptions}
+            />
           ) : null}
           {slots.to ? (
-            <button
-              type="button"
-              onClick={() => setPicker("to")}
-              className="min-h-11 rounded-xl border border-line-strong bg-card px-3 py-2 text-left transition-colors active:bg-card-2"
-            >
-              <span className="block text-[13px] text-muted">To</span>
-              <span className="block text-base font-medium text-ink">
-                {toAccount?.name ?? "Pick account"}
-              </span>
-            </button>
+            <FormSelect
+              label="To"
+              value={toId}
+              onChange={setToId}
+              placeholder="Pick account"
+              options={toOptions}
+            />
           ) : null}
         </div>
 
-        <div className="mt-4">
-          <p className="kicker mb-2">Category</p>
-          <div className="flex flex-wrap gap-2">
-            {categoryChips.map((row) => (
-              <button
-                key={row.id}
-                type="button"
-                onClick={() => selectCategory(row.id)}
-                className={chipClass(row.id === categoryId)}
-              >
-                {row.name}
-              </button>
-            ))}
-            {typeCategories.length > categoryChips.length ? (
-              <button
-                type="button"
-                onClick={() => setPicker("category")}
-                className={chipClass(false)}
-              >
-                All
-              </button>
-            ) : null}
+        <div className="flex items-end gap-2">
+          <div className="min-w-0 flex-1">
+            <FormSelect
+              label="Category"
+              value={categoryId}
+              onChange={selectCategory}
+              options={categoryOptions(typeCategories)}
+            />
           </div>
+          <button
+            type="button"
+            onClick={() => {
+              setCategoryQuery("");
+              setPicker("category");
+            }}
+            className="btn-secondary shrink-0"
+            aria-label="New category"
+          >
+            New
+          </button>
         </div>
 
         {showsInBudget(type) ? (
-          <div className="mt-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-medium text-ink">In budget</p>
-              <p className="text-[13px] text-muted">
-                counts against {formatInr(cap)} cap
-              </p>
-            </div>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm font-medium text-ink">In budget</p>
             <button
               type="button"
               role="switch"
@@ -516,7 +683,7 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
           </div>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => setDateChoice("today")}
@@ -531,9 +698,7 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
           >
             Yesterday
           </button>
-          <label
-            className={`${chipClass(dateChoice === "pick")} inline-flex items-center`}
-          >
+          <label className={`${chipClass(dateChoice === "pick")} inline-flex items-center`}>
             {dateChoice === "pick" && isIsoDate(pickedDate) ? pickedDate : "Pick"}
             <input
               type="date"
@@ -547,21 +712,19 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
           </label>
         </div>
 
-        <label className="mt-3 block">
-          <span className="sr-only">Note</span>
+        <label className="block">
+          <span className="kicker">Comment</span>
           <input
             type="text"
             value={notes}
             placeholder={notePlaceholder}
             onChange={(e) => setNotes(e.target.value)}
-            onFocus={() => setNoteFocused(true)}
-            onBlur={() => setNoteFocused(false)}
-            className="field"
+            className="mt-1 field"
           />
         </label>
 
         {hints.length > 0 ? (
-          <ul className="mt-3 space-y-1">
+          <ul className="space-y-1">
             {hints.map((hint) => (
               <li key={`${hint.field}:${hint.message}`} className="text-sm font-medium text-warn">
                 {hint.message}
@@ -571,34 +734,18 @@ export function QuickAddSheet({ open, onClose, onToast, prefill }: QuickAddSheet
         ) : null}
       </div>
 
-      <div className="shrink-0 border-t border-line pt-3">
-        {noteFocused ? null : (
-          <Keypad
-            plus={false}
-            onKey={(key) => setAmount((draft) => applyAmountKey(draft, key))}
-          />
-        )}
-        <div className="mt-2 grid grid-cols-3 gap-2">
-          <button
-            type="button"
-            aria-label="Add"
-            onClick={() => setAmount((draft) => applyAmountKey(draft, "+"))}
-            className="min-h-12 rounded-2xl border border-line-strong bg-card text-lg font-medium text-ink transition-colors active:bg-card-2"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            disabled={!canSave}
-            onClick={() => submit()}
-            className="btn-primary min-h-12"
-          >
-            Save
-          </button>
-          <button type="button" onClick={onClose} className="btn-quiet min-h-12">
-            Cancel
-          </button>
-        </div>
+      <div className="mt-3 grid shrink-0 grid-cols-2 gap-2 border-t border-line pt-3">
+        <button
+          type="button"
+          disabled={!canSave}
+          onClick={() => submit()}
+          className="btn-primary min-h-12"
+        >
+          Save
+        </button>
+        <button type="button" onClick={onClose} className="btn-close min-h-12">
+          Cancel
+        </button>
       </div>
     </div>
   );

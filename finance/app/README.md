@@ -35,7 +35,7 @@ If it still opens in the browser, the old shortcut is still there, or you instal
 
 ## Quick Add (Phase 12)
 
-Floating **+** on every product tab opens the sheet. Amount keypad first (`.` and `+` to sum), then From → To, category chips, date, note, **Save**. Rows go to SQLite via `POST /api/ledger` (not the browser). After save, the Ledger tab, Home pace, and `/dev/store` this-month budget spent should move.
+Floating **+** on every product tab opens the sheet. Choose **Form**, **Type**, or **Speak**. Form is the manual row (amount field, From/To, category, date, note, **Save**). Type sends a sentence to DeepSeek (`POST /api/finance-os/parse`) then `POST /api/ledger` with `source=ai`. Speak records audio, saves a Voice note, parses the transcript the same way, then posts the row. After save, Ledger, Home pace, and this-month budget spent should move.
 
 ## Home (Phase 15)
 

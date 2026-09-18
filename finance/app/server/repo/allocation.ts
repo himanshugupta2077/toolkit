@@ -417,7 +417,7 @@ export function saveAllocationRun(
   if (input.confirm) {
     const positive = input.confirmLines.filter((line) => line.amount > 0);
     if (positive.length === 0) {
-      throw new AllocationWriteError("Nothing to allocate — every line is ₹0.");
+      throw new AllocationWriteError("Nothing to allocate: every line is ₹0.");
     }
     for (const line of input.confirmLines) {
       if (!known.has(line.bucketId)) {
@@ -540,7 +540,7 @@ export function confirmAllocationRun(
   requireSurplus(existing.surplusInput, liveFree, existing.overrideReason);
   const positive = lines.filter((line) => line.amount > 0);
   if (positive.length === 0) {
-    throw new AllocationWriteError("Nothing to allocate — every line is ₹0.");
+    throw new AllocationWriteError("Nothing to allocate: every line is ₹0.");
   }
   const today = todayIst();
   const { categoryId, accounts } = validateMoves(db, lines, today);

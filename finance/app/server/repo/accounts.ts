@@ -7,6 +7,7 @@ import {
   currentCycleStart,
   cycleSpends,
   daysBetween,
+  estimatedNextStatement,
   findAdjustmentCounterpart,
   findReconciliationCategory,
   nowTimeIst,
@@ -36,6 +37,7 @@ import {
   listBuckets,
   listCategories,
   listLedgerEntries,
+  listRecurringPlans,
 } from "./store.ts";
 
 export const RECONCILE_RESOLUTIONS_WRITE = ["none", "adjustment"] as const;
@@ -103,6 +105,8 @@ export type AccountDetail = {
   daysSinceReconcile: number | null;
   cycleStart: IsoDate;
   cycleSpent: Paise;
+  estimatedNextStatement: Paise | null;
+  nextStatementDate: IsoDate | null;
   entries: LedgerEntry[];
   reconciliations: ReconciliationRow[];
   accounts: Account[];
@@ -225,16 +229,31 @@ export function getAccountDetail(
   const recons = listReconciliations(db, id);
   const last = recons[0] ?? null;
   const cycleStart = currentCycleStart(today, account.statementDay);
+  const balance = pos?.balance ?? accountBalance(account, entriesAll);
+  const estimate =
+    account.group === "credit_card"
+      ? estimatedNextStatement(
+          today,
+          account.statementDay,
+          account.id,
+          balance,
+          listRecurringPlans(db),
+          cats,
+          entriesAll,
+        )
+      : null;
   return {
     today,
     account,
-    balance: pos?.balance ?? accountBalance(account, entriesAll),
+    balance,
     available: pos?.available ?? null,
     utilisation: pos?.utilisation ?? null,
     lastReconciledAt: last?.checkedAt ?? null,
     daysSinceReconcile: daysSince(last?.checkedAt ?? null, today),
     cycleStart,
     cycleSpent: cycleSpends(account.id, entriesAll, cycleStart, today),
+    estimatedNextStatement: estimate?.estimated ?? null,
+    nextStatementDate: estimate?.nextStatementDate ?? null,
     entries: listLedgerForAccount(db, id),
     reconciliations: recons,
     accounts: accs,

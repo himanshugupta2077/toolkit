@@ -2,9 +2,11 @@
 .env.*
 __pycache__/
 *.pyc
+node_modules/
 whisper/.venv/
 data/
 heart/results.jsonl
+heart/media/
 finance/app/node_modules/
 finance/app/data/
 finance/app/dist/

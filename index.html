@@ -142,6 +142,22 @@
     .icon-btn:active { transform: scale(0.96); }
     .icon-btn.hidden { display: none; }
 
+    #detailSettingsBtn svg {
+      width: 18px;
+      height: 18px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.7;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    #detailSettingsBtn.is-on {
+      color: var(--accent);
+      border-color: rgba(61, 139, 253, 0.5);
+      background: rgba(61, 139, 253, 0.12);
+    }
+
     .icon-btn.danger {
       color: var(--danger);
       border-color: rgba(240, 113, 120, 0.35);
@@ -343,6 +359,7 @@
       cursor: pointer;
       color: inherit;
       font: inherit;
+      text-decoration: none;
       width: 100%;
       transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease, box-shadow 0.15s ease;
       box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22);
@@ -369,6 +386,10 @@
 
     .app-tile[data-app="food"]:hover {
       border-color: rgba(226, 168, 74, 0.55);
+    }
+
+    .app-tile[data-app="pact"]:hover {
+      border-color: rgba(196, 92, 38, 0.55);
     }
 
     .app-icon {
@@ -420,851 +441,12 @@
       -webkit-text-fill-color: #f3d39a;
     }
 
-    /* Heart module — locked countdown + unlock */
-    #view-heart {
-      align-items: center;
-      justify-content: flex-start;
-      padding-top: 12px;
-      gap: 18px;
-      position: relative;
-    }
-
-    .heart-locked,
-    .heart-unlocked {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 18px;
-    }
-
-    .heart-locked.hidden,
-    .heart-unlocked.hidden {
-      display: none;
-    }
-
-    .heart-pulse-btn.hidden,
-    .heart-countdown.hidden {
-      display: none;
-    }
-
-    .heart-pulse-btn {
-      appearance: none;
-      border: none;
-      background: transparent;
-      cursor: pointer;
-      padding: 8px;
-      line-height: 1;
-      font-size: 4.2rem;
-      color: #fb7185;
-      -webkit-text-fill-color: #fb7185;
-      filter: drop-shadow(0 0 22px rgba(251, 113, 133, 0.55));
-      animation: heart-pulse 1.6s ease-in-out infinite;
-      -webkit-tap-highlight-color: transparent;
-      user-select: none;
-    }
-
-    .heart-pulse-btn:active {
-      transform: scale(0.94);
-      animation-play-state: paused;
-    }
-
-    @keyframes heart-pulse {
-      0%, 100% { transform: scale(1); filter: drop-shadow(0 0 16px rgba(251, 113, 133, 0.4)); }
-      50% { transform: scale(1.07); filter: drop-shadow(0 0 28px rgba(251, 113, 133, 0.65)); }
-    }
-
-    .heart-lock-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 0.78rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      color: rgba(244, 114, 182, 0.95);
-      background: rgba(244, 114, 182, 0.1);
-      border: 1px solid rgba(244, 114, 182, 0.28);
-    }
-
-    .heart-countdown {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      width: 100%;
-      max-width: 360px;
-    }
-
-    .heart-cd-cell {
-      appearance: none;
-      border: 1px solid rgba(244, 114, 182, 0.22);
-      background: var(--surface);
-      border-radius: 14px;
-      padding: 12px 6px 10px;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 4px;
-      cursor: pointer;
-      color: inherit;
-      font: inherit;
-      -webkit-tap-highlight-color: transparent;
-      transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
-    }
-
-    .heart-cd-cell:active {
-      transform: scale(0.96);
-      background: var(--surface2);
-    }
-
-    .heart-cd-num {
-      font-size: 1.45rem;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      letter-spacing: -0.03em;
-      color: #f9a8d4;
-      min-height: 1.5em;
-    }
-
-    .heart-cd-label {
-      font-size: 0.65rem;
-      font-weight: 600;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      color: var(--muted);
-    }
-
-    .heart-date-line {
-      color: var(--muted);
-      font-size: 0.9rem;
-      text-align: center;
-    }
-
-    .heart-date-line strong {
-      color: #f9a8d4;
-      font-weight: 600;
-    }
-
-    /* Heart browser — unlocked catalog UI (mobile-first) */
-    #view-heart.browser-mode {
-      align-items: stretch;
-      padding-top: 0;
-      gap: 0;
-    }
-
-    .heart-unlocked {
-      align-items: stretch;
-      gap: 0;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .hb {
-      width: 100%;
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .hb-level {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      width: 100%;
-      flex: 1;
-      min-height: 0;
-    }
-
-    .hb-level.hidden { display: none; }
-
-    .hb-stats {
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 2px 2px 0;
-    }
-
-    .hb-stats-count {
-      font-size: 1.35rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      font-variant-numeric: tabular-nums;
-      color: #f9a8d4;
-    }
-
-    .hb-stats-label {
-      color: var(--muted);
-      font-size: 0.8rem;
-    }
-
-    .hb-search-wrap {
-      position: relative;
-    }
-
-    .hb-search {
-      width: 100%;
-      appearance: none;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--text);
-      border-radius: 14px;
-      padding: 12px 14px 12px 40px;
-      font: inherit;
-      font-size: 0.95rem;
-      outline: none;
-    }
-
-    .hb-search:focus {
-      border-color: rgba(244, 114, 182, 0.45);
-      box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.12);
-    }
-
-    .hb-search::placeholder { color: var(--muted); }
-
-    .hb-search-icon {
-      position: absolute;
-      left: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--muted);
-      font-size: 0.85rem;
-      pointer-events: none;
-    }
-
-    .hb-cat-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding-bottom: 8px;
-    }
-
-    .hb-cat {
-      appearance: none;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      border-radius: 16px;
-      padding: 14px 14px 14px 16px;
-      display: flex;
-      align-items: center;
-      gap: 14px;
-      width: 100%;
-      text-align: left;
-      color: inherit;
-      font: inherit;
-      cursor: pointer;
-      transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .hb-cat:active {
-      transform: scale(0.985);
-      background: var(--surface2);
-    }
-
-    .hb-cat-icon {
-      width: 44px;
-      height: 44px;
-      border-radius: 13px;
-      display: grid;
-      place-items: center;
-      font-size: 1.25rem;
-      flex-shrink: 0;
-      background: rgba(244, 114, 182, 0.1);
-      border: 1px solid rgba(244, 114, 182, 0.22);
-    }
-
-    .hb-cat-body {
-      flex: 1;
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .hb-cat-name {
-      font-size: 1rem;
-      font-weight: 650;
-      letter-spacing: -0.015em;
-      text-transform: capitalize;
-    }
-
-    .hb-cat-sub {
-      color: var(--muted);
-      font-size: 0.75rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .hb-cat-count {
-      font-variant-numeric: tabular-nums;
-      font-weight: 700;
-      font-size: 0.95rem;
-      color: #f9a8d4;
-      flex-shrink: 0;
-      min-width: 1.6em;
-      text-align: right;
-    }
-
-    .hb-cat-chev {
-      color: var(--muted);
-      font-size: 1.1rem;
-      flex-shrink: 0;
-      opacity: 0.65;
-    }
-
-    .hb-toolbar {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .hb-tags {
-      display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      overflow-y: hidden;
-      padding: 2px 0 4px;
-      margin: 0 -2px;
-      padding-left: 2px;
-      padding-right: 2px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      scroll-snap-type: x proximity;
-    }
-
-    .hb-tags::-webkit-scrollbar { display: none; }
-
-    .hb-tag {
-      appearance: none;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      color: var(--muted);
-      border-radius: 999px;
-      padding: 7px 12px;
-      font: inherit;
-      font-size: 0.78rem;
-      font-weight: 600;
-      white-space: nowrap;
-      cursor: pointer;
-      flex-shrink: 0;
-      scroll-snap-align: start;
-      -webkit-tap-highlight-color: transparent;
-      transition: border-color 0.12s ease, background 0.12s ease, color 0.12s ease;
-    }
-
-    .hb-tag.active {
-      color: #fce7f3;
-      border-color: rgba(244, 114, 182, 0.5);
-      background: rgba(244, 114, 182, 0.18);
-    }
-
-    .hb-tag:active { transform: scale(0.97); }
-
-    .hb-filter-meta {
-      color: var(--muted);
-      font-size: 0.78rem;
-      font-variant-numeric: tabular-nums;
-      padding: 0 2px;
-    }
-
-    .hb-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      padding-bottom: 12px;
-    }
-
-    .hb-card {
-      appearance: none;
-      border: 1px solid var(--border);
-      background: var(--surface);
-      border-radius: 14px;
-      overflow: hidden;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      text-align: left;
-      color: inherit;
-      font: inherit;
-      cursor: pointer;
-      width: 100%;
-      -webkit-tap-highlight-color: transparent;
-      transition: border-color 0.15s ease, transform 0.1s ease;
-    }
-
-    .hb-card:active {
-      transform: scale(0.98);
-      border-color: rgba(244, 114, 182, 0.4);
-    }
-
-    .hb-card-media {
-      position: relative;
-      aspect-ratio: 1;
-      background: #0a0e14;
-      overflow: hidden;
-    }
-
-    .hb-card-media img,
-    .hb-card-media video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-      background: #0a0e14;
-    }
-
-    .hb-card-ph {
-      width: 100%;
-      height: 100%;
-      display: grid;
-      place-items: center;
-      color: var(--muted);
-      font-size: 1.4rem;
-      opacity: 0.55;
-    }
-
-    .hb-card-badges {
-      position: absolute;
-      top: 7px;
-      right: 7px;
-      display: flex;
-      gap: 4px;
-    }
-
-    .hb-badge {
-      font-size: 0.65rem;
-      font-weight: 700;
-      letter-spacing: 0.02em;
-      text-transform: uppercase;
-      padding: 3px 6px;
-      border-radius: 6px;
-      background: rgba(8, 12, 18, 0.72);
-      color: #f3f4f6;
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-    }
-
-    .hb-card-body {
-      padding: 9px 10px 11px;
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      min-height: 52px;
-    }
-
-    .hb-card-title {
-      font-size: 0.78rem;
-      font-weight: 650;
-      line-height: 1.3;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-
-    .hb-card-sub {
-      color: var(--muted);
-      font-size: 0.68rem;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-
-    .hb-empty {
-      text-align: center;
-      color: var(--muted);
-      font-size: 0.9rem;
-      padding: 36px 16px;
-      line-height: 1.45;
-    }
-
-    .hb-detail {
-      display: flex;
-      flex-direction: column;
-      gap: 14px;
-      padding-bottom: 20px;
-    }
-
-    .hb-detail-hero {
-      position: relative;
-      border-radius: 16px;
-      overflow: hidden;
-      border: 1px solid var(--border);
-      background: #0a0e14;
-      aspect-ratio: 4 / 5;
-      max-height: 48vh;
-    }
-
-    .hb-detail-hero img,
-    .hb-detail-hero video {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
-    }
-
-    .hb-detail-title {
-      font-size: 1.2rem;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      line-height: 1.25;
-    }
-
-    .hb-detail-summary {
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.5;
-    }
-
-    .hb-chip-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-
-    .hb-chip {
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 5px 10px;
-      border-radius: 999px;
-      border: 1px solid rgba(244, 114, 182, 0.28);
-      background: rgba(244, 114, 182, 0.1);
-      color: #fbcfe8;
-    }
-
-    .hb-chip.muted {
-      border-color: var(--border);
-      background: var(--surface);
-      color: var(--muted);
-    }
-
-    .hb-meta-block {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .hb-meta-row {
-      display: flex;
-      gap: 10px;
-      font-size: 0.82rem;
-      line-height: 1.4;
-    }
-
-    .hb-meta-k {
-      color: var(--muted);
-      flex-shrink: 0;
-      min-width: 72px;
-      font-weight: 600;
-      font-size: 0.75rem;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      padding-top: 1px;
-    }
-
-    .hb-meta-v {
-      min-width: 0;
-      word-break: break-word;
-    }
-
-    .hb-view-media {
-      appearance: none;
-      width: 100%;
-      border: 1px solid rgba(244, 114, 182, 0.45);
-      background: linear-gradient(145deg, rgba(244, 114, 182, 0.22), rgba(244, 114, 182, 0.1));
-      color: #fce7f3;
-      border-radius: 14px;
-      padding: 14px 16px;
-      font: inherit;
-      font-weight: 650;
-      font-size: 0.95rem;
-      cursor: pointer;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .hb-view-media:active { transform: scale(0.985); }
-
-    /* Fullscreen media viewer */
-    .hb-media-viewer {
-      position: fixed;
-      inset: 0;
-      z-index: 90;
-      background: #05070a;
-      display: flex;
-      flex-direction: column;
-      color: #f3f4f6;
-    }
-
-    .hb-media-viewer.hidden { display: none; }
-
-    .hb-media-top {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 12px 14px calc(8px + env(safe-area-inset-top, 0px));
-      padding-top: max(12px, env(safe-area-inset-top, 0px));
-      flex-shrink: 0;
-    }
-
-    .hb-media-close,
-    .hb-media-nav {
-      appearance: none;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(255, 255, 255, 0.06);
-      color: #f3f4f6;
-      border-radius: 12px;
-      width: 42px;
-      height: 42px;
-      font-size: 1.15rem;
-      cursor: pointer;
-      display: grid;
-      place-items: center;
-      -webkit-tap-highlight-color: transparent;
-    }
-
-    .hb-media-close:active,
-    .hb-media-nav:active { background: rgba(255, 255, 255, 0.12); }
-
-    .hb-media-nav:disabled {
-      opacity: 0.3;
-      cursor: default;
-    }
-
-    .hb-media-counter {
-      font-size: 0.85rem;
-      font-variant-numeric: tabular-nums;
-      color: rgba(243, 244, 246, 0.7);
-      font-weight: 600;
-    }
-
-    .hb-media-stage {
-      flex: 1;
-      min-height: 0;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 8px 12px 16px;
-      position: relative;
-    }
-
-    .hb-media-stage img,
-    .hb-media-stage video {
-      max-width: 100%;
-      max-height: 100%;
-      width: auto;
-      height: auto;
-      object-fit: contain;
-      border-radius: 8px;
-      background: #000;
-    }
-
-    .hb-media-bottom {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      padding: 8px 16px calc(16px + var(--safe-bottom));
-      flex-shrink: 0;
-    }
-
-    .heart-pass-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 80;
-      display: flex;
-      align-items: flex-end;
-      justify-content: center;
-      padding: 16px 16px calc(16px + var(--safe-bottom));
-      background: rgba(5, 8, 12, 0.72);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
-    }
-
-    .heart-pass-overlay.hidden { display: none; }
-
-    .heart-pass-sheet {
-      width: 100%;
-      max-width: 420px;
-      background: var(--surface);
-      border: 1px solid rgba(244, 114, 182, 0.3);
-      border-radius: 20px;
-      padding: 20px 18px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.45);
-    }
-
-    .heart-pass-title {
-      font-size: 1.05rem;
-      font-weight: 650;
-    }
-
-    .heart-pass-hint {
-      color: var(--muted);
-      font-size: 0.82rem;
-      margin-top: -4px;
-    }
-
-    .heart-pass-input {
-      width: 100%;
-      appearance: none;
-      border: 1px solid var(--border);
-      background: var(--bg);
-      color: var(--text);
-      border-radius: 12px;
-      padding: 14px 14px;
-      font-size: 1.1rem;
-      letter-spacing: 0.12em;
-      font-variant-numeric: tabular-nums;
-      outline: none;
-    }
-
-    .heart-pass-input:focus {
-      border-color: rgba(244, 114, 182, 0.55);
-      box-shadow: 0 0 0 3px rgba(244, 114, 182, 0.15);
-    }
-
-    .heart-pass-err {
-      color: var(--danger);
-      font-size: 0.82rem;
-      min-height: 1.2em;
-    }
-
-    .heart-pass-actions {
-      display: flex;
-      gap: 10px;
-      margin-top: 2px;
-    }
-
-    .heart-pass-actions .btn {
-      flex: 1;
-    }
-
-    .btn-heart {
-      appearance: none;
-      border: 1px solid rgba(244, 114, 182, 0.45);
-      background: rgba(244, 114, 182, 0.16);
-      color: #fbcfe8;
-      border-radius: 12px;
-      padding: 12px 14px;
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .btn-heart:active { transform: scale(0.98); }
-
-    .btn-ghost {
-      appearance: none;
-      border: 1px solid var(--border);
-      background: transparent;
-      color: var(--muted);
-      border-radius: 12px;
-      padding: 12px 14px;
-      font: inherit;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .btn-ghost:active { transform: scale(0.98); }
-
-    /* AI usage log */
-    .ai-cost {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      padding: 18px 20px;
-      display: flex;
-      align-items: baseline;
-      justify-content: space-between;
-      gap: 12px;
-    }
-
-    .ai-cost-value {
-      font-size: 1.65rem;
-      font-weight: 700;
-      letter-spacing: -0.03em;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .ai-cost-meta {
-      color: var(--muted);
-      font-size: 0.82rem;
-      font-variant-numeric: tabular-nums;
-      text-align: right;
-    }
-
-    .ai-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .ai-row {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 12px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    }
-
-    .ai-row.fail {
-      border-color: rgba(240, 113, 120, 0.35);
-    }
-
-    .ai-row-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: baseline;
-      gap: 10px;
-    }
-
-    .ai-row-title {
-      font-size: 0.92rem;
-      font-weight: 600;
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .ai-row-cost {
-      font-size: 0.88rem;
-      font-weight: 650;
-      font-variant-numeric: tabular-nums;
-      color: var(--ok);
-      flex-shrink: 0;
-    }
-
-    .ai-row.fail .ai-row-cost { color: var(--danger); }
-
-    .ai-row-sub {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      color: var(--muted);
-      font-size: 0.75rem;
-      font-variant-numeric: tabular-nums;
-    }
-
-    .ai-row-sub span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
+    .app-icon.pact {
+      background: linear-gradient(145deg, rgba(196, 92, 38, 0.36), rgba(196, 92, 38, 0.08));
+      border-color: rgba(196, 92, 38, 0.45);
+      box-shadow: 0 0 28px rgba(196, 92, 38, 0.16);
+      color: #f4efe6;
+      -webkit-text-fill-color: #f4efe6;
     }
 
     .app-meta,
@@ -2506,6 +1688,46 @@
       padding: 14px;
     }
 
+    .stt-seg {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 4px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .stt-opt {
+      appearance: none;
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font: inherit;
+      font-weight: 650;
+      font-size: 0.92rem;
+      padding: 10px 8px;
+      border-radius: 9px;
+      cursor: pointer;
+    }
+
+    .stt-opt.is-on {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 0 0 1px var(--border);
+    }
+
+    .stt-opt:disabled {
+      opacity: 0.38;
+      cursor: not-allowed;
+    }
+
+    .field[hidden],
+    label[hidden],
+    #detailModelWrap[hidden] {
+      display: none !important;
+    }
+
     .open-notes-btn {
       appearance: none;
       width: 100%;
@@ -2543,11 +1765,6 @@
       display: block;
       font-size: 0.98rem;
       font-weight: 650;
-      margin-bottom: 2px;
-    }
-    .open-notes-btn .on-text span {
-      color: var(--muted);
-      font-size: 0.82rem;
     }
     .open-notes-btn .on-chevron {
       color: var(--muted);
@@ -2581,18 +1798,6 @@
       background-repeat: no-repeat;
       padding-right: 32px;
       background-color: var(--surface);
-    }
-
-    .toggle-mini {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      color: var(--text);
-      font-size: 0.9rem;
-      font-weight: 500;
-      user-select: none;
-      padding: 2px 2px;
     }
 
     .switch {
@@ -2788,6 +1993,56 @@
       justify-content: center;
     }
 
+    .rec-split {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      width: 100%;
+      max-width: 340px;
+    }
+
+    .rec-split .btn {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .rec-translate {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 46px;
+      padding: 8px 10px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      cursor: pointer;
+      user-select: none;
+      text-align: left;
+      color: inherit;
+      font: inherit;
+    }
+
+    .rec-translate strong {
+      font-size: 0.78rem;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
+    .rec-translate .switch {
+      width: 42px;
+      height: 26px;
+    }
+
+    .rec-translate .switch .slider::before {
+      width: 18px;
+      height: 18px;
+    }
+
+    .rec-translate .switch input:checked + .slider::before {
+      transform: translateX(16px);
+    }
+
     .btn {
       appearance: none;
       border: none;
@@ -2877,29 +2132,29 @@
     }
 
     /* Notes list */
-    .toolbar {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
     .notes-list {
       display: flex;
       flex-direction: column;
-      gap: 10px;
+      gap: 8px;
     }
 
     .note-row {
       display: flex;
-      align-items: stretch;
-      gap: 8px;
-    }
-
-    .note-item {
+      align-items: center;
+      gap: 2px;
       background: var(--surface);
       border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 14px 16px;
+      border-radius: 16px;
+      padding: 4px;
+    }
+
+    .note-row:hover { border-color: var(--accent); }
+
+    .note-item {
+      background: transparent;
+      border: none;
+      border-radius: 12px;
+      padding: 10px 12px;
       cursor: pointer;
       text-align: left;
       color: inherit;
@@ -2908,49 +2163,223 @@
       min-width: 0;
     }
 
-    .note-item:hover { border-color: var(--accent); }
-
-    .note-item .meta {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      color: var(--muted);
-      font-size: 0.78rem;
-      margin-bottom: 6px;
-    }
-
-    .note-item .preview {
-      font-size: 0.92rem;
-      line-height: 1.4;
+    .note-item .headline {
+      font-size: 0.95rem;
+      font-weight: 650;
+      line-height: 1.35;
       display: -webkit-box;
-      -webkit-line-clamp: 3;
+      -webkit-line-clamp: 2;
+      line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-      white-space: pre-wrap;
+      overflow-wrap: break-word;
     }
 
-    .note-del {
-      appearance: none;
-      width: 48px;
+    .note-item .headline.is-preview {
+      font-weight: 500;
+    }
+
+    .note-item .when {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .note-tools {
+      display: flex;
       flex-shrink: 0;
-      border: 1px solid rgba(240, 113, 120, 0.28);
-      background: rgba(240, 113, 120, 0.08);
-      color: var(--danger);
-      border-radius: 14px;
+      gap: 2px;
+      padding-right: 2px;
+    }
+
+    .note-icon {
+      appearance: none;
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      border-radius: 12px;
       cursor: pointer;
       display: grid;
       place-items: center;
-      font-size: 1.05rem;
       padding: 0;
     }
 
-    .note-del:hover {
-      background: rgba(240, 113, 120, 0.18);
-      border-color: rgba(240, 113, 120, 0.5);
+    .note-icon svg {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      fill: none;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
     }
 
-    .note-del:active { transform: scale(0.96); }
-    .note-del:disabled { opacity: 0.4; cursor: not-allowed; }
+    .note-icon:hover {
+      color: var(--text);
+      background: var(--surface2);
+    }
+
+    .note-icon:active { transform: scale(0.96); }
+    .note-icon:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .note-copy.is-copied {
+      color: var(--ok);
+      background: rgba(127, 217, 98, 0.1);
+    }
+
+    .note-del {
+      color: var(--danger);
+    }
+
+    .note-del:hover {
+      background: rgba(240, 113, 120, 0.16);
+      color: var(--danger);
+    }
+
+    .note-nav {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .note-nav[hidden] { display: none !important; }
+
+    .note-nav-pos {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-variant-numeric: tabular-nums;
+      text-align: center;
+      min-width: 3.2em;
+    }
+
+    .note-nav-btns {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .note-nav-btns .btn {
+      min-width: 0;
+      width: 100%;
+      min-height: 42px;
+    }
+
+    .note-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .note-actions .btn {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .note-actions .btn-danger {
+      background: rgba(240, 113, 120, 0.16);
+      color: var(--danger);
+      border: 1px solid rgba(240, 113, 120, 0.45);
+    }
+
+    .note-actions .btn-danger:hover:not(:disabled) {
+      background: rgba(240, 113, 120, 0.28);
+    }
+
+    .player {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .player[hidden] { display: none !important; }
+
+    .player-play {
+      appearance: none;
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      color: var(--text);
+      cursor: pointer;
+      display: grid;
+      place-items: center;
+      flex-shrink: 0;
+      padding: 0;
+    }
+
+    .player-play:active { transform: scale(0.96); }
+
+    .player-play svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .player-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .player-seek {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      height: 16px;
+      border-radius: 999px;
+      background: var(--surface2);
+      outline: none;
+      margin: 0;
+    }
+
+    .player-seek::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 999px;
+      background: transparent;
+    }
+
+    .player-seek::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      margin-top: -5px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 0;
+      box-shadow: 0 0 0 3px rgba(61, 139, 253, 0.22);
+      cursor: pointer;
+    }
+
+    .player-seek::-moz-range-thumb {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent);
+      border: 0;
+      cursor: pointer;
+    }
+
+    .player-seek::-moz-range-track {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--surface2);
+    }
+
+    .player-times {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+    }
 
     .empty {
       text-align: center;
@@ -2960,12 +2389,13 @@
 
     .transcript {
       white-space: pre-wrap;
-      line-height: 1.55;
-      font-size: 1rem;
+      line-height: 1.6;
+      font-size: 1.02rem;
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 14px;
-      padding: 16px;
+      padding: 16px 18px;
+      flex: 1;
     }
 
     .card {
@@ -2978,9 +2408,16 @@
       gap: 12px;
     }
 
+    .card[hidden] { display: none !important; }
+
     .card h2 {
       font-size: 1.05rem;
       font-weight: 650;
+    }
+
+    .note-hero {
+      gap: 14px;
+      padding: 14px 14px 16px;
     }
 
     .title-edit {
@@ -2989,29 +2426,28 @@
       gap: 6px;
     }
 
-    .title-edit-row {
-      display: flex;
-      gap: 8px;
-      align-items: stretch;
+    .title-field {
+      font-size: 1.12rem;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+      background: var(--surface2);
+      padding: 12px 14px;
     }
 
-    .title-edit-row .field {
-      flex: 1;
-      min-width: 0;
-    }
-
-    .title-edit-row .btn {
-      flex: 0 0 auto;
-      min-width: 72px;
-      padding-left: 14px;
-      padding-right: 14px;
+    .note-meta {
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-variant-numeric: tabular-nums;
+      padding: 0 2px;
     }
 
     .title-save-status {
-      min-height: 1.1em;
+      min-height: 0;
       font-size: 0.78rem;
       color: var(--muted);
     }
+
+    .title-save-status:empty { display: none; }
 
     .title-save-status.ok { color: var(--ok); }
     .title-save-status.err { color: var(--danger); }
@@ -3031,6 +2467,16 @@
       flex-direction: column;
       gap: 12px;
     }
+
+    .settings-head {
+      font-size: 0.82rem;
+      font-weight: 650;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+    }
+
+    #retranscribeBtn { width: 100%; }
 
     label.block-label {
       display: block;
@@ -3064,7 +2510,7 @@
 
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    audio { width: 100%; }
+    #detailAudio { display: none; }
   </style>
 </head>
 <body>
@@ -3101,6 +2547,20 @@
         title="Voice entry"
         aria-label="Voice entry"
       >🎙</button>
+      <button
+        type="button"
+        class="icon-btn hidden"
+        id="detailSettingsBtn"
+        title="Retranscribe"
+        aria-label="Retranscribe settings"
+        aria-expanded="false"
+        aria-controls="detailSettingsCard"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
     </div>
   </header>
 
@@ -3116,15 +2576,15 @@
         <button type="button" class="queue-banner-ack" id="queueBannerAck" aria-label="Dismiss">✕</button>
       </div>
       <div class="app-grid">
-        <button type="button" class="app-tile" id="openAudioNotes" data-app="audio-notes" title="Audio Notes" aria-label="Audio Notes">
+        <a class="app-tile" id="openAudioNotes" href="/voice/" data-app="audio-notes" title="Voice" aria-label="Voice">
           <span class="app-icon" aria-hidden="true">🎙</span>
-        </button>
+        </a>
         <button type="button" class="app-tile" id="openFinance" data-app="finance" title="Finance" aria-label="Finance">
           <span class="app-icon finance" aria-hidden="true">₹</span>
         </button>
-        <button type="button" class="app-tile" id="openAi" data-app="ai" title="AI" aria-label="AI">
+        <a class="app-tile" id="openAi" href="/ai/" data-app="ai" title="AI" aria-label="AI">
           <span class="app-icon ai" aria-hidden="true">🤖</span>
-        </button>
+        </a>
         <button type="button" class="app-tile" id="openHeart" data-app="heart" title="Heart" aria-label="Heart">
           <span class="app-icon heart" aria-hidden="true">❤️</span>
         </button>
@@ -3134,127 +2594,10 @@
         <button type="button" class="app-tile" id="openFood" data-app="food" title="Food" aria-label="Food">
           <span class="app-icon food" aria-hidden="true">🍛</span>
         </button>
+        <a class="app-tile" id="openPact" href="/pact/" data-app="pact" title="Pact" aria-label="Pact">
+          <span class="app-icon pact" aria-hidden="true">🔏</span>
+        </a>
       </div>
-    </section>
-
-    <!-- HEART (locked until 11 Sep 2026; early unlock via secret sequence + passcode) -->
-    <section id="view-heart" class="view">
-      <div id="heartLocked" class="heart-locked">
-        <button
-          type="button"
-          class="heart-pulse-btn"
-          id="heartPulse"
-          data-seq="heart"
-          title="Heart"
-          aria-label="Heart"
-        >❤️</button>
-        <div class="heart-countdown" id="heartCountdown" role="timer" aria-live="polite" aria-atomic="true">
-          <button type="button" class="heart-cd-cell" data-seq="days" aria-label="Days remaining">
-            <span class="heart-cd-num" id="heartDays">—</span>
-            <span class="heart-cd-label">Days</span>
-          </button>
-          <button type="button" class="heart-cd-cell" data-seq="hours" aria-label="Hours remaining">
-            <span class="heart-cd-num" id="heartHours">—</span>
-            <span class="heart-cd-label">Hours</span>
-          </button>
-          <button type="button" class="heart-cd-cell" data-seq="minutes" aria-label="Minutes remaining">
-            <span class="heart-cd-num" id="heartMinutes">—</span>
-            <span class="heart-cd-label">Mins</span>
-          </button>
-          <button type="button" class="heart-cd-cell" data-seq="seconds" aria-label="Seconds remaining">
-            <span class="heart-cd-num" id="heartSeconds">—</span>
-            <span class="heart-cd-label">Secs</span>
-          </button>
-        </div>
-      </div>
-
-      <div id="heartUnlocked" class="heart-unlocked hidden">
-        <div id="heartBrowser" class="hb">
-          <!-- Categories -->
-          <div id="hbLevelCats" class="hb-level">
-            <div class="hb-stats">
-              <div>
-                <div class="hb-stats-count" id="hbStatsCount">—</div>
-                <div class="hb-stats-label" id="hbStatsLabel">saved posts</div>
-              </div>
-            </div>
-            <div class="hb-search-wrap">
-              <span class="hb-search-icon" aria-hidden="true">⌕</span>
-              <input
-                type="search"
-                class="hb-search"
-                id="hbSearch"
-                placeholder="Search titles, tags, places…"
-                enterkeyhint="search"
-                autocomplete="off"
-                autocapitalize="off"
-                spellcheck="false"
-              />
-            </div>
-            <div id="hbCatList" class="hb-cat-list" role="list"></div>
-          </div>
-
-          <!-- Posts in a category -->
-          <div id="hbLevelPosts" class="hb-level hidden">
-            <div class="hb-toolbar">
-              <div id="hbTags" class="hb-tags" role="tablist" aria-label="Tags"></div>
-              <div class="hb-filter-meta" id="hbFilterMeta"></div>
-            </div>
-            <div id="hbPostGrid" class="hb-grid" role="list"></div>
-          </div>
-
-          <!-- Post detail -->
-          <div id="hbLevelDetail" class="hb-level hidden">
-            <div id="hbDetail" class="hb-detail"></div>
-          </div>
-        </div>
-
-        <!-- Fullscreen media -->
-        <div id="hbMediaViewer" class="hb-media-viewer hidden" role="dialog" aria-modal="true" aria-label="Media viewer">
-          <div class="hb-media-top">
-            <button type="button" class="hb-media-close" id="hbMediaClose" aria-label="Close">✕</button>
-            <div class="hb-media-counter" id="hbMediaCounter">1 / 1</div>
-            <div style="width:42px" aria-hidden="true"></div>
-          </div>
-          <div class="hb-media-stage" id="hbMediaStage"></div>
-          <div class="hb-media-bottom">
-            <button type="button" class="hb-media-nav" id="hbMediaPrev" aria-label="Previous">‹</button>
-            <button type="button" class="hb-media-nav" id="hbMediaNext" aria-label="Next">›</button>
-          </div>
-        </div>
-      </div>
-
-      <div id="heartPassOverlay" class="heart-pass-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="heartPassTitle">
-        <div class="heart-pass-sheet">
-          <div class="heart-pass-title" id="heartPassTitle">Enter passcode</div>
-          <p class="heart-pass-hint">Early access</p>
-          <input
-            type="password"
-            class="heart-pass-input"
-            id="heartPassInput"
-            inputmode="numeric"
-            autocomplete="off"
-            enterkeyhint="done"
-            maxlength="24"
-            placeholder="••••••"
-            aria-label="Passcode"
-          />
-          <div class="heart-pass-err" id="heartPassErr" aria-live="polite"></div>
-          <div class="heart-pass-actions">
-            <button type="button" class="btn-ghost" id="heartPassCancel">Cancel</button>
-            <button type="button" class="btn-heart" id="heartPassSubmit">Unlock</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <!-- AI USAGE -->
-    <section id="view-ai" class="view">
-      <div class="ai-cost" id="aiCostBar">
-        <div class="ai-cost-value" id="aiCostTotal">$0.00</div>
-        <div class="ai-cost-meta" id="aiCostMeta">0 calls</div>
-      </div>
-      <div class="ai-list" id="aiCallList"></div>
     </section>
 
     <!-- FINANCE TRACKER -->
@@ -3444,16 +2787,14 @@
           <button type="button" class="btn btn-soft" id="draftBtn" disabled>Save draft</button>
           <button type="button" class="btn btn-primary" id="sendBtn" disabled>Send</button>
         </div>
-        <label class="fin-budget-row" id="translateRow" title="Translate to English">
-          <span class="fin-budget-text">
+        <div class="rec-split" id="translateDiscardRow">
+          <label class="rec-translate" id="translateRow" title="Translate to English">
             <strong>Translate to English</strong>
-          </span>
-          <span class="switch">
-            <input type="checkbox" id="translateToggle" />
-            <span class="slider"></span>
-          </span>
-        </label>
-        <div class="action-row">
+            <span class="switch">
+              <input type="checkbox" id="translateToggle" />
+              <span class="slider"></span>
+            </span>
+          </label>
           <button type="button" class="btn btn-ghost" id="discardBtn" disabled>Discard</button>
         </div>
         <div class="progress-bar" id="uploadProgress">
@@ -3461,28 +2802,31 @@
         </div>
       </div>
 
-      <div class="section-label">Options</div>
-      <div class="options-block">
-        <input class="field" id="noteTitle" type="text" placeholder="Title (optional)" maxlength="120" autocomplete="off" />
-        <select class="field" id="modelSelect" aria-label="Whisper model"></select>
-      </div>
-
       <div class="section-label">Notes</div>
       <button type="button" class="open-notes-btn" id="openNotesBtn">
         <span class="on-icon" aria-hidden="true">☰</span>
         <span class="on-text">
           <strong>Open notes</strong>
-          <span>Browse saved transcripts</span>
         </span>
         <span class="on-chevron" aria-hidden="true">›</span>
       </button>
+
+      <div class="section-label">Options</div>
+      <div class="options-block">
+        <input class="field" id="noteTitle" type="text" placeholder="Title (optional)" maxlength="120" autocomplete="off" />
+        <div>
+          <label class="block-label" id="sttLabel">Speech</label>
+          <div class="stt-seg" role="radiogroup" aria-labelledby="sttLabel">
+            <button type="button" class="stt-opt" id="sttLocal" data-stt="local" aria-pressed="true">Local</button>
+            <button type="button" class="stt-opt" id="sttCloud" data-stt="cloud" aria-pressed="false">Cloud</button>
+          </div>
+        </div>
+        <select class="field" id="modelSelect" aria-label="Whisper model"></select>
+      </div>
     </section>
 
     <!-- NOTES LIST -->
     <section id="view-list" class="view">
-      <div class="toolbar">
-        <button type="button" class="btn btn-ghost" id="refreshList" style="flex:0; min-width:auto">Refresh</button>
-      </div>
       <div class="notes-list" id="notesList">
         <div class="empty">Loading…</div>
       </div>
@@ -3490,26 +2834,53 @@
 
     <!-- NOTE DETAIL -->
     <section id="view-detail" class="view">
-      <div class="card">
+      <div class="card note-hero">
         <div class="title-edit">
-          <label class="block-label" for="detailTitleInput">Title</label>
-          <div class="title-edit-row">
-            <input
-              class="field"
-              id="detailTitleInput"
-              type="text"
-              maxlength="120"
-              autocomplete="off"
-              placeholder="Add a title"
-            />
-            <button type="button" class="btn btn-soft" id="saveTitleBtn">Save</button>
-          </div>
+          <input
+            class="field title-field"
+            id="detailTitleInput"
+            type="text"
+            maxlength="120"
+            autocomplete="off"
+            placeholder="Add a title"
+            aria-label="Title"
+          />
+          <div class="note-meta" id="detailMeta"></div>
           <div class="title-save-status" id="titleSaveStatus" aria-live="polite"></div>
         </div>
-        <audio id="detailAudio" controls preload="metadata"></audio>
+        <div class="player" id="detailPlayer" hidden>
+          <button type="button" class="player-play" id="playerPlay" aria-label="Play">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
+          </button>
+          <div class="player-main">
+            <input
+              type="range"
+              class="player-seek"
+              id="playerSeek"
+              min="0"
+              max="1000"
+              value="0"
+              step="1"
+              aria-label="Seek"
+            />
+            <div class="player-times">
+              <span id="playerNow">0:00</span>
+              <span id="playerDur">0:00</span>
+            </div>
+          </div>
+        </div>
+        <audio id="detailAudio" preload="metadata"></audio>
       </div>
-      <div class="card settings-card">
+      <div class="card settings-card" id="detailSettingsCard" hidden>
+        <div class="settings-head">Retranscribe</div>
         <div>
+          <label class="block-label" id="detailSttLabel">Speech</label>
+          <div class="stt-seg" role="radiogroup" aria-labelledby="detailSttLabel">
+            <button type="button" class="stt-opt" id="detailSttLocal" data-stt="local" aria-pressed="true">Local</button>
+            <button type="button" class="stt-opt" id="detailSttCloud" data-stt="cloud" aria-pressed="false">Cloud</button>
+          </div>
+        </div>
+        <div id="detailModelWrap">
           <label class="block-label" for="detailModelSelect">Model</label>
           <select class="field" id="detailModelSelect"></select>
         </div>
@@ -3520,17 +2891,22 @@
             <span class="slider"></span>
           </label>
         </div>
-        <button type="button" class="btn btn-primary" id="retranscribeBtn" style="width:100%">
+        <button type="button" class="btn btn-primary" id="retranscribeBtn">
           Re-transcribe
         </button>
       </div>
-      <div class="transcript" id="detailTranscript"></div>
-      <div class="btn-row">
-        <button type="button" class="btn btn-ghost" id="copyTranscript">Copy</button>
+      <div class="note-nav" id="noteNav" hidden>
+        <div class="note-nav-btns">
+          <button type="button" class="btn btn-soft" id="notePrev">← Previous</button>
+          <div class="note-nav-pos" id="noteNavPos"></div>
+          <button type="button" class="btn btn-soft" id="noteNext">Next →</button>
+        </div>
       </div>
-      <div class="btn-row">
+      <div class="note-actions">
         <button type="button" class="btn btn-danger" id="deleteNoteBtn">Delete</button>
+        <button type="button" class="btn btn-soft" id="copyTranscript">Copy</button>
       </div>
+      <div class="transcript" id="detailTranscript"></div>
     </section>
   </main>
 
@@ -3544,828 +2920,25 @@
       list: document.getElementById("view-list"),
       detail: document.getElementById("view-detail"),
       finance: document.getElementById("view-finance"),
-      ai: document.getElementById("view-ai"),
-      heart: document.getElementById("view-heart"),
     };
-
-    /* ------------------------------------------------------------------ */
-    /* Heart module — countdown lock + secret sequence + passcode          */
-    /* Must live above any showView() call (early leaveHeartView is safe). */
-    /* Unlock sequence: heart → days → minutes → heart                     */
-    /* Passcode: 110926                                                    */
-    /* After 2026-09-11 local midnight, opens freely.                      */
-    /* ------------------------------------------------------------------ */
-    const HEART_UNLOCK_AT = new Date(2026, 8, 11, 0, 0, 0, 0); // 11 Sep 2026
-    const HEART_PASSCODE = "110926";
-    const HEART_SEQ = ["heart", "days", "minutes", "heart"];
-    const HEART_SEQ_TIMEOUT_MS = 4000;
-    const HEART_LS_KEY = "heart_unlocked_v1";
-    const heartModuleReady = true;
-
-    const HEART_CAT_META = {
-      fashion: { icon: "◇", label: "Fashion" },
-      relationships: { icon: "♡", label: "Relationships" },
-      travel: { icon: "◎", label: "Travel" },
-      art: { icon: "✧", label: "Art" },
-      entertainment: { icon: "◈", label: "Entertainment" },
-      food: { icon: "◉", label: "Food" },
-      home: { icon: "⌂", label: "Home" },
-      shopping: { icon: "▢", label: "Shopping" },
-      health: { icon: "✚", label: "Health" },
-      events: { icon: "✦", label: "Events" },
-      pets: { icon: "🐾", label: "Pets" },
-      other: { icon: "·", label: "Other" },
-    };
-
-    let heartTimer = 0;
-    let heartSeq = [];
-    let heartSeqTimer = 0;
-    let heartHandlersBound = false;
-
-    /* Browser state (unlocked) */
-    let hbCatalog = null;
-    let hbLoading = false;
-    let hbLevel = "cats"; // cats | posts | detail | media
-    let hbCategory = null;
-    let hbTag = null; // null = all
-    let hbSearch = "";
-    let hbPostId = null;
-    let hbMediaIndex = 0;
-    let hbSearchTimer = 0;
-    let hbBrowserBound = false;
-
-    function heartIsDateUnlocked() {
-      return Date.now() >= HEART_UNLOCK_AT.getTime();
-    }
-
-    function heartIsSessionUnlocked() {
-      try {
-        return localStorage.getItem(HEART_LS_KEY) === "1";
-      } catch (_) {
-        return false;
-      }
-    }
-
-    function heartIsOpen() {
-      return heartIsDateUnlocked() || heartIsSessionUnlocked();
-    }
-
-    function setHeartUnlockedPersist(on) {
-      try {
-        if (on) localStorage.setItem(HEART_LS_KEY, "1");
-        else localStorage.removeItem(HEART_LS_KEY);
-      } catch (_) { /* ignore */ }
-    }
-
-    function heartPad2(n) {
-      return String(Math.max(0, n)).padStart(2, "0");
-    }
-
-    function updateHeartCountdown() {
-      const daysEl = document.getElementById("heartDays");
-      const hoursEl = document.getElementById("heartHours");
-      const minsEl = document.getElementById("heartMinutes");
-      const secsEl = document.getElementById("heartSeconds");
-      if (!daysEl || !hoursEl || !minsEl || !secsEl) return;
-
-      const ms = HEART_UNLOCK_AT.getTime() - Date.now();
-      if (ms <= 0) {
-        daysEl.textContent = "0";
-        hoursEl.textContent = "00";
-        minsEl.textContent = "00";
-        secsEl.textContent = "00";
-        if (!heartIsSessionUnlocked()) setHeartUnlockedPersist(true);
-        renderHeartState();
-        return;
-      }
-
-      const totalSec = Math.floor(ms / 1000);
-      const days = Math.floor(totalSec / 86400);
-      const hours = Math.floor((totalSec % 86400) / 3600);
-      const mins = Math.floor((totalSec % 3600) / 60);
-      const secs = totalSec % 60;
-
-      daysEl.textContent = String(days);
-      hoursEl.textContent = heartPad2(hours);
-      minsEl.textContent = heartPad2(mins);
-      secsEl.textContent = heartPad2(secs);
-    }
-
-    function renderHeartState() {
-      const locked = document.getElementById("heartLocked");
-      const unlocked = document.getElementById("heartUnlocked");
-      const view = document.getElementById("view-heart");
-      if (!locked || !unlocked) return;
-      const open = heartIsOpen();
-      locked.classList.toggle("hidden", open);
-      unlocked.classList.toggle("hidden", !open);
-      if (view) view.classList.toggle("browser-mode", open);
-      if (open) {
-        stopHeartCountdown();
-        closeHeartPasscode();
-        ensureHeartBrowser();
-      }
-      syncHeartHeader();
-    }
-
-    function startHeartCountdown() {
-      stopHeartCountdown();
-      updateHeartCountdown();
-      heartTimer = window.setInterval(updateHeartCountdown, 1000);
-    }
-
-    function stopHeartCountdown() {
-      if (heartTimer) {
-        clearInterval(heartTimer);
-        heartTimer = 0;
-      }
-    }
-
-    function resetHeartSeq() {
-      heartSeq = [];
-      if (heartSeqTimer) {
-        clearTimeout(heartSeqTimer);
-        heartSeqTimer = 0;
-      }
-    }
-
-    function bumpHeartSeqTimeout() {
-      if (heartSeqTimer) clearTimeout(heartSeqTimer);
-      heartSeqTimer = window.setTimeout(resetHeartSeq, HEART_SEQ_TIMEOUT_MS);
-    }
-
-    function onHeartSeqTap(key) {
-      if (heartIsOpen()) return;
-      heartSeq.push(key);
-      bumpHeartSeqTimeout();
-
-      for (let i = 0; i < heartSeq.length; i++) {
-        if (heartSeq[i] !== HEART_SEQ[i]) {
-          heartSeq = key === HEART_SEQ[0] ? [key] : [];
-          if (heartSeq.length) bumpHeartSeqTimeout();
-          else resetHeartSeq();
-          return;
-        }
-      }
-
-      if (heartSeq.length === HEART_SEQ.length) {
-        resetHeartSeq();
-        openHeartPasscode();
-      }
-    }
-
-    function openHeartPasscode() {
-      const overlay = document.getElementById("heartPassOverlay");
-      const input = document.getElementById("heartPassInput");
-      const err = document.getElementById("heartPassErr");
-      if (!overlay) return;
-      overlay.classList.remove("hidden");
-      if (err) err.textContent = "";
-      if (input) {
-        input.value = "";
-        setTimeout(() => input.focus(), 60);
-      }
-    }
-
-    function closeHeartPasscode() {
-      const overlay = document.getElementById("heartPassOverlay");
-      const input = document.getElementById("heartPassInput");
-      const err = document.getElementById("heartPassErr");
-      if (overlay) overlay.classList.add("hidden");
-      if (input) input.value = "";
-      if (err) err.textContent = "";
-    }
-
-    function submitHeartPasscode() {
-      const input = document.getElementById("heartPassInput");
-      const err = document.getElementById("heartPassErr");
-      const val = (input && input.value ? input.value : "").trim();
-      if (val === HEART_PASSCODE) {
-        setHeartUnlockedPersist(true);
-        closeHeartPasscode();
-        renderHeartState();
-        return;
-      }
-      if (err) err.textContent = "Wrong passcode";
-      if (input) {
-        input.value = "";
-        input.focus();
-      }
-    }
-
-    function enterHeartView() {
-      renderHeartState();
-      if (!heartIsOpen()) startHeartCountdown();
-      bindHeartHandlers();
-    }
-
-    function leaveHeartView() {
-      stopHeartCountdown();
-      resetHeartSeq();
-      closeHeartPasscode();
-      closeHbMedia();
-      // Keep catalog in memory; reset nav to categories next open
-      hbLevel = "cats";
-      hbCategory = null;
-      hbTag = null;
-      hbPostId = null;
-      const search = document.getElementById("hbSearch");
-      if (search && !hbSearch) search.value = "";
-      const view = document.getElementById("view-heart");
-      if (view) view.classList.remove("browser-mode");
-    }
-
-    function bindHeartHandlers() {
-      if (heartHandlersBound) return;
-      heartHandlersBound = true;
-
-      const pulse = document.getElementById("heartPulse");
-      if (pulse) {
-        pulse.addEventListener("click", (e) => {
-          e.preventDefault();
-          onHeartSeqTap("heart");
-        });
-      }
-
-      document.querySelectorAll("#heartCountdown .heart-cd-cell").forEach((el) => {
-        el.addEventListener("click", (e) => {
-          e.preventDefault();
-          const key = el.getAttribute("data-seq");
-          if (key) onHeartSeqTap(key);
-        });
-      });
-
-      const cancel = document.getElementById("heartPassCancel");
-      const submit = document.getElementById("heartPassSubmit");
-      const input = document.getElementById("heartPassInput");
-      const overlay = document.getElementById("heartPassOverlay");
-
-      if (cancel) cancel.addEventListener("click", closeHeartPasscode);
-      if (submit) submit.addEventListener("click", submitHeartPasscode);
-      if (input) {
-        input.addEventListener("keydown", (e) => {
-          if (e.key === "Enter") {
-            e.preventDefault();
-            submitHeartPasscode();
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            closeHeartPasscode();
-          }
-        });
-      }
-      if (overlay) {
-        overlay.addEventListener("click", (e) => {
-          if (e.target === overlay) closeHeartPasscode();
-        });
-      }
-    }
-
-    /* ---------- Heart browser (catalog / media) ---------- */
-
-    function hbCatLabel(id) {
-      const m = HEART_CAT_META[id];
-      if (m) return m.label;
-      return (id || "Other").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    }
-
-    function hbCatIcon(id) {
-      const m = HEART_CAT_META[id];
-      return m ? m.icon : "·";
-    }
-
-    function hbMediaUrl(postId, filename) {
-      return (
-        "/api/heart/media/" +
-        encodeURIComponent(postId) +
-        "/" +
-        encodeURIComponent(filename)
-      );
-    }
-
-    function hbIsVideoFile(f) {
-      if (!f) return false;
-      const t = (f.type || "").toLowerCase();
-      const n = (f.name || "").toLowerCase();
-      return t.startsWith("video/") || /\.(mp4|webm|mov)$/.test(n);
-    }
-
-    function hbIsImageFile(f) {
-      if (!f) return false;
-      const t = (f.type || "").toLowerCase();
-      const n = (f.name || "").toLowerCase();
-      return t.startsWith("image/") || /\.(jpe?g|png|webp|gif)$/.test(n);
-    }
-
-    function syncHeartHeader() {
-      const titleEl = document.getElementById("headerTitle");
-      if (!titleEl) return;
-      // Only update when heart view is active
-      const heartView = document.getElementById("view-heart");
-      if (!heartView || !heartView.classList.contains("active")) return;
-
-      // Keep header title empty in Heart (no glyph / label next to back)
-      titleEl.textContent = "";
-    }
-
-    function hbShowLevel(level) {
-      hbLevel = level;
-      const cats = document.getElementById("hbLevelCats");
-      const posts = document.getElementById("hbLevelPosts");
-      const detail = document.getElementById("hbLevelDetail");
-      if (cats) cats.classList.toggle("hidden", level !== "cats");
-      if (posts) posts.classList.toggle("hidden", level !== "posts");
-      if (detail) detail.classList.toggle("hidden", level !== "detail");
-      syncHeartHeader();
-      window.scrollTo(0, 0);
-    }
-
-    async function ensureHeartBrowser() {
-      bindHeartBrowserHandlers();
-      if (hbCatalog || hbLoading) {
-        if (hbCatalog) renderHbCurrent();
-        return;
-      }
-      hbLoading = true;
-      const catList = document.getElementById("hbCatList");
-      if (catList) {
-        catList.innerHTML = `<div class="hb-empty">Loading collection…</div>`;
-      }
-      try {
-        const r = await fetch("/api/heart/catalog");
-        if (!r.ok) throw new Error("Failed to load catalog");
-        hbCatalog = await r.json();
-      } catch (e) {
-        if (catList) {
-          catList.innerHTML = `<div class="hb-empty">Could not load posts.<br/>${escapeHtml(String(e.message || e))}</div>`;
-        }
-        hbLoading = false;
-        return;
-      }
-      hbLoading = false;
-      renderHbCurrent();
-    }
-
-    function renderHbCurrent() {
-      if (!hbCatalog) return;
-      if (hbLevel === "detail" && hbPostId) {
-        renderHbDetail(hbPostId);
-        return;
-      }
-      if (hbLevel === "posts" && hbCategory) {
-        renderHbPosts();
-        return;
-      }
-      renderHbCategories();
-    }
-
-    function hbPostsMatchingSearch(posts, q) {
-      const needle = (q || "").trim().toLowerCase();
-      if (!needle) return posts;
-      return posts.filter((p) => {
-        const hay = [
-          p.title,
-          p.summary,
-          p.category,
-          p.content_type,
-          ...(p.tags || []),
-          ...(p.suggested_tags || []),
-          ...(p.keywords || []),
-          ...(p.locations || []),
-          ...(p.primary_subjects || []),
-          ...(p.people || []),
-          ...(p.brands || []),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return hay.includes(needle);
-      });
-    }
-
-    function renderHbCategories() {
-      hbShowLevel("cats");
-      const posts = hbCatalog.posts || [];
-      const filtered = hbPostsMatchingSearch(posts, hbSearch);
-      const statsCount = document.getElementById("hbStatsCount");
-      const statsLabel = document.getElementById("hbStatsLabel");
-      if (statsCount) statsCount.textContent = String(filtered.length);
-      if (statsLabel) {
-        statsLabel.textContent = hbSearch.trim()
-          ? "matches"
-          : `analyzed · ${hbCatalog.analyzed || 0} of ${hbCatalog.total || 0}`;
-      }
-
-      // Build category counts from filtered posts
-      const counts = {};
-      filtered.forEach((p) => {
-        const c = p.category || "other";
-        counts[c] = (counts[c] || 0) + 1;
-      });
-
-      // Prefer catalog order, then any extras
-      const order = (hbCatalog.categories || []).map((c) => c.id);
-      Object.keys(counts).forEach((c) => {
-        if (!order.includes(c)) order.push(c);
-      });
-
-      const list = document.getElementById("hbCatList");
-      if (!list) return;
-
-      if (!filtered.length) {
-        list.innerHTML = `<div class="hb-empty">${hbSearch.trim() ? "No posts match that search." : "No analyzed posts yet."}</div>`;
-        return;
-      }
-
-      const rows = order
-        .filter((id) => counts[id])
-        .map((id) => {
-          const n = counts[id];
-          const catInfo = (hbCatalog.categories || []).find((c) => c.id === id);
-          const topTags = ((catInfo && catInfo.tags) || [])
-            .slice(0, 3)
-            .map((t) => t.id)
-            .join(" · ");
-          return (
-            `<button type="button" class="hb-cat" data-cat="${escapeHtml(id)}" role="listitem">` +
-            `<span class="hb-cat-icon" aria-hidden="true">${hbCatIcon(id)}</span>` +
-            `<span class="hb-cat-body">` +
-            `<span class="hb-cat-name">${escapeHtml(hbCatLabel(id))}</span>` +
-            `<span class="hb-cat-sub">${escapeHtml(topTags || n + " post" + (n === 1 ? "" : "s"))}</span>` +
-            `</span>` +
-            `<span class="hb-cat-count">${n}</span>` +
-            `<span class="hb-cat-chev" aria-hidden="true">›</span>` +
-            `</button>`
-          );
-        });
-      list.innerHTML = rows.join("");
-    }
-
-    function openHbCategory(catId) {
-      hbCategory = catId;
-      hbTag = null;
-      hbPostId = null;
-      renderHbPosts();
-    }
-
-    function renderHbPosts() {
-      if (!hbCatalog || !hbCategory) {
-        renderHbCategories();
-        return;
-      }
-      hbShowLevel("posts");
-
-      let posts = (hbCatalog.posts || []).filter(
-        (p) => (p.category || "other") === hbCategory
-      );
-      posts = hbPostsMatchingSearch(posts, hbSearch);
-      if (hbTag) {
-        posts = posts.filter((p) => (p.tags || []).includes(hbTag));
-      }
-
-      // Tags for this category (from catalog, only those still present after search)
-      const catInfo = (hbCatalog.categories || []).find((c) => c.id === hbCategory);
-      const tagCounts = {};
-      posts.forEach((p) => {
-        (p.tags || []).forEach((t) => {
-          tagCounts[t] = (tagCounts[t] || 0) + 1;
-        });
-      });
-      // Prefer catalog tag order
-      const orderedTags = [];
-      if (catInfo && catInfo.tags) {
-        catInfo.tags.forEach((t) => {
-          if (tagCounts[t.id]) orderedTags.push(t.id);
-        });
-      }
-      Object.keys(tagCounts)
-        .sort((a, b) => tagCounts[b] - tagCounts[a] || a.localeCompare(b))
-        .forEach((t) => {
-          if (!orderedTags.includes(t)) orderedTags.push(t);
-        });
-
-      const tagsEl = document.getElementById("hbTags");
-      if (tagsEl) {
-        const chips = [
-          `<button type="button" class="hb-tag${hbTag ? "" : " active"}" data-tag="">All</button>`,
-        ];
-        orderedTags.forEach((t) => {
-          chips.push(
-            `<button type="button" class="hb-tag${hbTag === t ? " active" : ""}" data-tag="${escapeHtml(t)}">${escapeHtml(t)} <span style="opacity:.65">${tagCounts[t] || 0}</span></button>`
-          );
-        });
-        tagsEl.innerHTML = chips.join("");
-      }
-
-      const meta = document.getElementById("hbFilterMeta");
-      if (meta) {
-        const parts = [`${posts.length} post${posts.length === 1 ? "" : "s"}`];
-        if (hbTag) parts.push(`tag · ${hbTag}`);
-        if (hbSearch.trim()) parts.push(`search · “${hbSearch.trim()}”`);
-        meta.textContent = parts.join("  ·  ");
-      }
-
-      const grid = document.getElementById("hbPostGrid");
-      if (!grid) return;
-      if (!posts.length) {
-        grid.innerHTML = `<div class="hb-empty" style="grid-column:1/-1">Nothing here yet.</div>`;
-        return;
-      }
-
-      grid.innerHTML = posts
-        .map((p) => {
-          const mediaInner = p.thumb
-            ? hbIsVideoFile({ name: p.thumb, type: "" }) && !p.has_image
-              ? `<video src="${escapeHtml(hbMediaUrl(p.id, p.thumb))}" muted playsinline preload="metadata"></video>`
-              : `<img src="${escapeHtml(hbMediaUrl(p.id, p.thumb))}" alt="" loading="lazy" decoding="async" />`
-            : `<div class="hb-card-ph">♥</div>`;
-          const badges = [];
-          if (p.has_video) badges.push(`<span class="hb-badge">Video</span>`);
-          if (p.file_count > 1) badges.push(`<span class="hb-badge">${p.file_count}</span>`);
-          const sub = (p.tags || []).slice(0, 2).join(" · ") || p.content_type || "";
-          return (
-            `<button type="button" class="hb-card" data-post="${escapeHtml(p.id)}" role="listitem">` +
-            `<div class="hb-card-media">${mediaInner}` +
-            (badges.length
-              ? `<div class="hb-card-badges">${badges.join("")}</div>`
-              : "") +
-            `</div>` +
-            `<div class="hb-card-body">` +
-            `<div class="hb-card-title">${escapeHtml(p.title || p.id)}</div>` +
-            (sub ? `<div class="hb-card-sub">${escapeHtml(sub)}</div>` : "") +
-            `</div></button>`
-          );
-        })
-        .join("");
-    }
-
-    function hbFindPost(id) {
-      if (!hbCatalog || !id) return null;
-      return (hbCatalog.posts || []).find((p) => p.id === id) || null;
-    }
-
-    function openHbPost(postId) {
-      hbPostId = postId;
-      renderHbDetail(postId);
-    }
-
-    function renderHbDetail(postId) {
-      const p = hbFindPost(postId);
-      const root = document.getElementById("hbDetail");
-      if (!root) return;
-      if (!p) {
-        root.innerHTML = `<div class="hb-empty">Post not found.</div>`;
-        hbShowLevel("detail");
-        return;
-      }
-      hbShowLevel("detail");
-
-      const thumbFile = p.thumb
-        ? (p.files || []).find((f) => f.name === p.thumb) || { name: p.thumb, type: "" }
-        : (p.files || [])[0];
-      let hero = `<div class="hb-card-ph" style="min-height:200px">♥</div>`;
-      if (thumbFile) {
-        const url = hbMediaUrl(p.id, thumbFile.name);
-        if (hbIsVideoFile(thumbFile)) {
-          hero = `<video src="${escapeHtml(url)}" muted playsinline preload="metadata" controls></video>`;
-        } else {
-          hero = `<img src="${escapeHtml(url)}" alt="" />`;
-        }
-      }
-
-      const tags = (p.tags || [])
-        .map((t) => `<span class="hb-chip">${escapeHtml(t)}</span>`)
-        .join("");
-      const suggested = (p.suggested_tags || [])
-        .filter((t) => !(p.tags || []).includes(t))
-        .slice(0, 8)
-        .map((t) => `<span class="hb-chip muted">${escapeHtml(t)}</span>`)
-        .join("");
-
-      const metaRows = [];
-      const addRow = (k, v) => {
-        if (v == null || v === "" || (Array.isArray(v) && !v.length)) return;
-        const text = Array.isArray(v) ? v.join(", ") : String(v);
-        metaRows.push(
-          `<div class="hb-meta-row"><div class="hb-meta-k">${escapeHtml(k)}</div>` +
-            `<div class="hb-meta-v">${escapeHtml(text)}</div></div>`
-        );
-      };
-      addRow("Type", p.content_type);
-      addRow("Subjects", p.primary_subjects);
-      addRow("Also", p.secondary_subjects);
-      addRow("Places", p.locations);
-      addRow("People", p.people);
-      addRow("Brands", p.brands);
-      addRow("Objects", p.objects);
-      addRow("Keywords", (p.keywords || []).slice(0, 12));
-      if (p.text_visible && p.text_visible.length) {
-        addRow("Text", p.text_visible.slice(0, 6).join(" · "));
-      }
-      addRow("Files", `${p.file_count || 0}${p.has_video ? " · includes video" : ""}`);
-
-      root.innerHTML =
-        `<div class="hb-detail-hero">${hero}</div>` +
-        `<div class="hb-detail-title">${escapeHtml(p.title || p.id)}</div>` +
-        (p.summary
-          ? `<p class="hb-detail-summary">${escapeHtml(p.summary)}</p>`
-          : "") +
-        (tags || suggested
-          ? `<div class="hb-chip-row">${tags}${suggested}</div>`
-          : "") +
-        `<button type="button" class="hb-view-media" id="hbViewMediaBtn">View media${
-          p.file_count > 1 ? ` · ${p.file_count}` : ""
-        }</button>` +
-        (metaRows.length
-          ? `<div class="hb-meta-block">${metaRows.join("")}</div>`
-          : "");
-    }
-
-    function openHbMedia(startIndex) {
-      const p = hbFindPost(hbPostId);
-      if (!p || !(p.files || []).length) return;
-      hbMediaIndex = Math.max(0, Math.min(startIndex || 0, p.files.length - 1));
-      hbLevel = "media";
-      const viewer = document.getElementById("hbMediaViewer");
-      if (viewer) viewer.classList.remove("hidden");
-      document.body.style.overflow = "hidden";
-      renderHbMediaSlide();
-      syncHeartHeader();
-    }
-
-    function closeHbMedia() {
-      const viewer = document.getElementById("hbMediaViewer");
-      if (viewer) viewer.classList.add("hidden");
-      const stage = document.getElementById("hbMediaStage");
-      if (stage) stage.innerHTML = "";
-      document.body.style.overflow = "";
-      if (hbLevel === "media") {
-        hbLevel = "detail";
-        syncHeartHeader();
-      }
-    }
-
-    function renderHbMediaSlide() {
-      const p = hbFindPost(hbPostId);
-      const stage = document.getElementById("hbMediaStage");
-      const counter = document.getElementById("hbMediaCounter");
-      const prev = document.getElementById("hbMediaPrev");
-      const next = document.getElementById("hbMediaNext");
-      if (!p || !stage) return;
-      const files = p.files || [];
-      if (!files.length) {
-        stage.innerHTML = `<div class="hb-empty">No media</div>`;
-        return;
-      }
-      hbMediaIndex = Math.max(0, Math.min(hbMediaIndex, files.length - 1));
-      const f = files[hbMediaIndex];
-      const url = hbMediaUrl(p.id, f.name);
-      if (hbIsVideoFile(f)) {
-        stage.innerHTML = `<video src="${escapeHtml(url)}" controls playsinline autoplay></video>`;
-      } else {
-        stage.innerHTML = `<img src="${escapeHtml(url)}" alt="" />`;
-      }
-      if (counter) counter.textContent = `${hbMediaIndex + 1} / ${files.length}`;
-      if (prev) prev.disabled = hbMediaIndex <= 0;
-      if (next) next.disabled = hbMediaIndex >= files.length - 1;
-    }
-
-    function hbMediaStep(delta) {
-      const p = hbFindPost(hbPostId);
-      if (!p) return;
-      const n = (p.files || []).length;
-      if (!n) return;
-      hbMediaIndex = Math.max(0, Math.min(n - 1, hbMediaIndex + delta));
-      renderHbMediaSlide();
-    }
-
-    function bindHeartBrowserHandlers() {
-      if (hbBrowserBound) return;
-      hbBrowserBound = true;
-
-      const search = document.getElementById("hbSearch");
-      if (search) {
-        search.addEventListener("input", () => {
-          if (hbSearchTimer) clearTimeout(hbSearchTimer);
-          hbSearchTimer = window.setTimeout(() => {
-            hbSearch = search.value || "";
-            if (hbLevel === "posts") renderHbPosts();
-            else if (hbLevel === "cats") renderHbCategories();
-          }, 160);
-        });
-      }
-
-      const catList = document.getElementById("hbCatList");
-      if (catList) {
-        catList.addEventListener("click", (e) => {
-          const btn = e.target.closest(".hb-cat");
-          if (!btn) return;
-          const id = btn.getAttribute("data-cat");
-          if (id) openHbCategory(id);
-        });
-      }
-
-      const tags = document.getElementById("hbTags");
-      if (tags) {
-        tags.addEventListener("click", (e) => {
-          const btn = e.target.closest(".hb-tag");
-          if (!btn) return;
-          const t = btn.getAttribute("data-tag");
-          hbTag = t || null;
-          renderHbPosts();
-        });
-      }
-
-      const grid = document.getElementById("hbPostGrid");
-      if (grid) {
-        grid.addEventListener("click", (e) => {
-          const btn = e.target.closest(".hb-card");
-          if (!btn) return;
-          const id = btn.getAttribute("data-post");
-          if (id) openHbPost(id);
-        });
-      }
-
-      const detail = document.getElementById("hbDetail");
-      if (detail) {
-        detail.addEventListener("click", (e) => {
-          if (e.target.closest("#hbViewMediaBtn")) {
-            openHbMedia(0);
-          }
-        });
-      }
-
-      const closeBtn = document.getElementById("hbMediaClose");
-      const prevBtn = document.getElementById("hbMediaPrev");
-      const nextBtn = document.getElementById("hbMediaNext");
-      if (closeBtn) closeBtn.addEventListener("click", closeHbMedia);
-      if (prevBtn) prevBtn.addEventListener("click", () => hbMediaStep(-1));
-      if (nextBtn) nextBtn.addEventListener("click", () => hbMediaStep(1));
-
-      // Swipe on media stage (basic)
-      const stage = document.getElementById("hbMediaStage");
-      if (stage) {
-        let touchX = null;
-        stage.addEventListener(
-          "touchstart",
-          (e) => {
-            if (e.changedTouches && e.changedTouches[0]) {
-              touchX = e.changedTouches[0].clientX;
-            }
-          },
-          { passive: true }
-        );
-        stage.addEventListener(
-          "touchend",
-          (e) => {
-            if (touchX == null || !e.changedTouches || !e.changedTouches[0]) return;
-            const dx = e.changedTouches[0].clientX - touchX;
-            touchX = null;
-            if (Math.abs(dx) < 48) return;
-            if (dx < 0) hbMediaStep(1);
-            else hbMediaStep(-1);
-          },
-          { passive: true }
-        );
-      }
-    }
-
-    function heartGoBack() {
-      // Nested back within Heart browser
-      const overlay = document.getElementById("heartPassOverlay");
-      if (overlay && !overlay.classList.contains("hidden")) {
-        closeHeartPasscode();
-        return true;
-      }
-      if (!heartIsOpen()) {
-        showView("home");
-        return true;
-      }
-      if (hbLevel === "media") {
-        closeHbMedia();
-        return true;
-      }
-      if (hbLevel === "detail") {
-        hbPostId = null;
-        if (hbCategory) renderHbPosts();
-        else renderHbCategories();
-        return true;
-      }
-      if (hbLevel === "posts") {
-        if (hbTag) {
-          hbTag = null;
-          renderHbPosts();
-          return true;
-        }
-        hbCategory = null;
-        renderHbCategories();
-        return true;
-      }
-      showView("home");
-      return true;
-    }
 
     /** Where back goes from list/detail */
     let listBackTarget = "record";
+    /** After a new recording, Back on the transcript returns to /voice */
+    let detailFromRecord = false;
+    let currentNoteId = null;
+    const TRASH_ICON =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/></svg>';
+    const COPY_ICON =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
+    const PLAY_ICON =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>';
+    const PAUSE_ICON =
+      '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>';
+    let notesCache = [];
+    let playerKnown = 0;
+    let playerSeeking = false;
+    let playerGen = 0;
     /** Finance: dashboard (default) vs manual add/edit form vs month tx list */
     let financeFormOpen = false;
     let financeTxOpen = false;
@@ -4801,7 +3374,7 @@
       const settings =
         typeof getSettings === "function"
           ? getSettings()
-          : { model: "medium", translate: false };
+          : { model: "medium", translate: false, stt: resolvedStt() };
       const form = new FormData();
       const ext =
         typeof extForMime === "function" ? extForMime(fvMime) : "webm";
@@ -4809,6 +3382,7 @@
       form.append("title", "");
       form.append("model", settings.model || "medium");
       form.append("translate", settings.translate ? "true" : "false");
+      form.append("stt", settings.stt || "local");
       form.append("update_ledger", "true");
       form.append(
         "client_id",
@@ -5053,6 +3627,7 @@
         if (settings) {
           form.append("model", settings.model || "medium");
           form.append("translate", settings.translate ? "true" : "false");
+          form.append("stt", settings.stt || "local");
         }
       }
 
@@ -5140,34 +3715,103 @@
       }
     }
 
+    function normalizePath(path) {
+      const p = String(path || "/").split("?")[0].split("#")[0];
+      if (p.length > 1 && p.endsWith("/")) return p.replace(/\/+$/, "");
+      return p || "/";
+    }
+
+    function parseVoiceRoute(path) {
+      const p = normalizePath(path || location.pathname);
+      if (p === "/voice") return { name: "record", id: null };
+      if (p === "/voice/notes") return { name: "list", id: null };
+      const m = p.match(/^\/voice\/notes\/([^/]+)$/);
+      if (m) return { name: "detail", id: decodeURIComponent(m[1]) };
+      if (p.startsWith("/voice/")) return { name: "record", id: null };
+      return null;
+    }
+
+    function voicePathFor(name, noteId) {
+      if (name === "list") return "/voice/notes";
+      if (name === "detail") {
+        const id = noteId || currentNoteId;
+        return id ? "/voice/notes/" + encodeURIComponent(id) : "/voice/notes";
+      }
+      return "/voice/";
+    }
+
+    function isStandaloneVoice() {
+      try {
+        if (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches) {
+          return true;
+        }
+        if (window.matchMedia && window.matchMedia("(display-mode: fullscreen)").matches) {
+          return true;
+        }
+      } catch (_) {}
+      return !!(window.navigator && window.navigator.standalone);
+    }
+
+    function ensureVoiceServiceWorker() {
+      if (!("serviceWorker" in navigator)) return;
+      if (!parseVoiceRoute()) return;
+      navigator.serviceWorker
+        .register("/voice/sw.js", { scope: "/voice/" })
+        .catch(() => {});
+    }
+
+    function syncVoiceUrl(name, { replace } = {}) {
+      if (name !== "record" && name !== "list" && name !== "detail") return;
+      const next = voicePathFor(name, currentNoteId);
+      if (normalizePath(location.pathname) === normalizePath(next)) {
+        try {
+          history.replaceState(
+            { view: name, noteId: currentNoteId || null },
+            "",
+            next
+          );
+        } catch (_) {}
+        return;
+      }
+      const state = { view: name, noteId: currentNoteId || null };
+      if (replace) history.replaceState(state, "", next);
+      else history.pushState(state, "", next);
+    }
+
     function openRecord() {
       showView("record");
     }
 
-    function showView(name) {
+    function showView(name, opts) {
+      opts = opts || {};
       Object.entries(views).forEach(([k, el]) => {
         if (el) el.classList.toggle("active", k === name);
       });
       const titles = {
         home: "Toolkit",
-        record: "Audio Notes",
+        record: "Voice",
         list: "Notes",
         detail: "Note",
         finance: financeHeaderTitle(),
-        ai: "AI",
-        heart: "",
       };
       document.getElementById("headerTitle").textContent =
         name in titles ? titles[name] : "Toolkit";
+      if (name === "record") document.title = "Voice";
+      else if (name === "list") document.title = "Notes · Voice";
+      else if (name === "detail") document.title = "Note · Voice";
+      else if (name === "home") document.title = "Toolkit";
 
       const backBtn = document.getElementById("backBtn");
       const brandDot = document.getElementById("brandDot");
 
-      // Back: hidden on home; shown elsewhere
-      backBtn.classList.toggle("hidden", name === "home");
+      // Back: hidden on Toolkit home, and on Voice home when installed as its own app
+      backBtn.classList.toggle(
+        "hidden",
+        name === "home" || (name === "record" && isStandaloneVoice())
+      );
       // Live dot only while in the recorder app
       brandDot.style.display =
-        name === "home" || name === "finance" || name === "ai" || name === "heart"
+        name === "home" || name === "finance"
           ? "none"
           : "";
       // Finance header actions (+ / cam / mic) via syncFinanceChrome
@@ -5182,6 +3826,10 @@
         if (financeCam) financeCam.classList.add("hidden");
         if (financeAdd) financeAdd.classList.add("hidden");
       }
+
+      const settingsBtn = document.getElementById("detailSettingsBtn");
+      if (settingsBtn) settingsBtn.classList.toggle("hidden", name !== "detail");
+      if (name !== "detail") setDetailSettingsOpen(false);
 
       if (name === "finance") {
         if (financeFormOpen) {
@@ -5200,14 +3848,14 @@
         }
       }
 
-      if (name === "ai") {
-        loadAiUsage();
+      if (name !== "detail") {
+        try {
+          stopDetailAudio();
+        } catch (_) {}
       }
 
-      if (name === "heart") {
-        enterHeartView();
-      } else if (heartModuleReady) {
-        leaveHeartView();
+      if (!opts.skipHistory) {
+        syncVoiceUrl(name, { replace: !!opts.replace });
       }
 
       window.scrollTo(0, 0);
@@ -5217,12 +3865,18 @@
       const active = Object.entries(views).find(([, el]) => el && el.classList.contains("active"));
       const name = active ? active[0] : "home";
       if (name === "detail") {
-        showView("list");
-        loadNotes();
+        if (detailFromRecord) {
+          detailFromRecord = false;
+          showView("record", { replace: true });
+        } else {
+          showView("list", { replace: true });
+          loadNotes();
+        }
       } else if (name === "list") {
-        showView(listBackTarget || "record");
+        showView("record", { replace: true });
       } else if (name === "record") {
-        showView("home");
+        if (isStandaloneVoice()) return;
+        window.location.href = "/";
       } else if (name === "finance") {
         if (financeVoiceOpen) {
           setFinanceVoiceOpen(false);
@@ -5250,10 +3904,6 @@
           return;
         }
         showView("home");
-      } else if (name === "ai") {
-        showView("home");
-      } else if (name === "heart") {
-        heartGoBack();
       } else {
         showView("home");
       }
@@ -5261,140 +3911,21 @@
 
     document.getElementById("backBtn").addEventListener("click", goBack);
 
-    document.getElementById("openAudioNotes").addEventListener("click", () => {
-      openRecord();
-    });
-
     document.getElementById("openFinance").addEventListener("click", () => {
       window.location.href = "/finance";
     });
 
-    document.getElementById("openAi").addEventListener("click", () => {
-      showView("ai");
-    });
-
     document.getElementById("openHeart").addEventListener("click", () => {
-      showView("heart");
+      window.location.href = "/heart";
     });
 
     document.getElementById("openCfa").addEventListener("click", () => {
-      window.location.href = "/cfa";
+      window.location.href = "/cfa/";
     });
 
     document.getElementById("openFood").addEventListener("click", () => {
       window.location.href = "/food";
     });
-
-    function formatUsd(n) {
-      if (n == null || Number.isNaN(Number(n))) return "—";
-      const v = Number(n);
-      if (v === 0) return "$0.00";
-      // DeepSeek micro-costs are often $0.0000x–$0.00x; keep enough digits.
-      if (v < 0.01) return `$${v.toFixed(6)}`;
-      if (v < 1) return `$${v.toFixed(4)}`;
-      return `$${v.toFixed(2)}`;
-    }
-
-    function formatTokens(n) {
-      if (n == null || n === "") return "—";
-      const v = Number(n);
-      if (Number.isNaN(v)) return "—";
-      if (v >= 1000) return `${(v / 1000).toFixed(v >= 10000 ? 0 : 1)}k`;
-      return String(v);
-    }
-
-    function formatAiTime(iso) {
-      if (!iso) return "";
-      try {
-        const d = new Date(iso);
-        if (Number.isNaN(d.getTime())) return String(iso).slice(0, 16);
-        return d.toLocaleString(undefined, {
-          month: "short",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-        });
-      } catch {
-        return String(iso).slice(0, 16);
-      }
-    }
-
-    function moduleActionLabel(call) {
-      const mod = (call.module || "").trim();
-      const act = (call.action || "").trim();
-      if (mod && act) {
-        // "finance" + "Ledger update" → "Finance · Ledger update"
-        const m = mod.charAt(0).toUpperCase() + mod.slice(1);
-        return `${m} · ${act}`;
-      }
-      return act || mod || "API call";
-    }
-
-    async function loadAiUsage() {
-      const listEl = document.getElementById("aiCallList");
-      const totalEl = document.getElementById("aiCostTotal");
-      const metaEl = document.getElementById("aiCostMeta");
-      if (listEl) listEl.innerHTML = `<div class="empty">…</div>`;
-      try {
-        const r = await fetch("/api/ai/usage?limit=100");
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const data = await r.json();
-        const totals = data.totals || {};
-        if (totalEl) totalEl.textContent = formatUsd(totals.cost_usd || 0);
-        if (metaEl) {
-          const n = totals.calls || 0;
-          const tok =
-            (totals.prompt_tokens || 0) + (totals.completion_tokens || 0);
-          metaEl.textContent =
-            n === 0
-              ? "0 calls"
-              : `${n} call${n === 1 ? "" : "s"} · ${formatTokens(tok)} tok`;
-        }
-        const calls = data.calls || [];
-        if (!listEl) return;
-        if (!calls.length) {
-          listEl.innerHTML = `<div class="empty">No API calls yet</div>`;
-          return;
-        }
-        listEl.innerHTML = calls
-          .map((c) => {
-            const fail = c.ok === false;
-            const cost =
-              c.cost_usd != null
-                ? formatUsd(c.cost_usd)
-                : fail
-                  ? "fail"
-                  : "—";
-            const model = escapeHtml(c.model || "—");
-            const title = escapeHtml(moduleActionLabel(c));
-            const tok = `${formatTokens(c.prompt_tokens)} in · ${formatTokens(
-              c.completion_tokens
-            )} out`;
-            const when = escapeHtml(formatAiTime(c.ts));
-            return (
-              `<div class="ai-row${fail ? " fail" : ""}">` +
-              `<div class="ai-row-top">` +
-              `<div class="ai-row-title">${title}</div>` +
-              `<div class="ai-row-cost">${escapeHtml(cost)}</div>` +
-              `</div>` +
-              `<div class="ai-row-sub">` +
-              `<span>${model} · ${escapeHtml(tok)}</span>` +
-              `<span>${when}</span>` +
-              `</div>` +
-              `</div>`
-            );
-          })
-          .join("");
-      } catch (e) {
-        if (totalEl) totalEl.textContent = "—";
-        if (metaEl) metaEl.textContent = "error";
-        if (listEl) {
-          listEl.innerHTML = `<div class="empty">${escapeHtml(
-            e.message || "Failed to load"
-          )}</div>`;
-        }
-      }
-    }
 
     document.getElementById("financeMicBtn").addEventListener("click", () => {
       setFinanceVoiceOpen(true);
@@ -5505,7 +4036,6 @@
     }
 
     document.getElementById("openNotesBtn").addEventListener("click", openNotesList);
-    document.getElementById("refreshList").addEventListener("click", loadNotes);
 
     function isOldFinancePath() {
       return (
@@ -5524,12 +4054,40 @@
       showView("finance");
     }
 
-    // Start on home, unless this page was opened as /old-finance
-    if (isOldFinancePath()) {
-      openOldFinanceView();
-    } else {
-      showView("home");
+    function applyLocationView({ skipHistory } = { skipHistory: true }) {
+      if (isOldFinancePath()) {
+        openOldFinanceView();
+        return parseVoiceRoute();
+      }
+      const route = parseVoiceRoute();
+      if (!route) {
+        showView("home", { skipHistory: true });
+        return null;
+      }
+      if (route.name === "detail") {
+        currentNoteId = route.id || currentNoteId;
+        showView("detail", { skipHistory: true });
+      } else if (route.name === "list") {
+        showView("list", { skipHistory: true });
+      } else {
+        showView("record", { skipHistory: true });
+        if (normalizePath(location.pathname) !== "/voice") {
+          try {
+            history.replaceState({ view: "record" }, "", "/voice/");
+          } catch (_) {}
+        }
+      }
+      ensureVoiceServiceWorker();
+      return route;
     }
+
+    // Start on home, /voice, or /old-finance
+    applyLocationView();
+    window.addEventListener("popstate", () => {
+      const route = applyLocationView();
+      if (route && route.name === "list") loadNotes();
+      if (route && route.name === "detail" && route.id) hydrateVoiceNote(route.id);
+    });
 
     /* ------------------------------------------------------------------ */
     /* ChatGPT queue alerts (sound + vibrate + Android heads-up)            */
@@ -5829,9 +4387,13 @@
     const queueToastEl = document.getElementById("queueToast");
     if (queueToastEl) queueToastEl.addEventListener("click", ackQueueBanner);
 
-    ensureQueueServiceWorker().catch(() => {});
-    if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-      subscribeQueuePush().catch(() => {});
+    if (parseVoiceRoute()) {
+      ensureVoiceServiceWorker();
+    } else {
+      ensureQueueServiceWorker().catch(() => {});
+      if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+        subscribeQueuePush().catch(() => {});
+      }
     }
     connectQueueStream();
     refreshQueueAlerts({ announce: false });
@@ -5848,16 +4410,83 @@
       { id: "large-v3", label: "large-v3" },
     ];
 
+    let sttCaps = {
+      profile: "local",
+      default: "local",
+      local_enabled: true,
+      cloud_ready: false,
+      cloud_feature_on: true,
+      cloud_model: "whisper-1",
+    };
+
     function loadPrefs() {
       return {
         model: localStorage.getItem("an_model") || "medium",
         translate: localStorage.getItem("an_translate") === "1",
+        stt: localStorage.getItem("an_stt") || "",
       };
     }
 
-    function savePrefs(model, translate) {
+    function savePrefs(model, translate, stt) {
       localStorage.setItem("an_model", model);
       localStorage.setItem("an_translate", translate ? "1" : "0");
+      localStorage.setItem("an_stt", resolvedStt(stt));
+    }
+
+    function resolvedStt(preferred) {
+      const want = String(preferred || sttCaps.default || "local").toLowerCase();
+      if (!sttCaps.local_enabled) return "cloud";
+      if (want === "cloud") return (sttCaps.cloud_ready && sttCaps.cloud_feature_on !== false) ? "cloud" : "local";
+      return "local";
+    }
+
+    function applySttPair(localBtn, cloudBtn, mode) {
+      const localOn = mode === "local";
+      if (localBtn) {
+        localBtn.classList.toggle("is-on", localOn);
+        localBtn.setAttribute("aria-pressed", localOn ? "true" : "false");
+        localBtn.disabled = !sttCaps.local_enabled;
+      }
+      if (cloudBtn) {
+        cloudBtn.classList.toggle("is-on", !localOn);
+        cloudBtn.setAttribute("aria-pressed", localOn ? "false" : "true");
+        cloudBtn.disabled = sttCaps.cloud_feature_on === false
+          ? true
+          : sttCaps.local_enabled && !sttCaps.cloud_ready;
+      }
+    }
+
+    function applySttUi(stt, { record = true, detail = true } = {}) {
+      const mode = resolvedStt(stt);
+      if (record) {
+        applySttPair(
+          document.getElementById("sttLocal"),
+          document.getElementById("sttCloud"),
+          mode
+        );
+        const modelSelect = document.getElementById("modelSelect");
+        if (modelSelect) modelSelect.hidden = mode === "cloud";
+      }
+      if (detail) {
+        applySttPair(
+          document.getElementById("detailSttLocal"),
+          document.getElementById("detailSttCloud"),
+          mode
+        );
+        const detailModel = document.getElementById("detailModelSelect");
+        if (detailModel) detailModel.hidden = mode === "cloud";
+        const detailModelWrap = document.getElementById("detailModelWrap");
+        if (detailModelWrap) detailModelWrap.hidden = mode === "cloud";
+      }
+      return mode;
+    }
+
+    function currentStt(fromDetail) {
+      const cloud = document.getElementById(fromDetail ? "detailSttCloud" : "sttCloud");
+      if (cloud && cloud.classList.contains("is-on")) return "cloud";
+      const local = document.getElementById(fromDetail ? "detailSttLocal" : "sttLocal");
+      if (local && local.classList.contains("is-on")) return "local";
+      return resolvedStt(loadPrefs().stt);
     }
 
     function fillModelSelect(selectEl, selected) {
@@ -5889,37 +4518,66 @@
       fillModelSelect(detailModel, prefs.model);
       translateToggle.checked = prefs.translate;
       detailTranslate.checked = prefs.translate;
+      applySttUi(prefs.stt);
 
       const syncFromRecord = () => {
-        savePrefs(modelSelect.value, translateToggle.checked);
+        const stt = currentStt(false);
+        savePrefs(modelSelect.value, translateToggle.checked, stt);
         detailModel.value = modelSelect.value;
         detailTranslate.checked = translateToggle.checked;
+        applySttUi(stt);
       };
       const syncFromDetail = () => {
-        savePrefs(detailModel.value, detailTranslate.checked);
+        const stt = currentStt(true);
+        savePrefs(detailModel.value, detailTranslate.checked, stt);
         modelSelect.value = detailModel.value;
         translateToggle.checked = detailTranslate.checked;
+        applySttUi(stt);
       };
 
       modelSelect.addEventListener("change", syncFromRecord);
       translateToggle.addEventListener("change", syncFromRecord);
       detailModel.addEventListener("change", syncFromDetail);
       detailTranslate.addEventListener("change", syncFromDetail);
+
+      const pickStt = (value, fromDetail) => {
+        if (value === "local" && !sttCaps.local_enabled) return;
+        if (value === "cloud" && sttCaps.cloud_feature_on === false) return;
+        if (value === "cloud" && sttCaps.local_enabled && !sttCaps.cloud_ready) return;
+        applySttUi(value);
+        if (fromDetail) syncFromDetail();
+        else syncFromRecord();
+      };
+      document.getElementById("sttLocal").addEventListener("click", () => pickStt("local", false));
+      document.getElementById("sttCloud").addEventListener("click", () => pickStt("cloud", false));
+      document.getElementById("detailSttLocal").addEventListener("click", () => pickStt("local", true));
+      document.getElementById("detailSttCloud").addEventListener("click", () => pickStt("cloud", true));
     }
 
     function getSettings() {
       return {
         model: document.getElementById("modelSelect").value || "medium",
         translate: document.getElementById("translateToggle").checked,
+        stt: currentStt(false),
       };
     }
 
     bindSettings();
 
     /* Silent options fetch (model list only, no UI status) */
-    (async function loadOptions() {
+    async function loadOptions() {
       try {
         const o = await fetch("/api/options").then((r) => r.json());
+        if (o && o.stt && typeof o.stt === "object") {
+          sttCaps = {
+            profile: o.stt.profile || "local",
+            default: o.stt.default || "local",
+            local_enabled: o.stt.local_enabled !== false,
+            cloud_ready: !!o.stt.cloud_ready,
+            cloud_feature_on: o.stt.cloud_feature_on !== false,
+            cloud_model: o.stt.cloud_model || "whisper-1",
+          };
+        }
         if (o && Array.isArray(o.models) && o.models.length) {
           DEFAULT_MODELS.length = 0;
           o.models.forEach((m) => {
@@ -5933,8 +4591,11 @@
           fillModelSelect(document.getElementById("modelSelect"), model);
           fillModelSelect(document.getElementById("detailModelSelect"), model);
         }
+        const prefs = loadPrefs();
+        applySttUi(prefs.stt || (o && o.stt && o.stt.default) || "local");
       } catch (_) { /* offline ok */ }
-    })();
+    }
+    loadOptions();
 
     /* ------------------------------------------------------------------ */
     /* IndexedDB draft backup                                               */
@@ -6501,6 +5162,7 @@
       form.append("title", title);
       form.append("model", settings.model);
       form.append("translate", settings.translate ? "true" : "false");
+      form.append("stt", settings.stt || "local");
       form.append("update_ledger", "false");
       form.append(
         "client_id",
@@ -6541,7 +5203,7 @@
 
         setStatus("Saved", "ok");
         resetRecorderUi();
-        showNoteDetail(note);
+        showNoteDetail(note, { from: "record" });
       } catch (e) {
         setStatus("Failed: " + e.message, "err");
         state = "ready";
@@ -6594,7 +5256,264 @@
     /* ------------------------------------------------------------------ */
     /* Notes list / detail                                                  */
     /* ------------------------------------------------------------------ */
-    let currentNoteId = null;
+
+    function removeNoteFromCache(noteId) {
+      notesCache = notesCache.filter((n) => n.id !== noteId);
+    }
+
+    function syncNoteInCache(note) {
+      if (!note || !note.id) return;
+      const i = notesCache.findIndex((n) => n.id === note.id);
+      if (i >= 0) notesCache[i] = Object.assign({}, notesCache[i], note);
+      else notesCache.unshift(note);
+    }
+
+    async function ensureNotesCache() {
+      if (notesCache.length) return notesCache;
+      try {
+        const r = await fetch("/api/notes");
+        if (!r.ok) return notesCache;
+        const j = await r.json();
+        notesCache = j.notes || [];
+      } catch (_) {}
+      return notesCache;
+    }
+
+    function updateNoteNav() {
+      const nav = document.getElementById("noteNav");
+      const pos = document.getElementById("noteNavPos");
+      const prevBtn = document.getElementById("notePrev");
+      const nextBtn = document.getElementById("noteNext");
+      const i = notesCache.findIndex((n) => n.id === currentNoteId);
+      const total = notesCache.length;
+      const show = total > 1 && i >= 0;
+      if (nav) nav.hidden = !show;
+      if (!show) return;
+      if (pos) pos.textContent = i + 1 + " / " + total;
+      if (prevBtn) prevBtn.disabled = i <= 0;
+      if (nextBtn) nextBtn.disabled = i >= total - 1;
+    }
+
+    function showAdjacentNote(dir) {
+      const i = notesCache.findIndex((n) => n.id === currentNoteId);
+      const next = i >= 0 ? notesCache[i + dir] : null;
+      if (!next) return;
+      showNoteDetail(next, { from: "list", replace: true });
+    }
+
+    function noteDuration(note) {
+      const n = Number(note && note.duration);
+      if (Number.isFinite(n) && n > 0) return n;
+      const segs = (note && note.segments) || [];
+      if (segs.length) {
+        const end = Number(segs[segs.length - 1].end);
+        if (Number.isFinite(end) && end > 0) return end;
+      }
+      return 0;
+    }
+
+    function isPlaceholderTitle(title) {
+      const t = String(title || "").trim();
+      if (!t) return true;
+      return /^Note \d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?\s*$/.test(t);
+    }
+
+    function formatNoteWhen(iso) {
+      if (!iso) return "";
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) {
+        return String(iso).replace("T", " ").replace("+00:00", " UTC").slice(0, 16);
+      }
+      return d.toLocaleString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+    }
+
+    function noteListHeadline(note) {
+      const title = String((note && note.title) || "").trim();
+      if (title && !isPlaceholderTitle(title)) return { text: title, preview: false };
+      const preview = String((note && (note.transcript || note.error)) || "(empty)").trim();
+      return { text: preview, preview: true };
+    }
+
+    function fillNoteRowContent(btn, note) {
+      const head = noteListHeadline(note);
+      const when = formatNoteWhen(note.created_at);
+      const dur = noteDuration(note);
+      const meta = dur > 0 ? when + " · " + fmtPlayTime(dur) : when;
+      btn.setAttribute("aria-label", head.text);
+      btn.innerHTML =
+        `<div class="headline${head.preview ? " is-preview" : ""}">${escapeHtml(head.text)}</div>` +
+        `<div class="when">${escapeHtml(meta)}</div>`;
+    }
+
+    function setDetailSettingsOpen(on) {
+      const card = document.getElementById("detailSettingsCard");
+      const btn = document.getElementById("detailSettingsBtn");
+      const open = !!on;
+      if (card) card.hidden = !open;
+      if (btn) {
+        btn.classList.toggle("is-on", open);
+        btn.setAttribute("aria-expanded", open ? "true" : "false");
+      }
+    }
+
+    function fmtPlayTime(sec) {
+      if (!Number.isFinite(sec) || sec < 0) sec = 0;
+      const s = Math.floor(sec);
+      const m = Math.floor(s / 60);
+      return m + ":" + String(s % 60).padStart(2, "0");
+    }
+
+    function setPlayerPlaying(on) {
+      const btn = document.getElementById("playerPlay");
+      if (!btn) return;
+      btn.setAttribute("aria-label", on ? "Pause" : "Play");
+      try {
+        btn.innerHTML = on ? PAUSE_ICON : PLAY_ICON;
+      } catch (_) {}
+    }
+
+    function setPlayerProgress(current, duration) {
+      const seek = document.getElementById("playerSeek");
+      const now = document.getElementById("playerNow");
+      const dur = document.getElementById("playerDur");
+      const known = duration > 0 ? duration : 0;
+      const t = Math.max(0, current || 0);
+      const pct = known > 0 ? Math.min(1, t / known) : 0;
+      if (seek && !playerSeeking) {
+        seek.value = String(Math.round(pct * 1000));
+      }
+      if (seek) {
+        const fill = (pct * 100).toFixed(2);
+        seek.style.background =
+          "linear-gradient(to right, var(--accent) " +
+          fill +
+          "%, var(--surface2) " +
+          fill +
+          "%)";
+      }
+      if (now) now.textContent = fmtPlayTime(t);
+      if (dur) dur.textContent = fmtPlayTime(known);
+    }
+
+    function stopDetailAudio() {
+      const audio = document.getElementById("detailAudio");
+      if (!audio) return;
+      try {
+        audio.pause();
+      } catch (_) {}
+      setPlayerPlaying(false);
+    }
+
+    function teardownDetailPlayer() {
+      playerGen += 1;
+      playerKnown = 0;
+      playerSeeking = false;
+      const old = document.getElementById("detailAudio");
+      if (old) {
+        try {
+          old.pause();
+        } catch (_) {}
+        try {
+          old.removeAttribute("src");
+          old.load();
+        } catch (_) {}
+        const next = old.cloneNode(false);
+        next.id = "detailAudio";
+        next.preload = "metadata";
+        next.removeAttribute("src");
+        old.parentNode.replaceChild(next, old);
+      }
+      const wrap = document.getElementById("detailPlayer");
+      if (wrap) wrap.hidden = true;
+      setPlayerPlaying(false);
+      setPlayerProgress(0, 0);
+    }
+
+    function setupDetailPlayer(note) {
+      const wrap = document.getElementById("detailPlayer");
+      teardownDetailPlayer();
+      const primary = (note && note.audio_file) || "";
+      const fallback =
+        note && note.wav_file && note.wav_file !== primary ? note.wav_file : "";
+      const startFile = primary || fallback;
+      const audio = document.getElementById("detailAudio");
+      if (!wrap || !audio || !startFile) return;
+
+      const gen = playerGen;
+      playerKnown = noteDuration(note);
+      wrap.hidden = false;
+      setPlayerProgress(0, playerKnown);
+      audio.src = "/api/audio/" + encodeURIComponent(startFile);
+
+      const adoptDuration = () => {
+        if (gen !== playerGen) return;
+        const d = audio.duration;
+        const bogus =
+          !Number.isFinite(d) ||
+          d <= 0 ||
+          (playerKnown > 8 && d < playerKnown * 0.35);
+        if (!bogus && d > playerKnown) playerKnown = d;
+        else if (!playerKnown && Number.isFinite(d) && d > 0) playerKnown = d;
+        setPlayerProgress(audio.currentTime || 0, playerKnown);
+      };
+
+      audio.addEventListener("loadedmetadata", () => {
+        if (gen !== playerGen) return;
+        if (
+          !playerKnown &&
+          (!Number.isFinite(audio.duration) || audio.duration === Infinity)
+        ) {
+          try {
+            audio.currentTime = 1e101;
+          } catch (_) {}
+          const onHack = () => {
+            audio.removeEventListener("timeupdate", onHack);
+            if (gen !== playerGen) return;
+            const d = audio.duration;
+            if (Number.isFinite(d) && d > 0 && d !== Infinity) playerKnown = d;
+            try {
+              audio.currentTime = 0;
+            } catch (_) {}
+            setPlayerProgress(0, playerKnown);
+          };
+          audio.addEventListener("timeupdate", onHack);
+          return;
+        }
+        adoptDuration();
+      });
+      audio.addEventListener("durationchange", adoptDuration);
+      audio.addEventListener("timeupdate", () => {
+        if (gen !== playerGen || playerSeeking) return;
+        if (audio.currentTime > 1e6) return;
+        setPlayerProgress(audio.currentTime, playerKnown);
+      });
+      audio.addEventListener("ended", () => {
+        if (gen !== playerGen) return;
+        setPlayerPlaying(false);
+        setPlayerProgress(playerKnown, playerKnown);
+      });
+      audio.addEventListener("pause", () => {
+        if (gen !== playerGen || audio.ended) return;
+        setPlayerPlaying(false);
+      });
+      audio.addEventListener("play", () => {
+        if (gen !== playerGen) return;
+        setPlayerPlaying(true);
+      });
+      audio.addEventListener("error", () => {
+        if (gen !== playerGen) return;
+        if (fallback && !audio.dataset.triedWav) {
+          audio.dataset.triedWav = "1";
+          audio.src = "/api/audio/" + encodeURIComponent(fallback);
+        }
+      });
+    }
 
     async function deleteNoteById(noteId, { confirmMsg = "Delete this note?" } = {}) {
       if (!noteId) return false;
@@ -6603,6 +5522,7 @@
         method: "DELETE",
       });
       if (!r.ok) throw new Error("delete failed");
+      removeNoteFromCache(noteId);
       return true;
     }
 
@@ -6614,6 +5534,7 @@
         if (!r.ok) throw new Error("failed");
         const j = await r.json();
         const notes = j.notes || [];
+        notesCache = notes;
         if (!notes.length) {
           box.innerHTML = '<div class="empty">No notes yet.</div>';
           return;
@@ -6627,19 +5548,34 @@
           const btn = document.createElement("button");
           btn.type = "button";
           btn.className = "note-item";
-          const when = (n.created_at || "").replace("T", " ").replace("+00:00", " UTC").slice(0, 16);
-          const preview = (n.transcript || n.error || "(empty)").trim();
-          btn.innerHTML =
-            `<div class="meta"><span>${escapeHtml(n.title || n.id)}</span><span>${escapeHtml(when)}</span></div>` +
-            `<div class="preview">${escapeHtml(preview)}</div>`;
-          btn.addEventListener("click", () => showNoteDetail(n));
+          fillNoteRowContent(btn, n);
+          btn.addEventListener("click", () => showNoteDetail(n, { from: "list" }));
+
+          const tools = document.createElement("div");
+          tools.className = "note-tools";
+
+          const copy = document.createElement("button");
+          copy.type = "button";
+          copy.className = "note-icon note-copy";
+          copy.title = "Copy transcript";
+          copy.setAttribute("aria-label", "Copy transcript");
+          copy.innerHTML = COPY_ICON;
+          copy.addEventListener("click", async (ev) => {
+            ev.stopPropagation();
+            const text = (n.transcript || n.error || "").trim();
+            copy.disabled = true;
+            const ok = await copyText(text);
+            copy.classList.toggle("is-copied", ok);
+            copy.disabled = false;
+            setTimeout(() => copy.classList.remove("is-copied"), 1200);
+          });
 
           const del = document.createElement("button");
           del.type = "button";
-          del.className = "note-del";
+          del.className = "note-icon note-del";
           del.title = "Delete note";
           del.setAttribute("aria-label", "Delete note");
-          del.textContent = "🗑";
+          del.innerHTML = TRASH_ICON;
           del.addEventListener("click", async (ev) => {
             ev.stopPropagation();
             del.disabled = true;
@@ -6658,12 +5594,34 @@
             }
           });
 
+          tools.appendChild(copy);
+          tools.appendChild(del);
           row.appendChild(btn);
-          row.appendChild(del);
+          row.appendChild(tools);
           box.appendChild(row);
         }
       } catch (_) {
         box.innerHTML = '<div class="empty">Could not load notes.</div>';
+      }
+    }
+
+    async function copyText(text) {
+      const value = String(text || "");
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch (_) {
+        try {
+          const ta = document.createElement("textarea");
+          ta.value = value;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          ta.remove();
+          return true;
+        } catch (e) {
+          return false;
+        }
       }
     }
 
@@ -6682,17 +5640,27 @@
       if (kind) el.classList.add(kind);
     }
 
-    function showNoteDetail(note) {
+    function showNoteDetail(note, opts) {
+      opts = opts || {};
       currentNoteId = note.id;
+      if (opts.from === "record") detailFromRecord = true;
+      else if (opts.from === "list" || opts.from === "url") detailFromRecord = false;
+      syncNoteInCache(note);
       const titleInput = document.getElementById("detailTitleInput");
       titleInput.value = note.title || "";
       setTitleSaveStatus("");
+      const meta = document.getElementById("detailMeta");
+      if (meta) {
+        const when = formatNoteWhen(note.created_at);
+        const dur = noteDuration(note);
+        meta.textContent = dur > 0 ? when + " · " + fmtPlayTime(dur) : when;
+      }
       document.getElementById("detailTranscript").textContent =
         note.transcript || note.error || "(no transcript)";
 
       const detailModel = document.getElementById("detailModelSelect");
       const detailTranslate = document.getElementById("detailTranslateToggle");
-      if (note.model) {
+      if (note.model && note.model !== "whisper-1") {
         if (![...detailModel.options].some((o) => o.value === note.model)) {
           const opt = document.createElement("option");
           opt.value = note.model;
@@ -6702,29 +5670,49 @@
         detailModel.value = note.model;
       }
       detailTranslate.checked = !!(note.translate || note.task === "translate");
-
-      const audio = document.getElementById("detailAudio");
-      if (note.audio_file) {
-        audio.src = "/api/audio/" + encodeURIComponent(note.audio_file);
-        audio.style.display = "block";
-      } else {
-        audio.removeAttribute("src");
-        audio.style.display = "none";
+      applySttUi(note.stt || currentStt(true), { record: false, detail: true });
+      setupDetailPlayer(note);
+      updateNoteNav();
+      if (opts.from !== "retranscribe") setDetailSettingsOpen(false);
+      showView("detail", { skipHistory: !!opts.skipHistory, replace: !!opts.replace });
+      if (notesCache.length < 2) {
+        ensureNotesCache().then(() => {
+          if (currentNoteId === note.id) updateNoteNav();
+        });
       }
-      showView("detail");
     }
 
-    async function saveNoteTitle() {
+    async function hydrateVoiceNote(noteId) {
+      if (!noteId) return;
+      try {
+        const r = await fetch("/api/notes/" + encodeURIComponent(noteId));
+        if (!r.ok) throw new Error("missing");
+        showNoteDetail(await r.json(), { from: "url", skipHistory: true });
+      } catch (_) {
+        detailFromRecord = false;
+        showView("list", { replace: true });
+        loadNotes();
+      }
+    }
+
+    async function saveNoteTitle(opts) {
+      opts = opts || {};
       if (!currentNoteId) return;
       const input = document.getElementById("detailTitleInput");
-      const btn = document.getElementById("saveTitleBtn");
       const title = input.value.trim();
+      const cached = notesCache.find((n) => n.id === currentNoteId);
+      const current = String((cached && cached.title) || "").trim();
       if (!title) {
-        setTitleSaveStatus("Title cannot be empty", "err");
-        input.focus();
+        if (!opts.quiet) {
+          setTitleSaveStatus("Title cannot be empty", "err");
+          input.focus();
+        }
         return;
       }
-      btn.disabled = true;
+      if (title === current) {
+        if (!opts.quiet) setTitleSaveStatus("");
+        return;
+      }
       setTitleSaveStatus("Saving…");
       try {
         const r = await fetch("/api/notes/" + encodeURIComponent(currentNoteId), {
@@ -6738,33 +5726,113 @@
           throw new Error(typeof detail === "string" ? detail : "failed");
         }
         input.value = body.title || title;
-        setTitleSaveStatus("Title saved", "ok");
+        setTitleSaveStatus("Saved", "ok");
+        syncNoteInCache({
+          id: currentNoteId,
+          title: input.value,
+          title_source: "user",
+        });
+        if (opts.quiet) {
+          setTimeout(() => {
+            const el = document.getElementById("titleSaveStatus");
+            if (el && el.textContent === "Saved") setTitleSaveStatus("");
+          }, 1200);
+        }
       } catch (e) {
         setTitleSaveStatus("Save failed: " + e.message, "err");
-      } finally {
-        btn.disabled = false;
       }
     }
 
-    document.getElementById("saveTitleBtn").addEventListener("click", saveNoteTitle);
     document.getElementById("detailTitleInput").addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        saveNoteTitle();
+        e.target.blur();
       }
+    });
+    document.getElementById("detailTitleInput").addEventListener("blur", () => {
+      saveNoteTitle({ quiet: true });
+    });
+    document.getElementById("detailSettingsBtn").addEventListener("click", () => {
+      const card = document.getElementById("detailSettingsCard");
+      setDetailSettingsOpen(!!(card && card.hidden));
     });
 
     document.getElementById("copyTranscript").addEventListener("click", async () => {
-      const text = document.getElementById("detailTranscript").textContent;
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch (_) {
-        const ta = document.createElement("textarea");
-        ta.value = text;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        ta.remove();
+      const btn = document.getElementById("copyTranscript");
+      const text = document.getElementById("detailTranscript").textContent || "";
+      btn.disabled = true;
+      const ok = await copyText(text);
+      const prev = btn.textContent;
+      btn.textContent = ok ? "Copied" : "Copy failed";
+      setTimeout(() => {
+        btn.textContent = prev;
+        btn.disabled = false;
+      }, 1200);
+    });
+
+    document.getElementById("notePrev").addEventListener("click", () => showAdjacentNote(-1));
+    document.getElementById("noteNext").addEventListener("click", () => showAdjacentNote(1));
+
+    document.getElementById("playerPlay").addEventListener("click", async () => {
+      const audio = document.getElementById("detailAudio");
+      if (!audio || !audio.getAttribute("src")) return;
+      if (audio.paused) {
+        try {
+          await audio.play();
+        } catch (_) {}
+      } else {
+        audio.pause();
+      }
+    });
+
+    (function bindPlayerSeek() {
+      const seek = document.getElementById("playerSeek");
+      if (!seek) return;
+      const applySeek = (commit) => {
+        const pct = Number(seek.value) / 1000;
+        const t = pct * (playerKnown || 0);
+        setPlayerProgress(t, playerKnown);
+        if (commit) {
+          const audio = document.getElementById("detailAudio");
+          if (audio && playerKnown > 0) {
+            try {
+              audio.currentTime = t;
+            } catch (_) {}
+          }
+          playerSeeking = false;
+        }
+      };
+      seek.addEventListener("pointerdown", () => {
+        playerSeeking = true;
+      });
+      seek.addEventListener("input", () => {
+        playerSeeking = true;
+        applySeek(false);
+      });
+      seek.addEventListener("change", () => applySeek(true));
+      seek.addEventListener("pointerup", () => applySeek(true));
+      seek.addEventListener("keyup", (e) => {
+        if (e.key === "ArrowLeft" || e.key === "ArrowRight") applySeek(true);
+      });
+    })();
+
+    document.addEventListener("keydown", (e) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+      const detail = document.getElementById("view-detail");
+      if (!detail || !detail.classList.contains("active")) return;
+      const tag = (e.target && e.target.tagName) || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tag === "BUTTON") return;
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        showAdjacentNote(-1);
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        showAdjacentNote(1);
+      } else if (e.key === " ") {
+        const audio = document.getElementById("detailAudio");
+        if (!audio || !audio.getAttribute("src")) return;
+        e.preventDefault();
+        document.getElementById("playerPlay").click();
       }
     });
 
@@ -6773,9 +5841,11 @@
       const btn = document.getElementById("retranscribeBtn");
       const model = document.getElementById("detailModelSelect").value;
       const translate = document.getElementById("detailTranslateToggle").checked;
-      savePrefs(model, translate);
+      const stt = currentStt(true);
+      savePrefs(model, translate, stt);
       document.getElementById("modelSelect").value = model;
       document.getElementById("translateToggle").checked = translate;
+      applySttUi(stt);
 
       btn.disabled = true;
       const prev = btn.textContent;
@@ -6784,13 +5854,14 @@
         const form = new FormData();
         form.append("model", model);
         form.append("translate", translate ? "true" : "false");
+        form.append("stt", stt);
         const r = await fetch(
           "/api/notes/" + encodeURIComponent(currentNoteId) + "/retranscribe",
           { method: "POST", body: form }
         );
         const body = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(body.detail || "failed");
-        showNoteDetail(body);
+        showNoteDetail(body, { from: "retranscribe", skipHistory: true, replace: true });
       } catch (e) {
         alert("Re-transcribe failed: " + e.message);
       } finally {
@@ -6804,14 +5875,27 @@
       try {
         const ok = await deleteNoteById(currentNoteId);
         if (ok) {
+          teardownDetailPlayer();
           currentNoteId = null;
-          showView("list");
-          loadNotes();
+          if (detailFromRecord) {
+            detailFromRecord = false;
+            showView("record", { replace: true });
+          } else {
+            showView("list", { replace: true });
+            loadNotes();
+          }
         }
       } catch (e) {
         alert("Delete failed: " + e.message);
       }
     });
+
+    (function hydrateVoiceOnLoad() {
+      const route = parseVoiceRoute();
+      if (!route) return;
+      if (route.name === "list") loadNotes();
+      if (route.name === "detail" && route.id) hydrateVoiceNote(route.id);
+    })();
 
     /* ------------------------------------------------------------------ */
     /* Finance tracker (Ledger: From Account → To Account)                  */

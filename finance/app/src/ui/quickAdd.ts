@@ -62,6 +62,17 @@ export function amountExpression(draft: AmountDraft): string {
   return `${draft.parts.join(" + ")}${tail}`;
 }
 
+/** Type into an amount field. Strips ₹ and commas; `+` splits parts. */
+export function amountDraftFromText(raw: string): AmountDraft {
+  const cleaned = raw.replaceAll("₹", "").replaceAll(",", "");
+  if (cleaned.trim() === "") return EMPTY_AMOUNT;
+  const chunks = cleaned.split("+").map((part) => part.trim());
+  if (chunks.length === 1) return { parts: [], buffer: chunks[0] ?? "" };
+  const buffer = chunks[chunks.length - 1] ?? "";
+  const parts = chunks.slice(0, -1).filter((part) => part !== "");
+  return { parts, buffer };
+}
+
 function appendDigit(buffer: string, digit: string): string {
   if (buffer.includes(".")) {
     const frac = buffer.split(".")[1] ?? "";
@@ -225,6 +236,63 @@ export function recentCategoryIds(
   return ids;
 }
 
+/** Most-used live categories for this ledger type, then sort order. */
+export function topCategoryIds(
+  entries: readonly LedgerEntry[],
+  type: LedgerType,
+  categories: readonly Category[],
+  limit = 5,
+): string[] {
+  const allowed = new Set(categoriesForType(type, categories).map((row) => row.id));
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    if (entry.type !== type) continue;
+    if (!allowed.has(entry.categoryId)) continue;
+    counts.set(entry.categoryId, (counts.get(entry.categoryId) ?? 0) + 1);
+  }
+  const used = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id]) => id)
+    .filter((id) => allowed.has(id));
+  if (used.length >= limit) return used.slice(0, limit);
+  const rest = categoriesForType(type, categories)
+    .map((row) => row.id)
+    .filter((id) => !used.includes(id));
+  return [...used, ...rest].slice(0, limit);
+}
+
+export function defaultCategoryGroup(type: LedgerType): string {
+  switch (type) {
+    case "income":
+      return "Income";
+    case "investment":
+      return "Investment";
+    case "cc_payment":
+      return "Debt";
+    case "transfer":
+      return "Finance";
+    case "adjustment":
+      return "System";
+    default:
+      return "Lifestyle";
+  }
+}
+
+export function filterCategories(
+  rows: readonly Category[],
+  query: string,
+): Category[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return rows.slice();
+  return rows.filter((row) => row.name.toLowerCase().includes(q));
+}
+
+export function hasExactCategory(rows: readonly Category[], query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return false;
+  return rows.some((row) => row.name.trim().toLowerCase() === q);
+}
+
 export function lastNoteForCategory(
   entries: readonly LedgerEntry[],
   categoryId: string,
@@ -367,7 +435,7 @@ export function groupCategories(
 }
 
 const FRIENDLY_HINT: Record<string, string> = {
-  expense_to_not_expense: "Expenses go to the Expense account — pick a category instead.",
+  expense_to_not_expense: "Expenses go to the Expense account: pick a category instead.",
   income_from_not_employer_or_external: "Income usually comes from Employer or External.",
   cc_payment_to_not_liability: "Credit card payments go to a credit card.",
   investment_to_not_fd_or_investment: "Investments go to an FD or investment account.",

@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { Link, useOutletContext } from "react-router-dom";
 import {
   getInvest,
+  getPortfolio,
   postDipBuy,
   putInvestPlan,
   seedInvestDefaults,
@@ -20,11 +21,12 @@ import type { AppShellOutlet } from "./AppShell.tsx";
 import { BottomSheet } from "./BottomSheet.tsx";
 import { apiErrorText } from "./copy.ts";
 import { FetchError } from "./FetchError.tsx";
+import { useDisplayPrefs } from "./displayPrefs.ts";
 import {
   activeThemeTierId,
   addAsset,
   dipSuggestion,
-  moveDipPriority,
+  moveAsset,
   removeAsset,
   replaceAsset,
   setSipPct,
@@ -39,6 +41,7 @@ import {
   versionCaption,
   weightSumLabel,
 } from "./invest.ts";
+import { pieConic, pieSlices } from "./portfolio.ts";
 import { assetToForm, emptyAssetForm } from "./invest.ts";
 import { AssetFormSheet, DeploySheet, type DeployLineDraft } from "./InvestSheets.tsx";
 import { Amount } from "./Privacy.tsx";
@@ -62,21 +65,25 @@ const inputClass =
 function AssetRow({
   asset,
   sipAmount,
-  isFirstDip,
-  isLastDip,
+  isFirst,
+  isLast,
+  confirmingRemove,
   onToggle,
   onEdit,
   onRemove,
-  onMoveDip,
+  onCancelRemove,
+  onMove,
 }: {
   asset: InvestAsset;
   sipAmount: Paise;
-  isFirstDip: boolean;
-  isLastDip: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  confirmingRemove: boolean;
   onToggle: () => void;
   onEdit: () => void;
   onRemove: () => void;
-  onMoveDip: (dir: -1 | 1) => void;
+  onCancelRemove: () => void;
+  onMove: (dir: -1 | 1) => void;
 }) {
   return (
     <article className="card p-4">
@@ -96,46 +103,65 @@ function AssetRow({
           {formatInr(sipAmount)}
         </Amount>
       </div>
-      <div className="mt-2 flex items-center gap-1">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={asset.active}
-          aria-label={`${asset.name} active`}
-          onClick={onToggle}
-          className={`min-h-11 rounded-full px-3 text-sm font-medium ${
-            asset.active ? "bg-accent text-accent-fg" : "border border-line text-muted"
-          }`}
-        >
-          {asset.active ? "On" : "Off"}
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${asset.name} up`}
-          disabled={isFirstDip || asset.dipPriority == null}
-          onClick={() => onMoveDip(-1)}
-          className="icon-btn"
-        >
-          <ChevronUpIcon className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          aria-label={`Move ${asset.name} down`}
-          disabled={isLastDip || asset.dipPriority == null}
-          onClick={() => onMoveDip(1)}
-          className="icon-btn"
-        >
-          <ChevronDownIcon className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          aria-label={`Remove ${asset.name}`}
-          onClick={onRemove}
-          className="icon-btn text-danger"
-        >
-          <TrashIcon className="h-5 w-5" />
-        </button>
-      </div>
+      {confirmingRemove ? (
+        <div className="card-danger mt-3 p-3">
+          <p className="text-sm text-ink">Remove {asset.name} from the plan?</p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              aria-label={`Confirm remove ${asset.name}`}
+              onClick={onRemove}
+              className="btn-danger"
+            >
+              Remove
+            </button>
+            <button type="button" onClick={onCancelRemove} className="btn-close">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center gap-1">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={asset.active}
+            aria-label={`${asset.name} active`}
+            onClick={onToggle}
+            className={`min-h-11 rounded-full px-3 text-sm font-medium ${
+              asset.active ? "bg-accent text-accent-fg" : "border border-line text-muted"
+            }`}
+          >
+            {asset.active ? "On" : "Off"}
+          </button>
+          <button
+            type="button"
+            aria-label={`Move ${asset.name} up`}
+            disabled={isFirst}
+            onClick={() => onMove(-1)}
+            className="icon-btn"
+          >
+            <ChevronUpIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Move ${asset.name} down`}
+            disabled={isLast}
+            onClick={() => onMove(1)}
+            className="icon-btn"
+          >
+            <ChevronDownIcon className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            aria-label={`Remove ${asset.name}`}
+            onClick={onRemove}
+            className="icon-btn text-danger"
+          >
+            <TrashIcon className="h-5 w-5" />
+          </button>
+        </div>
+      )}
     </article>
   );
 }
@@ -148,12 +174,19 @@ export function InvestScreen() {
     queryFn: getInvest,
     staleTime: 15_000,
   });
+  const portfolioQ = useQuery({
+    queryKey: ["portfolio", "All"],
+    queryFn: () => getPortfolio("All"),
+    staleTime: 15_000,
+  });
+  const [prefs] = useDisplayPrefs();
   const data = investQ.data;
 
   const [draft, setDraft] = useState<InvestPlan | null>(null);
   const [whatIf, setWhatIf] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [assetOpen, setAssetOpen] = useState<"add" | InvestAsset | null>(null);
+  const [confirmRemoveId, setConfirmRemoveId] = useState<string | null>(null);
   const [deployOpen, setDeployOpen] = useState(false);
   const [deployAmount, setDeployAmount] = useState<Paise>(0);
   const [deployFrom, setDeployFrom] = useState("");
@@ -175,8 +208,13 @@ export function InvestScreen() {
     return map;
   }, [split]);
 
-  const dipRanked = (plan?.assets ?? []).filter((row) => row.dipPriority != null);
   const themes = plan ? themeAssets(plan) : [];
+  const pie = useMemo(() => {
+    const payload = portfolioQ.data;
+    if (!payload) return [];
+    return pieSlices(payload, prefs.pieBy);
+  }, [portfolioQ.data, prefs.pieBy]);
+  const pieTotal = pie.reduce((sum, row) => sum + row.value, 0);
 
   function openDeploy(payload: InvestResponse) {
     if (!payload.plan) return;
@@ -206,6 +244,21 @@ export function InvestScreen() {
         amount: row.amount,
       })),
     );
+  }
+
+  async function persistPlan(next: InvestPlan, toast?: string) {
+    setDraft(next);
+    setSaving(true);
+    try {
+      const res = await putInvestPlan(next);
+      setDraft(res.plan);
+      if (toast) onToast(toast);
+      await invalidateInvest(qc);
+    } catch (err) {
+      onToast(apiErrorText(err));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function onSave() {
@@ -257,13 +310,13 @@ export function InvestScreen() {
   }
 
   return (
-    <section className="px-5 pb-8">
-      <Link to="/wealth" className="btn-ghost">
+    <section className="page">
+      <Link to="/wealth" className="back-link btn-ghost">
         ← Wealth
       </Link>
       <div className="mt-2 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Invest</h1>
+          <h1 className="page-title">Invest</h1>
           <p className="mt-0.5 text-sm text-muted">{versionCaption(plan)}</p>
         </div>
         {plan ? (
@@ -296,7 +349,8 @@ export function InvestScreen() {
         </div>
       ) : (
         <>
-          <article className="mt-4 card p-4">
+          <div className="desk-dash mt-4">
+          <article className="card p-4 desk:col-span-4 desk:p-5">
             <p className="kicker">SIP / dip</p>
             <p className="mt-1 text-lg font-medium text-ink">
               SIP {sipPct(plan)}% / Dip reserve {100 - sipPct(plan)}%
@@ -315,7 +369,7 @@ export function InvestScreen() {
             </label>
           </article>
 
-          <article className="mt-3 card p-4">
+          <article className="card p-4 desk:col-span-4 desk:p-5">
             <h2 className="text-base font-medium text-ink">This month’s SIP</h2>
             <p className="mt-1 text-xs text-muted">
               {data && data.lastInvestAmount > 0
@@ -357,7 +411,39 @@ export function InvestScreen() {
             )}
           </article>
 
-          <div className="mt-4 flex items-center justify-between gap-3">
+          <article className="card p-4 desk:col-span-4 desk:p-5">
+            <p className="kicker">Where money sits</p>
+            {pie.length === 0 || pieTotal <= 0 ? (
+              <p className="mt-2 text-sm text-muted">
+                Add holdings on Portfolio to see invested assets here.
+              </p>
+            ) : (
+              <div className="mt-3 flex items-center gap-4">
+                <div
+                  role="img"
+                  aria-label="Invested assets pie"
+                  className="size-28 shrink-0 rounded-full desk:size-40"
+                  style={{ background: pieConic(pie) }}
+                />
+                <ul className="min-w-0 flex-1 space-y-1.5">
+                  {pie.map((slice) => (
+                    <li key={slice.key} className="flex items-center gap-2 text-sm">
+                      <span
+                        className="size-2.5 shrink-0 rounded-sm"
+                        style={{ background: slice.color }}
+                      />
+                      <span className="min-w-0 truncate text-ink">{slice.label}</span>
+                      <span className="ml-auto shrink-0 tabular-nums text-muted">
+                        {formatBpPct(Math.round((slice.value / pieTotal) * 10_000))}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </article>
+
+          <div className="flex items-center justify-between gap-3 desk:col-span-12">
             <div>
               <h2 className="text-base font-medium text-ink">Assets</h2>
               <p className="text-xs text-muted">{weightSumLabel(plan.assets)}</p>
@@ -381,23 +467,36 @@ export function InvestScreen() {
               </button>
             </div>
           </div>
-          <div className="mt-2 space-y-3">
-            {plan.assets.map((asset) => (
+          <div className="space-y-3 desk:col-span-12 desk:grid desk:grid-cols-2 desk:gap-4 desk:space-y-0">
+            {plan.assets.map((asset, index) => (
               <AssetRow
                 key={asset.id}
                 asset={asset}
                 sipAmount={sipById[asset.id] ?? 0}
-                isFirstDip={dipRanked[0]?.id === asset.id}
-                isLastDip={dipRanked[dipRanked.length - 1]?.id === asset.id}
+                isFirst={index === 0}
+                isLast={index === plan.assets.length - 1}
+                confirmingRemove={confirmRemoveId === asset.id}
                 onToggle={() => setDraft(toggleAssetActive(plan, asset.id))}
                 onEdit={() => setAssetOpen(asset)}
-                onRemove={() => setDraft(removeAsset(plan, asset.id))}
-                onMoveDip={(dir) => setDraft(moveDipPriority(plan, asset.id, dir))}
+                onCancelRemove={() => setConfirmRemoveId(null)}
+                onRemove={() => {
+                  if (confirmRemoveId !== asset.id) {
+                    setConfirmRemoveId(asset.id);
+                    return;
+                  }
+                  setConfirmRemoveId(null);
+                  void persistPlan(removeAsset(plan, asset.id));
+                }}
+                onMove={(dir) => {
+                  const next = moveAsset(plan, asset.id, dir);
+                  if (next === plan) return;
+                  void persistPlan(next);
+                }}
               />
             ))}
           </div>
 
-          <article className="mt-4 card p-4">
+          <article className="card p-4 desk:col-span-8 desk:p-5">
             <h2 className="text-base font-medium text-ink">Theme engine</h2>
             {plan.themeTiers.map((tier) => {
               const active =
@@ -452,7 +551,7 @@ export function InvestScreen() {
             })}
           </article>
 
-          <article className="mt-3 card p-4">
+          <article className="card p-4 desk:col-span-4 desk:p-5">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h2 className="text-base font-medium text-ink">Dip reserve</h2>
@@ -490,10 +589,11 @@ export function InvestScreen() {
             )}
           </article>
 
-          <article className="mt-3 rounded-2xl border border-dashed border-line bg-card p-4">
+          <article className="rounded-2xl border border-dashed border-line bg-card p-4 desk:col-span-4 desk:p-5">
             <p className="text-sm font-medium text-ink">AI research (coming)</p>
             <p className="mt-1 text-xs text-muted">Phase 26. Nothing to tap yet.</p>
           </article>
+          </div>
         </>
       )}
 

@@ -142,6 +142,7 @@ export const oneTimePlans = sqliteTable("one_time_plans", {
   amount: integer("amount").notNull(),
   priority: text("priority").notNull(),
   status: text("status").notNull(),
+  kind: text("kind"),
   payFromAccountId: text("pay_from_account_id").references(() => accounts.id),
   linkedEntryId: text("linked_entry_id").references(() => ledgerEntries.id),
   notes: text("notes"),

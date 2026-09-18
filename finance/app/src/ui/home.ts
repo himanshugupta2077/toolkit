@@ -1,4 +1,4 @@
-import type { HomeForecastMonth, HomeReconRow } from "../api/store.ts";
+import type { HomeForecastMonth } from "../api/store.ts";
 import {
   addMonths,
   daysBetween,
@@ -12,14 +12,16 @@ import {
   type MonthSummary,
   type PaceBand,
   type Paise,
+  type UpcomingBill,
   type YearMonth,
 } from "../engine/index.ts";
-import { RECONCILE_STALE_DAYS } from "./accounts.ts";
 import {
   EMPTY_LEDGER_FILTERS,
+  formatMonthShort,
   ledgerSearchParams,
   type LedgerFilters,
 } from "./ledger.ts";
+import { RECURRING_KIND_LABELS } from "./plan.ts";
 
 export const PACE_BAND_LABELS: Record<PaceBand, string> = {
   on_track: "On track",
@@ -46,7 +48,7 @@ export function calendarDaysLeft(today: IsoDate): number {
 
 export function paceHeadline(pace: Pick<BudgetPace, "spent" | "safePerDay">): string {
   const perDay = `${formatInr(pace.safePerDay)} / day`;
-  if (pace.spent === 0) return `No spending yet — ${perDay}`;
+  if (pace.spent === 0) return `No spending yet: ${perDay}`;
   return `Safe to spend today ${perDay}`;
 }
 
@@ -123,6 +125,23 @@ export function monthTiles(month: YearMonth, summary: MonthSummary): MonthTile[]
   ];
 }
 
+export type SavingsMonthBar = {
+  month: YearMonth;
+  savings: Paise;
+  height: number;
+};
+
+export function savingsMonthBars(
+  months: readonly { month: YearMonth; savings: Paise }[],
+): SavingsMonthBar[] {
+  const max = Math.max(0, ...months.map((row) => Math.abs(row.savings)));
+  return months.map((row) => ({
+    month: row.month,
+    savings: row.savings,
+    height: max === 0 || row.savings === 0 ? 0 : Math.abs(row.savings) / max,
+  }));
+}
+
 export type StackedMonthBar = {
   month: YearMonth;
   loanEmi: Paise;
@@ -157,64 +176,15 @@ export function stackedMonthBars(
 }
 
 export type HomeActionCard = {
-  kind: "unverified_import" | "unreconciled" | "negative_free" | "allocate";
+  kind: "negative_free" | "allocate";
   title: string;
   body: string;
   href: string | null;
   disabled: boolean;
 };
 
-function reconcilable(row: HomeReconRow): boolean {
-  if (row.isArchived) return false;
-  return row.type !== "virtual";
-}
-
-export function homeActionCards(input: {
-  lastImport: string | null;
-  recon: readonly HomeReconRow[];
-  free: Paise;
-}): HomeActionCard[] {
+export function homeActionCards(input: { free: Paise }): HomeActionCard[] {
   const cards: HomeActionCard[] = [];
-  const live = input.recon.filter(reconcilable);
-  const never = live.filter((row) => row.lastReconciledAt == null);
-  const unverified = input.lastImport != null && never.length > 0;
-
-  if (unverified) {
-    cards.push({
-      kind: "unverified_import",
-      title: "Unverified import",
-      body: "Reconcile each account against the bank once.",
-      href: "/more/accounts",
-      disabled: false,
-    });
-  }
-
-  const stalePool = unverified
-    ? live.filter((row) => row.lastReconciledAt != null)
-    : live;
-  const worst = stalePool
-    .slice()
-    .sort((a, b) => {
-      const da = a.daysSinceReconcile ?? Number.POSITIVE_INFINITY;
-      const db = b.daysSinceReconcile ?? Number.POSITIVE_INFINITY;
-      return db - da;
-    })[0];
-  if (worst) {
-    const days = worst.daysSinceReconcile;
-    const isNever = worst.lastReconciledAt == null;
-    const isStale = isNever || (days != null && days > RECONCILE_STALE_DAYS);
-    if (isStale) {
-      cards.push({
-        kind: "unreconciled",
-        title: isNever
-          ? `${worst.name} not reconciled yet`
-          : `${worst.name} not reconciled in ${days} days`,
-        body: "Open Reconcile and stamp or add an adjustment.",
-        href: `/more/accounts/${worst.id}/reconcile`,
-        disabled: false,
-      });
-    }
-  }
 
   if (input.free < 0) {
     cards.push({
@@ -229,7 +199,7 @@ export function homeActionCards(input: {
   if (input.free > 0) {
     cards.push({
       kind: "allocate",
-      title: `Allocate this month — ${formatInr(input.free)} free`,
+      title: `Allocate this month: ${formatInr(input.free)} free`,
       body: "Preview the waterfall, then confirm transfers.",
       href: "/wealth/allocate",
       disabled: false,
@@ -242,4 +212,40 @@ export function homeActionCards(input: {
 export function signedLineAmount(sign: 1 | -1, amount: Paise): string {
   const body = formatInr(amount);
   return sign < 0 ? `− ${body}` : body;
+}
+
+export function upcomingBillHref(bill: Pick<UpcomingBill, "source">): string {
+  return bill.source === "one_time" ? "/plan?tab=one-time" : "/plan?tab=recurring";
+}
+
+export function upcomingBillsTotal(bills: readonly Pick<UpcomingBill, "amount">[]): Paise {
+  return bills.reduce((sum, row) => sum + row.amount, 0);
+}
+
+export function upcomingDueCaption(today: IsoDate, due: IsoDate): string {
+  const days = daysBetween(today, due);
+  if (days <= 0) return "today";
+  if (days === 1) return "tomorrow";
+  return `in ${days} days`;
+}
+
+function upcomingKindLabel(
+  bill: Pick<UpcomingBill, "source" | "frequency"> & Partial<Pick<UpcomingBill, "kind">>,
+): string {
+  if (bill.kind) return RECURRING_KIND_LABELS[bill.kind];
+  if (bill.source === "one_time") return "One-time";
+  if (bill.frequency === "yearly") return "Yearly";
+  if (bill.frequency === "weekly") return "Weekly";
+  if (bill.frequency === "custom_months") return "Repeating";
+  return "Monthly";
+}
+
+export function upcomingBillSubline(
+  bill: Pick<UpcomingBill, "source" | "frequency" | "dueDate"> &
+    Partial<Pick<UpcomingBill, "kind">>,
+  today: IsoDate,
+): string {
+  const day = Number(bill.dueDate.slice(8, 10));
+  const month = formatMonthShort(bill.dueDate.slice(0, 7) as YearMonth);
+  return `${day} ${month} · ${upcomingKindLabel(bill)} · ${upcomingDueCaption(today, bill.dueDate)}`;
 }

@@ -7,12 +7,11 @@ import { FetchError } from "./FetchError.tsx";
 import { formatInr, reconCheckedDate, yearMonthFromIsoDate } from "../engine/index.ts";
 import type { AppShellOutlet } from "./AppShell.tsx";
 import { differenceHint, searchAmountQuery } from "./accounts.ts";
-import { Keypad } from "./Keypad.tsx";
+import { AmountField } from "./formFields.tsx";
 import { amountDraftFromPaise } from "./ledger.ts";
 import {
   amountExpression,
   amountPaise,
-  applyAmountKey,
   EMPTY_AMOUNT,
   type AmountDraft,
 } from "./quickAdd.ts";
@@ -112,14 +111,14 @@ export function ReconcileScreen() {
 
   if (detailQ.isPending) {
     return (
-      <section className="px-5">
+      <section className="page">
         <p className="text-sm text-muted">Loading account…</p>
       </section>
     );
   }
   if (detailQ.error) {
     return (
-      <section className="px-5">
+      <section className="page">
         <Link to="/more/accounts" className="btn-ghost">
           ← Accounts
         </Link>
@@ -129,7 +128,7 @@ export function ReconcileScreen() {
   }
   if (!data) {
     return (
-      <section className="px-5">
+      <section className="page">
         <Link to="/more/accounts" className="btn-ghost">
           ← Accounts
         </Link>
@@ -140,7 +139,7 @@ export function ReconcileScreen() {
 
   if (!data.canReconcile) {
     return (
-      <section className="px-5">
+      <section className="page">
         <Link
           to={`/more/accounts/${data.account.id}`}
           className="btn-ghost"
@@ -153,14 +152,14 @@ export function ReconcileScreen() {
   }
 
   return (
-    <section className="flex min-h-0 flex-col px-5 pb-8">
+    <section className="page flex min-h-0 flex-col desk:max-w-2xl">
       <Link
         to={`/more/accounts/${data.account.id}`}
         className="btn-ghost"
       >
         ← {data.account.name}
       </Link>
-      <h1 className="mt-1 text-2xl font-semibold tracking-tight text-ink">Reconcile</h1>
+      <h1 className="page-title mt-1">Reconcile</h1>
       <p className="mt-1 text-sm text-muted">Type the number from the bank app. Do not edit the calculated balance.</p>
 
       <dl className="mt-4 space-y-1 text-base">
@@ -184,7 +183,12 @@ export function ReconcileScreen() {
       <p className="mt-2 text-sm text-muted">{differenceHint(difference)}</p>
 
       <div className="mt-4">
-        <Keypad onKey={(key) => setActual((draft) => applyAmountKey(draft, key))} />
+        <AmountField
+          label="Bank actual"
+          amount={actual}
+          onChange={setActual}
+          plus={false}
+        />
       </div>
 
       {match ? (
@@ -211,7 +215,7 @@ export function ReconcileScreen() {
             <input
               value={note}
               onChange={(e) => setNote(e.target.value)}
-              placeholder="Required — why the gap"
+              placeholder="Required: why the gap"
               className="mt-1 field"
             />
           </label>

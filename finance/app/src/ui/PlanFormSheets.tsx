@@ -6,6 +6,7 @@ import type {
 } from "../api/store.ts";
 import {
   isIsoDate,
+  RECURRING_KINDS,
   todayIst,
   type ExpectedInflow,
   type InflowStatus,
@@ -18,36 +19,80 @@ import {
   type RecurringPlan,
 } from "../engine/index.ts";
 import type { Account, Category } from "../engine/types.ts";
-import { Keypad } from "./Keypad.tsx";
+import {
+  AmountField,
+  categoryOptions,
+  chipClass,
+  FieldLabel,
+  FormSelect,
+  namedOptions,
+} from "./formFields.tsx";
 import { amountDraftFromPaise } from "./ledger.ts";
 import {
-  chipClass,
   FREQUENCY_LABELS,
   INFLOW_STATUS_LABELS,
+  KIND_HELP,
   liveCategories,
+  ONE_TIME_KIND_HELP,
   ONE_TIME_STATUS_LABELS,
   payFromAccounts,
   PRIORITY_LABELS,
   RECURRING_KIND_LABELS,
 } from "./plan.ts";
-import {
-  amountExpression,
-  amountPaise,
-  applyAmountKey,
-  EMPTY_AMOUNT,
-  type AmountDraft,
-  type AmountKey,
-} from "./quickAdd.ts";
+import { amountPaise, EMPTY_AMOUNT, type AmountDraft } from "./quickAdd.ts";
 
 const FREQUENCIES: RecurringFrequency[] = ["monthly", "yearly", "weekly", "custom_months"];
-const KINDS: RecurringKind[] = ["loan_emi", "lifestyle", "investment"];
+const KINDS: RecurringKind[] = [...RECURRING_KINDS];
 const PRIORITIES: PlanPriority[] = ["high", "medium", "low"];
 const ONE_STATUSES: OneTimeStatus[] = ["planned", "completed", "cancelled"];
 const INFLOW_STATUSES: InflowStatus[] = ["expected", "received", "dropped"];
 
-function FieldLabel({ children }: { children: string }) {
+function DeletePlanRow({
+  noun,
+  saving,
+  onDelete,
+}: {
+  noun: string;
+  saving: boolean;
+  onDelete: () => void;
+}) {
+  const [confirm, setConfirm] = useState(false);
+  if (confirm) {
+    return (
+      <div className="card-danger mt-3 p-3">
+        <p className="text-sm text-ink">
+          Delete this {noun}? Planning only — the ledger is untouched.
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onDelete}
+            className="btn-danger"
+          >
+            {saving ? "Deleting…" : `Delete ${noun}`}
+          </button>
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => setConfirm(false)}
+            className="btn-quiet text-base"
+          >
+            Keep
+          </button>
+        </div>
+      </div>
+    );
+  }
   return (
-    <span className="kicker">{children}</span>
+    <button
+      type="button"
+      disabled={saving}
+      onClick={() => setConfirm(true)}
+      className="btn-quiet mt-3 w-full text-danger"
+    >
+      Delete
+    </button>
   );
 }
 
@@ -66,34 +111,26 @@ export function BudgetCapSheet({
   const canSave = paise > 0 && !saving;
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-        <p className="text-sm text-muted">
-          This month&apos;s cap. Planning never posts to the ledger.
-        </p>
-        <p className="mt-3 hero-num">
-          {amountExpression(amount) ? `₹${amountExpression(amount)}` : "₹0"}
-        </p>
+    <div className="pb-1">
+      <div className="space-y-4">
+        <AmountField amount={amount} onChange={setAmount} label="Cap" />
         <button
           type="button"
-          className={`mt-4 ${chipClass(applyToFuture)}`}
+          className={chipClass(applyToFuture)}
           onClick={() => setApplyToFuture((v) => !v)}
         >
           Apply to future months too
         </button>
-        <p className="mt-2 text-xs text-muted">
+        <p className="text-xs text-muted">
           Future months without their own row follow Settings default. Toggling this also updates
           that default and any later month rows already stored.
         </p>
-      </div>
-      <div className="shrink-0 pt-2">
-        <Keypad onKey={(key: AmountKey) => setAmount((d) => applyAmountKey(d, key))} />
       </div>
       <button
         type="button"
         disabled={!canSave}
         onClick={() => onSave(paise, applyToFuture)}
-        className="mt-3 btn-primary w-full"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : "Save cap"}
       </button>
@@ -109,6 +146,7 @@ export function RecurringFormSheet({
   today = todayIst(),
   saving,
   onSave,
+  onDelete,
 }: {
   mode: "add" | "edit";
   plan?: RecurringPlan;
@@ -117,6 +155,7 @@ export function RecurringFormSheet({
   today?: IsoDate;
   saving: boolean;
   onSave: (body: RecurringWriteBody) => void;
+  onDelete?: () => void;
 }) {
   const cats = liveCategories(categories);
   const payFrom = payFromAccounts(accounts);
@@ -158,8 +197,8 @@ export function RecurringFormSheet({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+    <div className="pb-1">
+      <div className="space-y-4">
         <label className="block">
           <FieldLabel>Name</FieldLabel>
           <input
@@ -169,43 +208,24 @@ export function RecurringFormSheet({
             className="mt-1 field"
           />
         </label>
-        <p className="mt-4 hero-num">
-          {amountExpression(amount) ? `₹${amountExpression(amount)}` : "₹0"}
-        </p>
-
-        <p className="mt-4 mb-2">
-          <FieldLabel>Category</FieldLabel>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {cats.map((row) => (
-            <button
-              key={row.id}
-              type="button"
-              className={chipClass(categoryId === row.id)}
-              onClick={() => setCategoryId(row.id)}
-            >
-              {row.name}
-            </button>
-          ))}
-        </div>
-
-        <p className="mt-4 mb-2">
-          <FieldLabel>Frequency</FieldLabel>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {FREQUENCIES.map((freq) => (
-            <button
-              key={freq}
-              type="button"
-              className={chipClass(frequency === freq)}
-              onClick={() => setFrequency(freq)}
-            >
-              {FREQUENCY_LABELS[freq]}
-            </button>
-          ))}
-        </div>
+        <AmountField amount={amount} onChange={setAmount} />
+        <FormSelect
+          label="Category"
+          value={categoryId}
+          onChange={setCategoryId}
+          options={categoryOptions(cats)}
+        />
+        <FormSelect
+          label="Frequency"
+          value={frequency}
+          onChange={(v) => setFrequency(v as RecurringFrequency)}
+          options={FREQUENCIES.map((freq) => ({
+            value: freq,
+            label: FREQUENCY_LABELS[freq],
+          }))}
+        />
         {frequency === "custom_months" ? (
-          <label className="mt-3 block">
+          <label className="block">
             <FieldLabel>Every N months</FieldLabel>
             <input
               inputMode="numeric"
@@ -215,8 +235,7 @@ export function RecurringFormSheet({
             />
           </label>
         ) : null}
-
-        <div className="mt-4 grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <label>
             <FieldLabel>Start</FieldLabel>
             <input
@@ -236,82 +255,44 @@ export function RecurringFormSheet({
             />
           </label>
         </div>
-        <p className="mt-1 text-xs text-muted">Leave end blank for until I stop.</p>
-
-        <p className="mt-4 mb-2">
-          <FieldLabel>Kind</FieldLabel>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button type="button" className={chipClass(kind === "")} onClick={() => setKind("")}>
-            Auto
-          </button>
-          {KINDS.map((k) => (
-            <button
-              key={k}
-              type="button"
-              className={chipClass(kind === k)}
-              onClick={() => setKind(k)}
-            >
-              {RECURRING_KIND_LABELS[k]}
-            </button>
-          ))}
-        </div>
-
+        <p className="-mt-2 text-xs text-muted">Leave end blank for until I stop.</p>
+        <FormSelect
+          label="Kind"
+          value={kind}
+          onChange={(v) => setKind(v as RecurringKind | "")}
+          options={[
+            { value: "", label: "Auto" },
+            ...KINDS.map((k) => ({ value: k, label: RECURRING_KIND_LABELS[k] })),
+          ]}
+        />
+        <p className="-mt-2 text-xs text-muted">{KIND_HELP}</p>
         {payFrom.length > 0 ? (
-          <>
-            <p className="mt-4 mb-2">
-              <FieldLabel>Pay from</FieldLabel>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={chipClass(payFromId === "")}
-                onClick={() => setPayFromId("")}
-              >
-                None
-              </button>
-              {payFrom.map((row) => (
-                <button
-                  key={row.id}
-                  type="button"
-                  className={chipClass(payFromId === row.id)}
-                  onClick={() => setPayFromId(row.id)}
-                >
-                  {row.name}
-                </button>
-              ))}
-            </div>
-          </>
+          <FormSelect
+            label="Pay from"
+            value={payFromId}
+            onChange={setPayFromId}
+            options={[{ value: "", label: "None" }, ...namedOptions(payFrom)]}
+          />
         ) : null}
-
-        <button
-          type="button"
-          className={`mt-4 ${chipClass(autoPost)}`}
-          onClick={() => setAutoPost((v) => !v)}
-        >
+        <button type="button" className={chipClass(autoPost)} onClick={() => setAutoPost((v) => !v)}>
           Auto-propose (off by default)
         </button>
-
-        <label className="mt-4 block">
+        <label className="block">
           <FieldLabel>Note</FieldLabel>
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="mt-1 field"
-          />
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 field" />
         </label>
-      </div>
-      <div className="shrink-0 pt-2">
-        <Keypad onKey={(key: AmountKey) => setAmount((d) => applyAmountKey(d, key))} />
       </div>
       <button
         type="button"
         disabled={!canSave}
         onClick={save}
-        className="mt-3 btn-primary w-full"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : mode === "add" ? "Add recurring" : "Save"}
       </button>
+      {mode === "edit" && onDelete ? (
+        <DeletePlanRow noun="recurring" saving={saving} onDelete={onDelete} />
+      ) : null}
     </div>
   );
 }
@@ -324,6 +305,7 @@ export function OneTimeFormSheet({
   today = todayIst(),
   saving,
   onSave,
+  onDelete,
 }: {
   mode: "add" | "edit";
   plan?: OneTimePlan;
@@ -332,6 +314,7 @@ export function OneTimeFormSheet({
   today?: IsoDate;
   saving: boolean;
   onSave: (body: OneTimeWriteBody) => void;
+  onDelete?: () => void;
 }) {
   const cats = liveCategories(categories);
   const payFrom = payFromAccounts(accounts);
@@ -343,6 +326,7 @@ export function OneTimeFormSheet({
   const [expectedDate, setExpectedDate] = useState(plan?.expectedDate ?? today);
   const [priority, setPriority] = useState<PlanPriority>(plan?.priority ?? "medium");
   const [status, setStatus] = useState<OneTimeStatus>(plan?.status ?? "planned");
+  const [kind, setKind] = useState<RecurringKind | "">(plan?.kind ?? "");
   const [payFromId, setPayFromId] = useState(plan?.payFromAccountId ?? "");
   const [notes, setNotes] = useState(plan?.notes ?? "");
 
@@ -359,14 +343,15 @@ export function OneTimeFormSheet({
       amount: paise,
       priority,
       status,
+      kind: kind === "" ? null : kind,
       payFromAccountId: payFromId || null,
       notes,
     });
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+    <div className="pb-1">
+      <div className="space-y-4">
         <label className="block">
           <FieldLabel>Name</FieldLabel>
           <input
@@ -376,25 +361,14 @@ export function OneTimeFormSheet({
             className="mt-1 field"
           />
         </label>
-        <p className="mt-4 hero-num">
-          {amountExpression(amount) ? `₹${amountExpression(amount)}` : "₹0"}
-        </p>
-        <p className="mt-4 mb-2">
-          <FieldLabel>Category</FieldLabel>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {cats.map((row) => (
-            <button
-              key={row.id}
-              type="button"
-              className={chipClass(categoryId === row.id)}
-              onClick={() => setCategoryId(row.id)}
-            >
-              {row.name}
-            </button>
-          ))}
-        </div>
-        <label className="mt-4 block">
+        <AmountField amount={amount} onChange={setAmount} />
+        <FormSelect
+          label="Category"
+          value={categoryId}
+          onChange={setCategoryId}
+          options={categoryOptions(cats)}
+        />
+        <label className="block">
           <FieldLabel>Expected date</FieldLabel>
           <input
             type="date"
@@ -403,89 +377,62 @@ export function OneTimeFormSheet({
             className="mt-1 field"
           />
         </label>
-        <p className="mt-4 mb-2">
-          <FieldLabel>Priority</FieldLabel>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {PRIORITIES.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className={chipClass(priority === p)}
-              onClick={() => setPriority(p)}
-            >
-              {PRIORITY_LABELS[p]}
-            </button>
-          ))}
-        </div>
+        <FormSelect
+          label="Kind"
+          value={kind}
+          onChange={(v) => setKind(v as RecurringKind | "")}
+          options={[
+            { value: "", label: "None" },
+            { value: "bill", label: RECURRING_KIND_LABELS.bill },
+          ]}
+        />
+        <p className="-mt-2 text-xs text-muted">{ONE_TIME_KIND_HELP}</p>
+        <FormSelect
+          label="Priority"
+          value={priority}
+          onChange={(v) => setPriority(v as PlanPriority)}
+          options={PRIORITIES.map((p) => ({ value: p, label: PRIORITY_LABELS[p] }))}
+        />
         {mode === "edit" ? (
           <>
-            <p className="mt-4 mb-2">
-              <FieldLabel>Status</FieldLabel>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {ONE_STATUSES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={chipClass(status === s)}
-                  onClick={() => setStatus(s)}
-                >
-                  {ONE_TIME_STATUS_LABELS[s]}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-muted">
+            <FormSelect
+              label="Status"
+              value={status}
+              onChange={(v) => setStatus(v as OneTimeStatus)}
+              options={ONE_STATUSES.map((s) => ({
+                value: s,
+                label: ONE_TIME_STATUS_LABELS[s],
+              }))}
+            />
+            <p className="-mt-2 text-xs text-muted">
               Complete does not write a ledger row. Log the spend with Quick Add when you pay.
             </p>
           </>
         ) : null}
         {payFrom.length > 0 ? (
-          <>
-            <p className="mt-4 mb-2">
-              <FieldLabel>Pay from</FieldLabel>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={chipClass(payFromId === "")}
-                onClick={() => setPayFromId("")}
-              >
-                None
-              </button>
-              {payFrom.map((row) => (
-                <button
-                  key={row.id}
-                  type="button"
-                  className={chipClass(payFromId === row.id)}
-                  onClick={() => setPayFromId(row.id)}
-                >
-                  {row.name}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
-        <label className="mt-4 block">
-          <FieldLabel>Note</FieldLabel>
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="mt-1 field"
+          <FormSelect
+            label="Pay from"
+            value={payFromId}
+            onChange={setPayFromId}
+            options={[{ value: "", label: "None" }, ...namedOptions(payFrom)]}
           />
+        ) : null}
+        <label className="block">
+          <FieldLabel>Note</FieldLabel>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 field" />
         </label>
-      </div>
-      <div className="shrink-0 pt-2">
-        <Keypad onKey={(key: AmountKey) => setAmount((d) => applyAmountKey(d, key))} />
       </div>
       <button
         type="button"
         disabled={!canSave}
         onClick={save}
-        className="mt-3 btn-primary w-full"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : mode === "add" ? "Add one-time" : "Save"}
       </button>
+      {mode === "edit" && onDelete ? (
+        <DeletePlanRow noun="one-time" saving={saving} onDelete={onDelete} />
+      ) : null}
     </div>
   );
 }
@@ -497,6 +444,7 @@ export function InflowFormSheet({
   today = todayIst(),
   saving,
   onSave,
+  onDelete,
 }: {
   mode: "add" | "edit";
   inflow?: ExpectedInflow;
@@ -504,6 +452,7 @@ export function InflowFormSheet({
   today?: IsoDate;
   saving: boolean;
   onSave: (body: InflowWriteBody) => void;
+  onDelete?: () => void;
 }) {
   const cats = liveCategories(categories);
   const [name, setName] = useState(inflow?.name ?? "");
@@ -532,12 +481,12 @@ export function InflowFormSheet({
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-        <p className="text-sm text-muted">
-          Free to allocate ignores these until they land in the ledger.
-        </p>
-        <label className="mt-3 block">
+    <div className="pb-1">
+      <p className="text-sm text-muted">
+        Free to allocate ignores these until they land in the ledger.
+      </p>
+      <div className="mt-4 space-y-4">
+        <label className="block">
           <FieldLabel>Name</FieldLabel>
           <input
             value={name}
@@ -546,32 +495,15 @@ export function InflowFormSheet({
             className="mt-1 field"
           />
         </label>
-        <p className="mt-4 hero-num">
-          {amountExpression(amount) ? `₹${amountExpression(amount)}` : "₹0"}
-        </p>
-        <p className="mt-4 mb-2">
-          <FieldLabel>Category</FieldLabel>
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            className={chipClass(categoryId === "")}
-            onClick={() => setCategoryId("")}
-          >
-            None
-          </button>
-          {cats.map((row) => (
-            <button
-              key={row.id}
-              type="button"
-              className={chipClass(categoryId === row.id)}
-              onClick={() => setCategoryId(row.id)}
-            >
-              {row.name}
-            </button>
-          ))}
-        </div>
-        <label className="mt-4 block">
+        <AmountField amount={amount} onChange={setAmount} />
+        <FormSelect
+          label="Category"
+          value={categoryId}
+          onChange={setCategoryId}
+          placeholder="None"
+          options={categoryOptions(cats)}
+        />
+        <label className="block">
           <FieldLabel>Expected date</FieldLabel>
           <input
             type="date"
@@ -580,54 +512,36 @@ export function InflowFormSheet({
             className="mt-1 field"
           />
         </label>
-        <button
-          type="button"
-          className={`mt-4 ${chipClass(isLiquid)}`}
-          onClick={() => setIsLiquid((v) => !v)}
-        >
+        <button type="button" className={chipClass(isLiquid)} onClick={() => setIsLiquid((v) => !v)}>
           Liquid
         </button>
         {mode === "edit" ? (
-          <>
-            <p className="mt-4 mb-2">
-              <FieldLabel>Status</FieldLabel>
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {INFLOW_STATUSES.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  className={chipClass(status === s)}
-                  onClick={() => setStatus(s)}
-                >
-                  {INFLOW_STATUS_LABELS[s]}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : null}
-        <label className="mt-4 block">
-          <FieldLabel>Note</FieldLabel>
-          <input
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className="mt-1 field"
+          <FormSelect
+            label="Status"
+            value={status}
+            onChange={(v) => setStatus(v as InflowStatus)}
+            options={INFLOW_STATUSES.map((s) => ({
+              value: s,
+              label: INFLOW_STATUS_LABELS[s],
+            }))}
           />
+        ) : null}
+        <label className="block">
+          <FieldLabel>Note</FieldLabel>
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} className="mt-1 field" />
         </label>
-      </div>
-      <div className="shrink-0 pt-2">
-        <Keypad onKey={(key: AmountKey) => setAmount((d) => applyAmountKey(d, key))} />
       </div>
       <button
         type="button"
         disabled={!canSave}
         onClick={save}
-        className="mt-3 btn-primary w-full"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : mode === "add" ? "Add inflow" : "Save"}
       </button>
+      {mode === "edit" && onDelete ? (
+        <DeletePlanRow noun="inflow" saving={saving} onDelete={onDelete} />
+      ) : null}
     </div>
   );
 }
-
-

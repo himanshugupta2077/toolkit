@@ -122,6 +122,9 @@ import {
   type ReconcileWriteResolution,
 } from "./repo/accounts.ts";
 import {
+  deleteExpectedInflow,
+  deleteOneTimePlan,
+  deleteRecurringPlan,
   insertExpectedInflow,
   insertOneTimePlan,
   insertRecurringPlan,
@@ -181,6 +184,8 @@ import {
 export type CreateAppOptions = OpenedDb & {
   serveUi?: boolean;
   auth?: AuthConfig;
+  /** Wipe / dummy-expense. Off in production unless FINANCE_DEV_ROUTES=1. */
+  allowDevRoutes?: boolean;
 };
 
 type LedgerBody = {
@@ -222,8 +227,10 @@ function seedPatchFromBody(body: Record<string, unknown>): SeedTargetPatch {
   if (savingsPaise != null) patch.savingsTargetPaise = Math.round(savingsPaise);
   else if (savingsRupees != null) patch.savingsTargetPaise = Math.round(savingsRupees * 100);
 
-  const efMonths = asFiniteNumber(body.efMonths);
-  if (efMonths != null) patch.efMonths = Math.round(efMonths);
+  const efTargetPaise = asFiniteNumber(body.efTargetPaise);
+  const efRupees = asFiniteNumber(body.efRupees);
+  if (efTargetPaise != null) patch.efTargetPaise = Math.round(efTargetPaise);
+  else if (efRupees != null) patch.efTargetPaise = Math.round(efRupees * 100);
 
   const sipBp = asFiniteNumber(body.sipBp);
   const dipBp = asFiniteNumber(body.dipReserveBp);
@@ -452,6 +459,7 @@ type OneTimeBody = {
   amount?: unknown;
   priority?: unknown;
   status?: unknown;
+  kind?: unknown;
   payFromAccountId?: unknown;
   notes?: unknown;
 };
@@ -642,6 +650,14 @@ function parseOneTimeWrite(
     if (!isOneTimeStatus(status)) return { ok: false, error: "Unknown status." };
     patch.status = status as OneTimeStatus;
   }
+  if (mode === "create" || body.kind !== undefined) {
+    if (body.kind == null || body.kind === "") patch.kind = null;
+    else {
+      const kind = asString(body.kind);
+      if (!isRecurringKind(kind)) return { ok: false, error: "Unknown kind." };
+      patch.kind = kind as RecurringKind;
+    }
+  }
   if (mode === "create" || body.payFromAccountId !== undefined) {
     const pay = optionalAccountId(body.payFromAccountId);
     if (!pay.ok) return pay;
@@ -659,6 +675,7 @@ function parseOneTimeWrite(
         amount: patch.amount ?? 0,
         priority: patch.priority ?? "medium",
         status: patch.status ?? "planned",
+        kind: patch.kind ?? null,
         payFromAccountId: patch.payFromAccountId ?? null,
         notes: patch.notes ?? "",
       } satisfies NewOneTimeInput,
@@ -905,8 +922,6 @@ type CategoryBody = {
 type SettingsBody = {
   defaultBudget?: unknown;
   monthlySalary?: unknown;
-  salaryDay?: unknown;
-  efMonths?: unknown;
   essentialIds?: unknown;
   blurDefault?: unknown;
   autoLockSeconds?: unknown;
@@ -982,26 +997,17 @@ function parseMoneyPatch(
     }
     patch.monthlySalary = n;
   }
-  if (body.salaryDay !== undefined) {
-    const day = asDay(body.salaryDay);
-    if (day === "invalid" || day == null) {
-      return { ok: false, error: "Salary day must be 1–31." };
-    }
-    patch.salaryDay = day;
-  }
-  if (body.efMonths !== undefined) {
-    const n = asFiniteNumber(body.efMonths);
-    if (n == null || !Number.isInteger(n) || n < 1 || n > 24) {
-      return { ok: false, error: "EF months must be 1–24." };
-    }
-    patch.efMonths = n;
-  }
   return { ok: true, value: patch };
 }
 
 export function createApp(opts: CreateAppOptions): Hono {
   const { db, sqlite, dbFile, serveUi = false } = opts;
   const auth = opts.auth ?? authFromEnv();
+  const allowDevRoutes =
+    opts.allowDevRoutes ??
+    (process.env.FINANCE_DEV_ROUTES === "1" ||
+      (process.env.NODE_ENV !== "production" &&
+        process.env.FINANCE_DEV_ROUTES !== "0"));
   const app = new Hono();
 
   app.use("/api/*", async (c, next) => {
@@ -1207,6 +1213,12 @@ export function createApp(opts: CreateAppOptions): Hono {
     return c.json({ ok: true, ...buildPlan(db) });
   });
 
+  app.delete("/api/plans/recurring/:id", (c) => {
+    const removed = deleteRecurringPlan(db, c.req.param("id"));
+    if (!removed) return c.json({ ok: false, error: "not found" }, 404);
+    return c.json({ ok: true, id: removed.id, ...buildPlan(db) });
+  });
+
   app.get("/api/plans/one-time", (c) => {
     return c.json({ ok: true, oneTime: listOneTimePlans(db) });
   });
@@ -1244,6 +1256,12 @@ export function createApp(opts: CreateAppOptions): Hono {
     return c.json({ ok: true, ...buildPlan(db) });
   });
 
+  app.delete("/api/plans/one-time/:id", (c) => {
+    const removed = deleteOneTimePlan(db, c.req.param("id"));
+    if (!removed) return c.json({ ok: false, error: "not found" }, 404);
+    return c.json({ ok: true, id: removed.id, ...buildPlan(db) });
+  });
+
   app.get("/api/plans/inflows", (c) => {
     return c.json({ ok: true, inflows: listExpectedInflows(db) });
   });
@@ -1279,6 +1297,12 @@ export function createApp(opts: CreateAppOptions): Hono {
     const inflow = updateExpectedInflow(db, c.req.param("id"), patch);
     if (!inflow) return c.json({ ok: false, error: "not found" }, 404);
     return c.json({ ok: true, ...buildPlan(db) });
+  });
+
+  app.delete("/api/plans/inflows/:id", (c) => {
+    const removed = deleteExpectedInflow(db, c.req.param("id"));
+    if (!removed) return c.json({ ok: false, error: "not found" }, 404);
+    return c.json({ ok: true, id: removed.id, ...buildPlan(db) });
   });
 
   app.post("/api/import/finance", async (c) => {
@@ -2063,42 +2087,56 @@ export function createApp(opts: CreateAppOptions): Hono {
     return c.json({ ok: true, counts: storeCounts(db) });
   });
 
-  app.post("/api/dev/dummy-expense", (c) => {
-    const added = addLedger(db, {
-      date: todayIst(),
-      time: nowTimeIst(),
-      type: "expense",
-      amount: DUMMY_EXPENSE_PAISE,
-      fromAccountId: SEED_IDS.hdfcSavings,
-      toAccountId: SEED_IDS.expense,
-      categoryId: SEED_IDS.groceries,
-      inBudget: true,
-      notes: DUMMY_EXPENSE_NOTES,
-      source: "manual",
+  if (allowDevRoutes) {
+    app.post("/api/dev/dummy-expense", (c) => {
+      const added = addLedger(db, {
+        date: todayIst(),
+        time: nowTimeIst(),
+        type: "expense",
+        amount: DUMMY_EXPENSE_PAISE,
+        fromAccountId: SEED_IDS.hdfcSavings,
+        toAccountId: SEED_IDS.expense,
+        categoryId: SEED_IDS.groceries,
+        inBudget: true,
+        notes: DUMMY_EXPENSE_NOTES,
+        source: "manual",
+      });
+      if (!added.ok) return c.json({ ok: false, issues: added.issues }, 400);
+      return c.json(added, 201);
     });
-    if (!added.ok) return c.json({ ok: false, issues: added.issues }, 400);
-    return c.json(added, 201);
-  });
 
-  app.post("/api/dev/wipe", async (c) => {
-    let body: { confirm?: unknown } = {};
-    try {
-      body = (await c.req.json()) as { confirm?: unknown };
-    } catch {
-      return c.json({ ok: false, error: "type wipe to confirm" }, 400);
-    }
-    if (body.confirm !== "wipe") {
-      return c.json({ ok: false, error: "type wipe to confirm" }, 400);
-    }
-    wipeAll(db);
-    seedCatalog(db);
-    return c.json({ ok: true, counts: storeCounts(db) });
-  });
-
-  if (serveUi) {
-    app.use("/*", serveStatic({ root: "./dist" }));
-    app.get("*", serveStatic({ path: "./dist/index.html" }));
+    app.post("/api/dev/wipe", async (c) => {
+      let body: { confirm?: unknown } = {};
+      try {
+        body = (await c.req.json()) as { confirm?: unknown };
+      } catch {
+        return c.json({ ok: false, error: "type wipe to confirm" }, 400);
+      }
+      if (body.confirm !== "wipe") {
+        return c.json({ ok: false, error: "type wipe to confirm" }, 400);
+      }
+      wipeAll(db);
+      seedCatalog(db);
+      return c.json({ ok: true, counts: storeCounts(db) });
+    });
   }
 
-  return app;
+  const handler = new Hono();
+  handler.route("/", app);
+  if (serveUi) {
+    handler.use("/*", serveStatic({ root: "./dist" }));
+    handler.get("*", serveStatic({ path: "./dist/index.html" }));
+  }
+
+  const root = new Hono();
+  // Do not redirect / → /finance/: Tailscale Serve --set-path=/finance may
+  // already strip the prefix, and that redirect would loop.
+  root.get("/finance", (c) => c.redirect("/finance/", 302));
+  root.all("/finance/*", (c) => {
+    const url = new URL(c.req.url);
+    url.pathname = url.pathname.slice("/finance".length) || "/";
+    return handler.fetch(new Request(url, c.req.raw));
+  });
+  root.route("/", handler);
+  return root;
 }

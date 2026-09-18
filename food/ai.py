@@ -9,6 +9,8 @@ import time
 from typing import Any
 
 import ai_usage
+from ai.features import FOOD_MEAL_PROFILE, is_on as feature_on
+from ai.prompts import apply_system, apply_user_template, render_template
 from food import store as food_store
 
 AI_MODULE = "food"
@@ -44,6 +46,37 @@ Rules:
 - Output ONLY valid JSON matching the schema.
 """
 
+USER_TEMPLATE = """Schema:
+{
+  "food": {
+    "name": string,
+    "aliases": [string],
+    "summary": string,
+    "profile": {"carbs":"none|low|medium|high","protein":"...","fiber":"...","fat":"..."}
+  },
+  "ingredients": [
+    {"name": string, "summary": string, "profile": {"carbs":"...","protein":"...","fiber":"...","fat":"..."}}
+  ],
+  "meal": {
+    "summary": string,
+    "inferred": boolean,
+    "profile": {"carbs":"...","protein":"...","fiber":"...","fat":"..."},
+    "parts": [{"name": string, "role": string}]
+  }
+}
+
+Food: {food}
+Constitutes of: {constitutes}
+
+Known kitchen catalog:
+{catalog}
+
+Return ONLY the JSON object."""
+
+
+def system_prompt() -> str:
+    return apply_system(FOOD_MEAL_PROFILE, SYSTEM)
+
 
 class FoodAIError(Exception):
     def __init__(self, message: str, *, status: str = "error"):
@@ -65,10 +98,14 @@ def _api_key() -> str:
     return key
 
 
-def is_enabled() -> bool:
+def _key_set() -> bool:
     return bool(
         (os.environ.get("DEEPSEEK_API_KEY") or os.environ.get("DEEPSEEK_KEY") or "").strip()
     )
+
+
+def is_enabled() -> bool:
+    return _key_set() and feature_on(FOOD_MEAL_PROFILE)
 
 
 def _base_url() -> str:
@@ -87,12 +124,14 @@ def _timeout() -> float:
 
 
 def status_payload() -> dict[str, Any]:
+    key = _key_set()
     return {
         "enabled": is_enabled(),
         "model": _model(),
         "base_url": _base_url(),
         "thinking": "disabled",
-        "api_key_set": is_enabled(),
+        "api_key_set": key,
+        "feature_on": feature_on(FOOD_MEAL_PROFILE),
     }
 
 
@@ -154,29 +193,14 @@ def build_user_prompt(entry: dict[str, Any], catalog: list[dict[str, Any]] | Non
         for c in constitutes
     ]
     names = [n for n in names if n]
-    return (
-        "Schema:\n"
-        "{\n"
-        '  "food": {\n'
-        '    "name": string,\n'
-        '    "aliases": [string],\n'
-        '    "summary": string,\n'
-        '    "profile": {"carbs":"none|low|medium|high","protein":"...","fiber":"...","fat":"..."}\n'
-        "  },\n"
-        '  "ingredients": [\n'
-        '    {"name": string, "summary": string, "profile": {"carbs":"...","protein":"...","fiber":"...","fat":"..."}}\n'
-        "  ],\n"
-        '  "meal": {\n'
-        '    "summary": string,\n'
-        '    "inferred": boolean,\n'
-        '    "profile": {"carbs":"...","protein":"...","fiber":"...","fat":"..."},\n'
-        '    "parts": [{"name": string, "role": string}]\n'
-        "  }\n"
-        "}\n\n"
-        f"Food: {food}\n"
-        f"Constitutes of: {json.dumps(names, ensure_ascii=False) if names else '(none given)'}\n\n"
-        f"Known kitchen catalog:\n{_catalog_brief(catalog)}\n\n"
-        "Return ONLY the JSON object."
+    tmpl = apply_user_template(FOOD_MEAL_PROFILE, USER_TEMPLATE)
+    return render_template(
+        tmpl,
+        {
+            "food": food,
+            "constitutes": json.dumps(names, ensure_ascii=False) if names else "(none given)",
+            "catalog": _catalog_brief(catalog),
+        },
     )
 
 
@@ -258,9 +282,11 @@ def analyze(
     catalog: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Return parsed {food, ingredients, meal} JSON from the model."""
+    if not feature_on(FOOD_MEAL_PROFILE):
+        raise FoodAIError("Meal profile AI is turned off.", status="config")
     user = build_user_prompt(entry, catalog)
     try:
-        content, meta = _call_deepseek(SYSTEM, user)
+        content, meta = _call_deepseek(system_prompt(), user)
     except FoodAIError as e:
         ai_usage.log_call(
             module=AI_MODULE,

@@ -3,6 +3,7 @@ import type { Forecast, FreeToAllocate, NextMonthEstimate } from "../engine/cash
 import type { GoalCard } from "../engine/goals.ts";
 import type { InvestSplit } from "../engine/invest.ts";
 import type { WaterfallResult } from "../engine/waterfall.ts";
+import type { UpcomingBill } from "../engine/index.ts";
 import type {
   Account,
   AccountGroup,
@@ -27,7 +28,7 @@ import type {
   RecurringPlan,
   VirtualKind,
 } from "../engine/types.ts";
-import { apiJson } from "./http.ts";
+import { apiJson, toolkitJson } from "./http.ts";
 
 export type StoreCounts = {
   accounts: number;
@@ -138,6 +139,11 @@ export type HomeForecastMonth = {
   total: number;
 };
 
+export type HomeSavingsMonth = {
+  month: string;
+  savings: number;
+};
+
 export type HomeReconRow = {
   id: string;
   name: string;
@@ -161,7 +167,9 @@ export type HomeResponse = {
     months: HomeForecastMonth[];
     totals: { loanEmi: number; lifestyle: number; investment: number; total: number };
   };
+  savingsMonths: HomeSavingsMonth[];
   cards: HomeCard[];
+  upcomingBills: UpcomingBill[];
   recent: LedgerEntry[];
   accounts: Account[];
   categories: Category[];
@@ -225,6 +233,75 @@ export function postLedger(body: LedgerPostBody) {
   return apiJson<LedgerPostResponse>("/api/ledger", {
     method: "POST",
     body: JSON.stringify(body),
+  });
+}
+
+export type OsCatalogAccount = {
+  id: string;
+  name: string;
+  type: string;
+  group: string;
+  virtualKind: string | null;
+  isArchived: boolean;
+};
+
+export type OsCatalogCategory = {
+  id: string;
+  name: string;
+  group: string;
+  defaultInBudget: boolean;
+  isArchived: boolean;
+};
+
+export type OsParseCatalog = {
+  today: string;
+  timezone: string;
+  types: string[];
+  accounts: OsCatalogAccount[];
+  categories: OsCatalogCategory[];
+};
+
+export type OsParsedEntry = LedgerPostBody & {
+  fromAccountName?: string;
+  toAccountName?: string;
+  categoryName?: string;
+};
+
+export type OsParseResponse = {
+  ok: boolean;
+  status?: string;
+  error?: string;
+  transcript?: string;
+  confidence?: string;
+  raw_summary?: string;
+  note_id?: string;
+  note?: { id?: string; transcript?: string; title?: string };
+  entries: OsParsedEntry[];
+};
+
+export function parseOsLedger(body: { text: string; catalog: OsParseCatalog }) {
+  return toolkitJson<OsParseResponse>("/api/finance-os/parse", {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+}
+
+export function postOsVoice(
+  audio: Blob,
+  filename: string,
+  catalog: OsParseCatalog,
+  stt: { model: string; translate: boolean; stt: string },
+) {
+  const form = new FormData();
+  form.append("audio", audio, filename);
+  form.append("catalog", JSON.stringify(catalog));
+  form.append("model", stt.model);
+  form.append("translate", stt.translate ? "true" : "false");
+  form.append("stt", stt.stt);
+  form.append("title", "");
+  return toolkitJson<OsParseResponse>("/api/finance-os/voice", {
+    method: "POST",
+    body: form,
   });
 }
 
@@ -323,6 +400,7 @@ export type OneTimeWriteBody = {
   amount: number;
   priority?: PlanPriority;
   status?: OneTimeStatus;
+  kind?: RecurringKind | null;
   payFromAccountId?: string | null;
   notes?: string;
 };
@@ -381,6 +459,12 @@ export function patchRecurring(id: string, body: RecurringPatchBody) {
   });
 }
 
+export function deleteRecurring(id: string) {
+  return apiJson<PlanMutationResponse>(`/api/plans/recurring/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export function postOneTime(body: OneTimeWriteBody) {
   return apiJson<PlanMutationResponse>("/api/plans/one-time", {
     method: "POST",
@@ -395,6 +479,12 @@ export function patchOneTime(id: string, body: OneTimePatchBody) {
   });
 }
 
+export function deleteOneTime(id: string) {
+  return apiJson<PlanMutationResponse>(`/api/plans/one-time/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+}
+
 export function postInflow(body: InflowWriteBody) {
   return apiJson<PlanMutationResponse>("/api/plans/inflows", {
     method: "POST",
@@ -406,6 +496,12 @@ export function patchInflow(id: string, body: InflowPatchBody) {
   return apiJson<PlanMutationResponse>(`/api/plans/inflows/${encodeURIComponent(id)}`, {
     method: "PATCH",
     body: JSON.stringify(body),
+  });
+}
+
+export function deleteInflow(id: string) {
+  return apiJson<PlanMutationResponse>(`/api/plans/inflows/${encodeURIComponent(id)}`, {
+    method: "DELETE",
   });
 }
 
@@ -474,7 +570,7 @@ export type EngineSummary = {
   } | null;
   goals: EngineGoalLine[];
   essentialsAverage: number;
-  efMonths: number;
+  efTarget: number;
   savingsTarget: number;
 };
 
@@ -952,6 +1048,8 @@ export type AccountDetailResponse = {
   daysSinceReconcile: number | null;
   cycleStart: string;
   cycleSpent: number;
+  estimatedNextStatement: number | null;
+  nextStatementDate: string | null;
   entries: LedgerEntry[];
   reconciliations: ReconciliationRow[];
   accounts: Account[];
@@ -1037,7 +1135,7 @@ export function postReconcile(body: ReconcilePostBody) {
 
 export function saveInvestSeed(body: {
   savingsRupees?: number;
-  efMonths?: number;
+  efRupees?: number;
   sipPct?: number;
   dipPct?: number;
   goldInactive?: boolean;
@@ -1104,8 +1202,6 @@ export type SettingsResponse = {
 export type SettingsPutBody = {
   defaultBudget?: number;
   monthlySalary?: number;
-  salaryDay?: number;
-  efMonths?: number;
   essentialIds?: string[];
   blurDefault?: boolean;
   autoLockSeconds?: number;

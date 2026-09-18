@@ -145,11 +145,15 @@ export function isRecurringFrequency(value: string): value is RecurringFrequency
   return (RECURRING_FREQUENCIES as readonly string[]).includes(value);
 }
 
-export const RECURRING_KINDS = ["loan_emi", "lifestyle", "investment"] as const;
+export const RECURRING_KINDS = ["loan_emi", "lifestyle", "investment", "bill"] as const;
 export type RecurringKind = (typeof RECURRING_KINDS)[number];
 
 export function isRecurringKind(value: string): value is RecurringKind {
   return (RECURRING_KINDS as readonly string[]).includes(value);
+}
+
+export function isBillKind(kind: RecurringKind | null | undefined): kind is "bill" {
+  return kind === "bill";
 }
 
 export const PLAN_PRIORITIES = ["high", "medium", "low"] as const;
@@ -177,7 +181,10 @@ export type RecurringPlan = {
   startDate: IsoDate | null;
   endDate: IsoDate | null;
   active: boolean;
-  /** Null = blank Kind: infer EMIs → loan_emi, Investment → investment, else lifestyle. */
+  /**
+   * Null = blank Kind: infer EMIs → loan_emi, Investment → investment, else lifestyle.
+   * `bill` is a Plan tag; forecast still counts it as lifestyle.
+   */
   kind: RecurringKind | null;
   payFromAccountId: string | null;
   notes: string;
@@ -193,6 +200,8 @@ export type OneTimePlan = {
   amount: Paise;
   priority: PlanPriority;
   status: OneTimeStatus;
+  /** Optional Plan tag. Home lists every planned one-time on or after today. */
+  kind: RecurringKind | null;
   payFromAccountId: string | null;
   notes: string;
   linkedLedgerEntryId: string | null;
@@ -270,7 +279,7 @@ export type Bucket = {
   targetRule: TargetRule;
   /** When `targetRule` is `fixed`. */
   targetAmount: Paise | null;
-  /** When `targetRule` is `months_of_essentials` (default 6). */
+  /** When `targetRule` is `months_of_essentials`. */
   targetMonths: number | null;
   fillMode: FillMode;
   /**

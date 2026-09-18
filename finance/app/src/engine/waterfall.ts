@@ -40,10 +40,12 @@ export const DEFAULT_BUCKET_IDS = {
   investment: "investment",
 } as const;
 
-/** Locked v1 default: 6 × trailing essentials. */
+/** Settings-row default. Emergency Fund target is a typed ₹ amount. */
 export const DEFAULT_EF_MONTHS = 6;
 /** Trailing completed months used for the essentials average. */
 export const ESSENTIALS_TRAILING_MONTHS = 3;
+/** Default Emergency Fund target until you type one. */
+export const DEFAULT_EF_TARGET: Paise = ZERO_PAISE;
 /** Locked v1 default: ₹10,000 hard cash. */
 export const DEFAULT_SAVINGS_BUFFER_TARGET: Paise = rupeesToPaise(10_000);
 
@@ -138,7 +140,7 @@ function issue(
 }
 
 /**
- * Default three-bucket plan: Emergency Fund until 6× essentials, Savings
+ * Default three-bucket plan: Emergency Fund until a typed ₹ target, Savings
  * buffer until ₹10,000, Investment remainder.
  */
 export function seedDefaultBuckets(): Bucket[] {
@@ -147,9 +149,9 @@ export function seedDefaultBuckets(): Bucket[] {
       id: DEFAULT_BUCKET_IDS.emergencyFund,
       name: "Emergency Fund",
       priority: 1,
-      targetRule: "months_of_essentials",
-      targetAmount: null,
-      targetMonths: DEFAULT_EF_MONTHS,
+      targetRule: "fixed",
+      targetAmount: DEFAULT_EF_TARGET,
+      targetMonths: null,
       fillMode: "until_target",
       fillValue: null,
       minMonthly: null,

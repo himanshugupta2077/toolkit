@@ -11,19 +11,22 @@ import {
 } from "../engine/index.ts";
 import type { Account } from "../engine/types.ts";
 import type { AccountPatchBody, AccountPostBody } from "../api/store.ts";
-import { Keypad } from "./Keypad.tsx";
+import {
+  AmountField,
+  chipClass,
+  FieldLabel,
+  FormSelect,
+  namedOptions,
+} from "./formFields.tsx";
 import {
   ACCOUNT_GROUP_LABELS,
   ACCOUNT_GROUP_ORDER,
 } from "./accounts.ts";
 import { amountDraftFromPaise } from "./ledger.ts";
 import {
-  amountExpression,
   amountPaise,
-  applyAmountKey,
   EMPTY_AMOUNT,
   type AmountDraft,
-  type AmountKey,
 } from "./quickAdd.ts";
 
 type AccountFormSheetProps = {
@@ -36,11 +39,11 @@ type AccountFormSheetProps = {
   onSaveEdit: (body: AccountPatchBody) => void;
 };
 
-function chipClass(on: boolean): string {
-  return `chip ${on ? "chip-on" : "chip-off"}`;
-}
-
-type AmountTarget = "opening" | "limit";
+const VIRTUAL_KIND_OPTIONS = [
+  { value: "employer", label: "Employer" },
+  { value: "external", label: "External" },
+  { value: "expense", label: "Expense" },
+] as const;
 
 export function AccountFormSheet({
   mode,
@@ -74,7 +77,6 @@ export function AccountFormSheet({
   const [virtualKind, setVirtualKind] = useState<VirtualKind>(
     account?.virtualKind ?? "external",
   );
-  const [amountTarget, setAmountTarget] = useState<AmountTarget>("opening");
 
   const type = typeForAccountGroup(group);
   const showLimit = group === "credit_card";
@@ -87,11 +89,6 @@ export function AccountFormSheet({
       setIncludeLiquid(defaultIncludeLiquid(next));
       setIncludeNetWorth(typeForAccountGroup(next) !== "virtual");
     }
-  }
-
-  function onKey(key: AmountKey) {
-    if (amountTarget === "limit") setLimit((d) => applyAmountKey(d, key));
-    else setOpening((d) => applyAmountKey(d, key));
   }
 
   function parseDay(raw: string): number | null {
@@ -139,14 +136,11 @@ export function AccountFormSheet({
     });
   }
 
-  const keypadDraft = amountTarget === "limit" ? limit : opening;
-  const keypadLabel = amountTarget === "limit" ? "Credit limit" : "Opening";
-
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+    <div className="pb-1">
+      <div className="space-y-4">
         <label className="block">
-          <span className="kicker">Name</span>
+          <FieldLabel>Name</FieldLabel>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -157,53 +151,39 @@ export function AccountFormSheet({
 
         {mode === "add" ? (
           <>
-            <p className="mt-4 mb-2 kicker">
-              Group
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {ACCOUNT_GROUP_ORDER.map((g) => (
-                <button
-                  key={g}
-                  type="button"
-                  className={chipClass(group === g)}
-                  onClick={() => onGroup(g)}
-                >
-                  {ACCOUNT_GROUP_LABELS[g]}
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-muted">
+            <FormSelect
+              label="Group"
+              value={group}
+              onChange={(v) => onGroup(v as AccountGroup)}
+              options={ACCOUNT_GROUP_ORDER.map((g) => ({
+                value: g,
+                label: ACCOUNT_GROUP_LABELS[g],
+              }))}
+            />
+            <p className="-mt-2 text-xs text-muted">
               Type is {type}
               {showVirtual ? " · pick the virtual kind" : ""}.
             </p>
           </>
         ) : (
-          <p className="mt-3 text-sm text-muted">
+          <p className="text-sm text-muted">
             {ACCOUNT_GROUP_LABELS[group]} · {type}. Opening stays {formatInr(account?.openingBalance ?? 0)} on{" "}
             {account?.openingDate}. Balances are calculated.
           </p>
         )}
 
         {showVirtual && mode === "add" ? (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {(["employer", "external", "expense"] as const).map((kind) => (
-              <button
-                key={kind}
-                type="button"
-                className={chipClass(virtualKind === kind)}
-                onClick={() => setVirtualKind(kind)}
-              >
-                {kind === "employer" ? "Employer" : kind === "external" ? "External" : "Expense"}
-              </button>
-            ))}
-          </div>
+          <FormSelect
+            label="Virtual kind"
+            value={virtualKind}
+            onChange={(v) => setVirtualKind(v as VirtualKind)}
+            options={[...VIRTUAL_KIND_OPTIONS]}
+          />
         ) : null}
 
         {mode === "add" ? (
-          <label className="mt-4 block">
-            <span className="kicker">
-              Opening date
-            </span>
+          <label className="block">
+            <FieldLabel>Opening date</FieldLabel>
             <input
               type="date"
               value={openingDate}
@@ -213,7 +193,7 @@ export function AccountFormSheet({
           </label>
         ) : null}
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             className={chipClass(includeNetWorth)}
@@ -231,38 +211,18 @@ export function AccountFormSheet({
         </div>
 
         {buckets.length > 0 ? (
-          <>
-            <p className="mt-4 mb-2 kicker">
-              Bucket
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={chipClass(bucketId === "")}
-                onClick={() => setBucketId("")}
-              >
-                None
-              </button>
-              {buckets.map((bucket) => (
-                <button
-                  key={bucket.id}
-                  type="button"
-                  className={chipClass(bucketId === bucket.id)}
-                  onClick={() => setBucketId(bucket.id)}
-                >
-                  {bucket.name}
-                </button>
-              ))}
-            </div>
-          </>
+          <FormSelect
+            label="Bucket"
+            value={bucketId}
+            onChange={setBucketId}
+            options={[{ value: "", label: "None" }, ...namedOptions(buckets)]}
+          />
         ) : null}
 
         {showLimit ? (
-          <div className="mt-4 grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2">
             <label>
-              <span className="kicker">
-                Statement day
-              </span>
+              <FieldLabel>Statement day</FieldLabel>
               <input
                 inputMode="numeric"
                 value={statementDay}
@@ -272,9 +232,7 @@ export function AccountFormSheet({
               />
             </label>
             <label>
-              <span className="kicker">
-                Due day
-              </span>
+              <FieldLabel>Due day</FieldLabel>
               <input
                 inputMode="numeric"
                 value={dueDay}
@@ -287,10 +245,8 @@ export function AccountFormSheet({
         ) : null}
 
         {showMaturity ? (
-          <label className="mt-4 block">
-            <span className="kicker">
-              Maturity date
-            </span>
+          <label className="block">
+            <FieldLabel>Maturity date</FieldLabel>
             <input
               type="date"
               value={maturityDate}
@@ -300,8 +256,8 @@ export function AccountFormSheet({
           </label>
         ) : null}
 
-        <label className="mt-4 block">
-          <span className="kicker">Note</span>
+        <label className="block">
+          <FieldLabel>Note</FieldLabel>
           <input
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
@@ -309,46 +265,19 @@ export function AccountFormSheet({
           />
         </label>
 
-        {mode === "add" || showLimit ? (
-          <div className="mt-4">
-            <div className="flex gap-2">
-              {mode === "add" ? (
-                <button
-                  type="button"
-                  className={chipClass(amountTarget === "opening")}
-                  onClick={() => setAmountTarget("opening")}
-                >
-                  Opening {formatInr(amountPaise(opening))}
-                </button>
-              ) : null}
-              {showLimit ? (
-                <button
-                  type="button"
-                  className={chipClass(amountTarget === "limit")}
-                  onClick={() => setAmountTarget("limit")}
-                >
-                  Limit {formatInr(amountPaise(limit))}
-                </button>
-              ) : null}
-            </div>
-            <p className="mt-2 text-2xl font-semibold tabular-nums text-ink">
-              {keypadLabel} {amountExpression(keypadDraft) || "0"}
-            </p>
-          </div>
+        {mode === "add" ? (
+          <AmountField label="Opening" amount={opening} onChange={setOpening} plus={false} />
+        ) : null}
+        {showLimit ? (
+          <AmountField label="Credit limit" amount={limit} onChange={setLimit} plus={false} />
         ) : null}
       </div>
-
-      {mode === "add" || showLimit ? (
-        <div className="shrink-0 pt-2">
-          <Keypad onKey={onKey} />
-        </div>
-      ) : null}
 
       <button
         type="button"
         disabled={!canSave}
         onClick={save}
-        className="mt-3 btn-primary w-full"
+        className="mt-5 btn-primary w-full"
       >
         {saving ? "Saving…" : mode === "add" ? "Add account" : "Save"}
       </button>

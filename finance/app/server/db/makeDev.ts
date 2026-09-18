@@ -11,7 +11,6 @@ import {
   runWaterfall,
   rupeesToPaise,
   todayIst,
-  trailingEssentialsAverage,
   validateLedgerEntry,
 } from "../../src/engine/index.ts";
 import { loadBooks, toFreeCashBooks } from "../books.ts";
@@ -19,7 +18,7 @@ import { vacuumInto } from "./backup.ts";
 import { openDatabase } from "./client.ts";
 import { buckets } from "./schema.ts";
 import { nowIso } from "../ids.ts";
-import { listEssentialCategoryIds, replaceGoals } from "../repo/invest.ts";
+import { replaceGoals } from "../repo/invest.ts";
 import { insertLedgerEntry, listAccounts, listCategories, setMeta } from "../repo/store.ts";
 
 const LIVE = join(process.cwd(), "data", "finance.sqlite");
@@ -122,20 +121,14 @@ function overlaySandbox(): void {
   const snap = computeBalances(books.accounts, books.entries, books.today);
   const cash = freeToAllocate(toFreeCashBooks(books));
   const current = bucketCurrentBalances(books.accounts, snap.positions);
-  const essentials = trailingEssentialsAverage(
-    books.today,
-    books.entries,
-    books.categories,
-    listEssentialCategoryIds(db),
-  );
-  const waterfall = runWaterfall(cash.free, books.buckets, current, essentials.average);
+  const waterfall = runWaterfall(cash.free, books.buckets, current);
   const hdfcBal = snap.positions.find((row) => row.accountId === hdfc.id)?.balance ?? 0;
   const fd = accs.find((row) => row.name.trim().toLowerCase() === "fd");
   const fdBal = fd
     ? (snap.positions.find((row) => row.accountId === fd.id)?.balance ?? 0)
     : 0;
   const ef = books.buckets.find((row) => row.id === DEFAULT_BUCKET_IDS.emergencyFund);
-  const efTarget = ef ? resolveBucketTarget(ef, essentials.average) : null;
+  const efTarget = ef ? resolveBucketTarget(ef, 0) : null;
 
   console.log(`live   ${LIVE}`);
   console.log(`dev    ${DEST}`);

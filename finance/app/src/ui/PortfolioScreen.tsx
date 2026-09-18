@@ -107,7 +107,7 @@ export function PortfolioScreen() {
   const pieTotal = slices.reduce((sum, row) => sum + row.value, 0);
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page">
       <header className="flex items-start justify-between gap-3">
         <div>
           <p className="text-sm text-muted">
@@ -116,7 +116,7 @@ export function PortfolioScreen() {
             </Link>
             {" · Portfolio"}
           </p>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">Portfolio</h1>
+          <h1 className="page-title">Portfolio</h1>
         </div>
         <button
           type="button"
@@ -134,7 +134,8 @@ export function PortfolioScreen() {
         <FetchError error={q.error} onRetry={() => void q.refetch()} />
       ) : data ? (
         <>
-          <div className="mt-4 card p-4">
+          <div className="desk-dash mt-4">
+          <div className="card p-4 desk:col-span-8 desk:p-5">
             <p className="kicker">Current value</p>
             <p className="mt-1 hero-num text-ink">
               <Amount>{formatInr(data.value)}</Amount>
@@ -160,7 +161,7 @@ export function PortfolioScreen() {
           </div>
 
           {prefs.showPie ? (
-            <div className="mt-4 card p-4">
+            <div className="card p-4 desk:col-span-4 desk:p-5">
               <p className="kicker">Where the money sits</p>
               {slices.length === 0 || pieTotal <= 0 ? (
                 <p className="mt-2 text-sm text-muted">Add holdings to see the split.</p>
@@ -169,7 +170,7 @@ export function PortfolioScreen() {
                   <div
                     role="img"
                     aria-label="Allocation pie"
-                    className="size-28 shrink-0 rounded-full"
+                    className="size-28 shrink-0 rounded-full desk:size-40"
                     style={{ background: pieConic(slices) }}
                   />
                   <ul className="min-w-0 flex-1 space-y-1.5">
@@ -192,7 +193,7 @@ export function PortfolioScreen() {
             </div>
           ) : null}
 
-          <div className="mt-4 card p-4">
+          <div className="card p-4 desk:col-span-6 desk:p-5">
             <p className="kicker">Allocation drift</p>
             {data.drift.length === 0 ? (
               <p className="mt-2 text-sm text-muted">Add holdings to compare with the plan.</p>
@@ -205,7 +206,7 @@ export function PortfolioScreen() {
             )}
           </div>
 
-          <div className="mt-4 card p-4">
+          <div className="card p-4 desk:col-span-6 desk:p-5">
             <div className="flex items-center justify-between gap-3">
               <p className="kicker">Holdings</p>
               <button
@@ -254,7 +255,7 @@ export function PortfolioScreen() {
             )}
           </div>
 
-          <div className="mt-4 card p-4">
+          <div className="card p-4 desk:col-span-12 desk:p-5">
             <p className="kicker">Fixed deposits</p>
             {data.fds.length === 0 ? (
               <p className="mt-2 text-sm text-muted">No FD accounts.</p>
@@ -282,6 +283,7 @@ export function PortfolioScreen() {
                 ))}
               </ul>
             )}
+          </div>
           </div>
         </>
       ) : null}

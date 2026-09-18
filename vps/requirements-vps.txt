@@ -1,0 +1,8 @@
+# Slim VPS venv — no torch, no faster-whisper, no CUDA.
+# Create on the droplet: /opt/toolkit/.venv
+fastapi>=0.115
+uvicorn>=0.32
+python-multipart>=0.0.9
+openai>=1.40
+openpyxl>=3.1
+webauthn>=2.2

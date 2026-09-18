@@ -156,14 +156,14 @@ export function LedgerDetailScreen() {
 
   if (detailQ.isPending) {
     return (
-      <section className="px-5">
+      <section className="page">
         <p className="text-sm text-muted">Loading this row…</p>
       </section>
     );
   }
   if (detailQ.error) {
     return (
-      <section className="px-5">
+      <section className="page">
         <Link to={backTo} className="btn-ghost">
           ← Ledger
         </Link>
@@ -173,7 +173,7 @@ export function LedgerDetailScreen() {
   }
   if (!entry) {
     return (
-      <section className="px-5">
+      <section className="page">
         <Link to={backTo} className="btn-ghost">
           ← Ledger
         </Link>
@@ -185,7 +185,7 @@ export function LedgerDetailScreen() {
   const kind = flowKind(entry.type);
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page desk:max-w-2xl">
       <div className="flex items-center gap-2">
         <Link
           to={backTo}
@@ -312,7 +312,7 @@ export function LedgerDetailScreen() {
         </button>
       )}
 
-      <BottomSheet open={editOpen} title="Edit" tall onClose={() => setEditOpen(false)}>
+      <BottomSheet open={editOpen} title="Edit" onClose={() => setEditOpen(false)}>
         <LedgerEditSheet
           open={editOpen}
           entry={entry}

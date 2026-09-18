@@ -3,14 +3,30 @@ import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import type { LedgerType, Paise } from "../engine/index.ts";
 import { BottomSheet } from "./BottomSheet.tsx";
 import {
+  AccountIcon,
+  CategoryIcon,
+  DebtIcon,
+  EmergencyIcon,
+  EyeIcon,
+  EyeOffIcon,
+  GearIcon,
   GoalsIcon,
   HomeIcon,
   InvestIcon,
+  LedgerIcon,
   MoreIcon,
+  PlanIcon,
   PlusIcon,
   WealthIcon,
 } from "./icons.tsx";
 import { InstallBanner } from "./InstallBanner.tsx";
+import {
+  DESKTOP_NAV_GROUPS,
+  DESKTOP_SETUP,
+  isDesktopNavActive,
+  useDesktopLayout,
+} from "./layout.ts";
+import { usePrivacy } from "./Privacy.tsx";
 import { QuickAddSheet } from "./QuickAddSheet.tsx";
 import { adjacentTabPath, isTabActive, TABS } from "./tabs.ts";
 import { Toast } from "./Toast.tsx";
@@ -38,12 +54,28 @@ const TAB_ICONS = {
   "/more": MoreIcon,
 } as const;
 
+const DESKTOP_ICONS = {
+  "/home": HomeIcon,
+  "/ledger": LedgerIcon,
+  "/plan": PlanIcon,
+  "/emergency": EmergencyIcon,
+  "/debt": DebtIcon,
+  "/wealth": WealthIcon,
+  "/wealth/invest": InvestIcon,
+  "/wealth/goals": GoalsIcon,
+  "/more/accounts": AccountIcon,
+  "/more/categories": CategoryIcon,
+  "/more/settings": GearIcon,
+} as const;
+
 const SWIPE_MIN_X = 72;
 const SWIPE_MAX_Y = 48;
 
 export function AppShell() {
   const location = useLocation();
   const navigate = useNavigate();
+  const desktop = useDesktopLayout();
+  const { blurred, toggle } = usePrivacy();
   const swipe = useRef<{ x: number; y: number } | null>(null);
   const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickAddPrefill, setQuickAddPrefill] = useState<QuickAddPrefill | undefined>();
@@ -59,7 +91,7 @@ export function AppShell() {
   }, []);
 
   function onTouchStart(event: TouchEvent<HTMLElement>) {
-    if (quickAddOpen) return;
+    if (quickAddOpen || desktop) return;
     const t = event.changedTouches[0];
     if (!t) return;
     const target = event.target;
@@ -76,7 +108,7 @@ export function AppShell() {
   function onTouchEnd(event: TouchEvent<HTMLElement>) {
     const start = swipe.current;
     swipe.current = null;
-    if (!start || quickAddOpen) return;
+    if (!start || quickAddOpen || desktop) return;
     const t = event.changedTouches[0];
     if (!t) return;
     const dx = t.clientX - start.x;
@@ -85,6 +117,123 @@ export function AppShell() {
     if (Math.abs(dx) < Math.abs(dy) * 2) return;
     const next = adjacentTabPath(location.pathname, dx < 0 ? 1 : -1);
     if (next) navigate(next);
+  }
+
+  const outlet = <Outlet context={{ onToast, openQuickAdd } satisfies AppShellOutlet} />;
+  const sheet = (
+    <BottomSheet
+      open={quickAddOpen}
+      title="Quick Add"
+      onClose={closeQuickAdd}
+    >
+      <QuickAddSheet
+        open={quickAddOpen}
+        onClose={closeQuickAdd}
+        onToast={onToast}
+        prefill={quickAddPrefill}
+      />
+    </BottomSheet>
+  );
+
+  if (desktop) {
+    return (
+      <div className="relative flex h-full w-full overflow-hidden bg-page">
+        <aside className="flex w-64 shrink-0 flex-col border-r border-line bg-card">
+          <div className="px-5 pt-7 pb-5">
+            <p className="text-lg font-semibold tracking-tight text-ink">Finance</p>
+            <p className="mt-0.5 text-[12px] text-muted">Personal workspace</p>
+          </div>
+          <nav
+            aria-label="Primary"
+            className="min-h-0 flex-1 overflow-y-auto px-3 pb-3"
+          >
+            {DESKTOP_NAV_GROUPS.map((group) => (
+              <div key={group.label ?? "home"} className={group.label ? "mt-5" : ""}>
+                {group.label ? (
+                  <p className="mb-1 px-3 text-[11px] font-semibold tracking-wider text-muted uppercase">
+                    {group.label}
+                  </p>
+                ) : null}
+                {group.items.map((item) => {
+                  const Icon = DESKTOP_ICONS[item.to];
+                  const active = isDesktopNavActive(location.pathname, item.to);
+                  return (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      aria-current={active ? "page" : undefined}
+                      className={`mt-0.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+                        active
+                          ? "bg-accent-soft font-semibold text-accent"
+                          : "font-medium text-ink hover:bg-card-2"
+                      }`}
+                    >
+                      <Icon className="h-5 w-5 shrink-0" />
+                      {item.label}
+                    </NavLink>
+                  );
+                })}
+              </div>
+            ))}
+            <p className="mt-6 mb-1 px-3 text-[11px] font-semibold tracking-wider text-muted uppercase">
+              Setup
+            </p>
+            {DESKTOP_SETUP.map((item) => {
+              const Icon = DESKTOP_ICONS[item.to];
+              const active = isDesktopNavActive(location.pathname, item.to);
+              return (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  aria-current={active ? "page" : undefined}
+                  className={`mt-0.5 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors ${
+                    active
+                      ? "bg-accent-soft font-semibold text-accent"
+                      : "font-medium text-ink hover:bg-card-2"
+                  }`}
+                >
+                  <Icon className="h-5 w-5 shrink-0" />
+                  {item.label}
+                </NavLink>
+              );
+            })}
+          </nav>
+          <div className="border-t border-line p-3">
+            <button
+              type="button"
+              aria-label="Quick Add"
+              onClick={() => openQuickAdd()}
+              className="btn-primary w-full gap-2"
+            >
+              <PlusIcon className="h-5 w-5" />
+              Add
+            </button>
+            <div className="mt-2 flex items-center justify-between gap-2">
+              <a href="/" className="btn-quiet px-2 text-sm">
+                Toolkit
+              </a>
+              <button
+                type="button"
+                onClick={toggle}
+                className="icon-btn"
+                aria-pressed={blurred}
+                aria-label={blurred ? "Show amounts" : "Hide amounts"}
+              >
+                {blurred ? <EyeOffIcon className="h-5 w-5" /> : <EyeIcon className="h-5 w-5" />}
+              </button>
+            </div>
+          </div>
+        </aside>
+
+        <div className="relative flex min-w-0 flex-1 flex-col bg-app">
+          <main className="min-h-0 flex-1 overflow-y-auto px-10 py-8">
+            {outlet}
+          </main>
+          <Toast message={toast} onDismiss={() => setToast(null)} />
+        </div>
+        {sheet}
+      </div>
+    );
   }
 
   return (
@@ -99,7 +248,7 @@ export function AppShell() {
         onTouchEnd={onTouchEnd}
       >
         <InstallBanner />
-        <Outlet context={{ onToast, openQuickAdd } satisfies AppShellOutlet} />
+        {outlet}
       </main>
 
       <button
@@ -141,20 +290,7 @@ export function AppShell() {
       </nav>
 
       <Toast message={toast} onDismiss={() => setToast(null)} />
-
-      <BottomSheet
-        open={quickAddOpen}
-        title="Quick Add"
-        tall
-        onClose={closeQuickAdd}
-      >
-        <QuickAddSheet
-          open={quickAddOpen}
-          onClose={closeQuickAdd}
-          onToast={onToast}
-          prefill={quickAddPrefill}
-        />
-      </BottomSheet>
+      {sheet}
     </div>
   );
 }

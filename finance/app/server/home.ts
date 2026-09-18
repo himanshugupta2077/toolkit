@@ -1,4 +1,5 @@
 import {
+  addMonths,
   budgetPace,
   budgetSpendByCategory,
   computeBalances,
@@ -8,6 +9,7 @@ import {
   nextMonthEstimate,
   resolveBudgetCap,
   todayIst,
+  upcomingBills,
   yearMonthFromIsoDate,
   type Account,
   type Category,
@@ -18,6 +20,8 @@ import {
   type LedgerEntry,
   type NextMonthEstimate,
   type Paise,
+  type UpcomingBill,
+  type YearMonth,
 } from "../src/engine/index.ts";
 import { loadBooks, toFreeCashBooks } from "./books.ts";
 import type { AppDb } from "./db/client.ts";
@@ -27,6 +31,7 @@ import { getMeta, listRecentLedgerEntries } from "./repo/store.ts";
 const PACE_CATEGORY_LIMIT = 5;
 const RECENT_LIMIT = 5;
 const FORECAST_MONTHS = 6;
+const SAVINGS_MONTHS = 6;
 
 export type HomeCard = {
   accountId: string;
@@ -51,6 +56,11 @@ export type HomeForecast = {
   totals: Forecast["totals"];
 };
 
+export type HomeSavingsMonth = {
+  month: YearMonth;
+  savings: Paise;
+};
+
 export type HomePayload = {
   today: IsoDate;
   month: string;
@@ -60,7 +70,9 @@ export type HomePayload = {
   free: FreeToAllocate;
   nextMonth: NextMonthEstimate;
   forecast: HomeForecast;
+  savingsMonths: HomeSavingsMonth[];
   cards: HomeCard[];
+  upcomingBills: UpcomingBill[];
   recent: LedgerEntry[];
   accounts: readonly Account[];
   categories: readonly Category[];
@@ -96,6 +108,14 @@ export function buildHome(db: AppDb, today: IsoDate = todayIst()): HomePayload {
   const snap = computeBalances(books.accounts, books.entries, today);
   const { rows } = listAccountBalanceRows(db, today);
   const dueById = new Map(snap.cards.map((row) => [row.accountId, row]));
+  const savingsMonths: HomeSavingsMonth[] = [];
+  for (let i = SAVINGS_MONTHS - 1; i >= 0; i--) {
+    const ym = addMonths(month, -i);
+    savingsMonths.push({
+      month: ym,
+      savings: monthSummary(ym, books.entries, books.categories).estSavings,
+    });
+  }
 
   const cards: HomeCard[] = books.accounts
     .filter((account) => account.group === "credit_card" && !account.isArchived)
@@ -121,7 +141,14 @@ export function buildHome(db: AppDb, today: IsoDate = todayIst()): HomePayload {
     free,
     nextMonth: next,
     forecast: compactForecast(forecast(cash, FORECAST_MONTHS)),
+    savingsMonths,
     cards,
+    upcomingBills: upcomingBills(
+      today,
+      books.recurringPlans,
+      books.oneTimePlans,
+      books.categories,
+    ),
     recent: listRecentLedgerEntries(db, RECENT_LIMIT),
     accounts: books.accounts,
     categories: books.categories,

@@ -38,6 +38,42 @@ export function LedgerIcon({ className }: IconProps) {
   );
 }
 
+export function EmergencyIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path
+        d="M12 3.5 19.5 7v5.2c0 4.4-3 7.4-7.5 8.8C8 19.6 5 16.6 5 12.2V7z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+export function DebtIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path
+        d="M12 4.5v11M8.5 12.5 12 16l3.5-3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M5 19.5h14"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 export function PlanIcon({ className }: IconProps) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
@@ -103,6 +139,30 @@ export function PlusIcon({ className }: IconProps) {
         fill="none"
         stroke="currentColor"
         strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function MicIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect
+        x="9"
+        y="3.5"
+        width="6"
+        height="11"
+        rx="3"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M6.5 11.5a5.5 5.5 0 0 0 11 0M12 17v3.5"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
         strokeLinecap="round"
       />
     </svg>
@@ -273,6 +333,44 @@ export function GoalsIcon({ className }: IconProps) {
         strokeWidth="1.8"
         strokeLinejoin="round"
         strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function AccountIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <rect
+        x="3.5"
+        y="6"
+        width="17"
+        height="12"
+        rx="2"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M3.5 10h17"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+export function CategoryIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+      <path
+        d="M5 8.5h6.5V15H5zM12.5 8.5H19V12h-6.5zM5 16.5h6.5V19H5zM12.5 13.5H19V19h-6.5z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
       />
     </svg>
   );

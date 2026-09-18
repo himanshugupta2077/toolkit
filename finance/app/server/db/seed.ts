@@ -1,5 +1,6 @@
 import { count, eq } from "drizzle-orm";
 import {
+  DEFAULT_BUCKET_IDS,
   DEFAULT_EF_MONTHS,
   rupeesToPaise,
   seedDefaultBuckets,
@@ -36,9 +37,25 @@ export function ensureCatalog(db: AppDb, now = new Date()): void {
   const [{ n }] = db.select({ n: count() }).from(accounts).all();
   if (n > 0) {
     ensureSchemaVersion(db);
+    ensureEmergencyFundFixedTarget(db, nowIso(now));
     return;
   }
   seedCatalog(db, now);
+}
+
+/** Old books used months × essentials. Target is now a typed ₹ amount. */
+export function ensureEmergencyFundFixedTarget(db: AppDb, at: string): void {
+  const row = db.select().from(buckets).where(eq(buckets.id, DEFAULT_BUCKET_IDS.emergencyFund)).get();
+  if (!row || row.targetRule !== "months_of_essentials") return;
+  db.update(buckets)
+    .set({
+      targetRule: "fixed",
+      targetAmount: row.targetAmount ?? 0,
+      targetMonths: null,
+      updatedAt: at,
+    })
+    .where(eq(buckets.id, DEFAULT_BUCKET_IDS.emergencyFund))
+    .run();
 }
 
 export function insertDefaultBuckets(db: AppDb, at: string): void {

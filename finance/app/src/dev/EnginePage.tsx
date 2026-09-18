@@ -23,7 +23,7 @@ function errorText(err: unknown): string {
 
 type SeedForm = {
   savingsRupees: number;
-  efMonths: number;
+  efRupees: number;
   sip: number;
   dip: number;
   goldInactive: boolean;
@@ -40,7 +40,7 @@ function formFromSummary(summary: EngineSummary): SeedForm {
   );
   return {
     savingsRupees: Math.round(paiseToRupees(summary.savingsTarget)),
-    efMonths: summary.efMonths,
+    efRupees: Math.round(paiseToRupees(summary.efTarget)),
     sip,
     dip: 100 - sip,
     goldInactive: gold ? !gold.active : true,
@@ -49,7 +49,7 @@ function formFromSummary(summary: EngineSummary): SeedForm {
 
 const EMPTY_FORM: SeedForm = {
   savingsRupees: 10_000,
-  efMonths: 6,
+  efRupees: 0,
   sip: 70,
   dip: 30,
   goldInactive: true,
@@ -66,7 +66,7 @@ export function EnginePage() {
   const summaryQ = useQuery({ queryKey: ["engine-summary"], queryFn: getEngineSummary });
   const summary = summaryQ.data?.summary;
   const form = edit ?? (summary ? formFromSummary(summary) : EMPTY_FORM);
-  const { savingsRupees, efMonths, sip, dip, goldInactive } = form;
+  const { savingsRupees, efRupees, sip, dip, goldInactive } = form;
 
   function patchForm(next: Partial<SeedForm>) {
     setEdit({ ...form, ...next });
@@ -99,7 +99,7 @@ export function EnginePage() {
     try {
       const res = await saveInvestSeed({
         savingsRupees,
-        efMonths,
+        efRupees,
         sipPct: sip,
         dipPct: dip,
         goldInactive,
@@ -155,7 +155,7 @@ export function EnginePage() {
 
       {summaryQ.error ? (
         <p className="mt-4 text-sm text-red-700 dark:text-red-400">
-          {errorText(summaryQ.error)} — is the API running on :8787?
+          {errorText(summaryQ.error)}: is the API running on :8787?
         </p>
       ) : null}
 
@@ -206,16 +206,16 @@ export function EnginePage() {
           onChange={(e) => patchForm({ savingsRupees: Number(e.target.value) })}
           className="mt-1 min-h-11 w-full rounded-lg border border-line bg-app px-3 text-base text-ink"
         />
-        <label className="mt-3 block text-sm text-muted" htmlFor="ef-months">
-          Emergency Fund months
+        <label className="mt-3 block text-sm text-muted" htmlFor="ef-target">
+          Emergency Fund target (₹)
         </label>
         <input
-          id="ef-months"
+          id="ef-target"
           type="number"
-          min={1}
+          min={0}
           step={1}
-          value={efMonths}
-          onChange={(e) => patchForm({ efMonths: Number(e.target.value) })}
+          value={efRupees}
+          onChange={(e) => patchForm({ efRupees: Number(e.target.value) })}
           className="mt-1 min-h-11 w-full rounded-lg border border-line bg-app px-3 text-base text-ink"
         />
         <div className="mt-3 grid grid-cols-2 gap-3">

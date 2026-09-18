@@ -1,6 +1,5 @@
 import { eq } from "drizzle-orm";
 import {
-  DEFAULT_BUCKET_IDS,
   isFillMode,
   isPaise,
   isTargetRule,
@@ -12,7 +11,7 @@ import {
   type TargetRule,
 } from "../../src/engine/index.ts";
 import type { AppDb } from "../db/client.ts";
-import { accounts, buckets, settings } from "../db/schema.ts";
+import { accounts, buckets } from "../db/schema.ts";
 import { nowIso } from "../ids.ts";
 import { listAccounts, listBuckets } from "./store.ts";
 
@@ -235,14 +234,6 @@ export function saveBuckets(db: AppDb, writes: BucketWrite[], at = nowIso()): vo
       tx.update(accounts)
         .set({ bucketId: next, updatedAt: at })
         .where(eq(accounts.id, account.id))
-        .run();
-    }
-
-    const ef = writes.find((row) => row.id === DEFAULT_BUCKET_IDS.emergencyFund);
-    if (ef?.targetMonths != null && Number.isInteger(ef.targetMonths) && ef.targetMonths >= 1) {
-      tx.update(settings)
-        .set({ efMonths: ef.targetMonths, updatedAt: at })
-        .where(eq(settings.id, 1))
         .run();
     }
   });

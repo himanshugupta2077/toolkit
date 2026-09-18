@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-export const SCHEMA_VERSION = "6";
+export const SCHEMA_VERSION = "7";
 
 export function defaultDbFile(): string {
   return process.env.FINANCE_DB ?? join(process.cwd(), "data", "finance.sqlite");

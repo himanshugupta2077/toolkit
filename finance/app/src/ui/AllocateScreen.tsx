@@ -166,16 +166,16 @@ export function AllocateScreen() {
   const negative = free < 0;
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page">
       <div className="flex items-center gap-2">
         <Link
           to="/wealth"
-          className="btn-ghost"
+          className="back-link btn-ghost"
         >
           ← Wealth
         </Link>
       </div>
-      <h1 className="mt-2 text-2xl font-semibold tracking-tight text-ink">Allocate</h1>
+      <h1 className="page-title mt-2">Allocate</h1>
       <p className="mt-1 text-sm text-muted">Confirm writes ledger transfers. History is not rewritten.</p>
 
       {allocQ.isPending ? (
@@ -190,7 +190,7 @@ export function AllocateScreen() {
                 {COMMITTED_BEYOND_LIQUID}
               </p>
               <p className="mt-1 text-sm text-muted">
-                Free to allocate is negative. The breakdown on Home shows why. Allocate stays off
+                Free to allocate is negative. The breakdown on Dashboard shows why. Allocate stays off
                 until free cash is positive.
               </p>
             </div>
@@ -247,7 +247,7 @@ export function AllocateScreen() {
           </div>
 
           {waterfall ? (
-            <div className="mt-3 space-y-3">
+            <div className="mt-3 space-y-3 desk:grid desk:grid-cols-3 desk:gap-5 desk:space-y-0">
               {waterfall.lines.map((row) => (
                 <article key={row.bucketId} className="card p-4">
                   <div className="flex items-start justify-between gap-3">

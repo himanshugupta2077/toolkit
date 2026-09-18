@@ -11,6 +11,9 @@ describe("error copy", () => {
       apiErrorText(new ApiError(400, { issues: [{ message: "from = to" }] })),
     ).toBe("from = to");
     expect(apiErrorText(new ApiError(503, null))).toBe("HTTP 503");
+    expect(apiErrorText(new ApiError(400, { detail: "text is required" }))).toBe(
+      "text is required",
+    );
     expect(apiErrorText(new Error("boom"))).toBe("boom");
   });
 

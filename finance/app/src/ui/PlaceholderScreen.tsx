@@ -10,7 +10,7 @@ export function PlaceholderScreen({
   purpose,
 }: PlaceholderScreenProps) {
   return (
-    <section className="px-5">
+    <section className="page">
       <p className="text-sm font-medium tracking-wide text-accent uppercase">
         {phase}
       </p>

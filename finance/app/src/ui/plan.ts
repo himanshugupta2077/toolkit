@@ -41,6 +41,7 @@ export function isPlanTab(value: string): value is PlanTab {
 
 export const RECURRING_FILTERS = [
   "all",
+  "bill",
   "loan_emi",
   "lifestyle",
   "investment",
@@ -52,10 +53,18 @@ export const RECURRING_KIND_LABELS: Record<RecurringKind, string> = {
   loan_emi: "Loan/EMI",
   lifestyle: "Lifestyle",
   investment: "Investment",
+  bill: "Bill",
 };
+
+export const KIND_HELP =
+  "Forecast bars and Recurring filters. Auto uses the category: EMIs → Loan/EMI, Investment → Investment, else Lifestyle.";
+
+export const ONE_TIME_KIND_HELP =
+  "Optional tag on Budget. Dashboard lists every planned one-time.";
 
 export const RECURRING_FILTER_LABELS: Record<RecurringFilter, string> = {
   all: "All",
+  bill: "Bill",
   loan_emi: "Loan/EMI",
   lifestyle: "Lifestyle",
   investment: "Investment",
@@ -171,7 +180,10 @@ export function recurringSections(
 
   for (const plan of plans) {
     const endedRow = recurringIsEnded(plan.endDate, today);
-    const kind = resolveRecurringKind(plan.kind, names.get(plan.categoryId));
+    const kind =
+      plan.kind === "bill"
+        ? "bill"
+        : resolveRecurringKind(plan.kind, names.get(plan.categoryId));
     if (endedRow) {
       if (filter === "all" || filter === kind) ended.push(plan);
       continue;
@@ -194,6 +206,7 @@ export function kindLabel(
   plan: RecurringPlan,
   categories: readonly Pick<Category, "id" | "name">[],
 ): string {
+  if (plan.kind === "bill") return RECURRING_KIND_LABELS.bill;
   const category = categories.find((row) => row.id === plan.categoryId);
   return RECURRING_KIND_LABELS[resolveRecurringKind(plan.kind, category?.name)];
 }

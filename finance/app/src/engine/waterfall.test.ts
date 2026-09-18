@@ -122,8 +122,9 @@ describe("seedDefaultBuckets", () => {
     const [ef, savings, investment] = seedDefaultBuckets();
     expect(ef.id).toBe(EF);
     expect(ef.priority).toBe(1);
-    expect(ef.targetRule).toBe("months_of_essentials");
-    expect(ef.targetMonths).toBe(DEFAULT_EF_MONTHS);
+    expect(ef.targetRule).toBe("fixed");
+    expect(ef.targetAmount).toBe(0);
+    expect(ef.targetMonths).toBeNull();
     expect(ef.fillMode).toBe("until_target");
 
     expect(savings.id).toBe(SAVINGS);
@@ -282,10 +283,24 @@ describe("runWaterfall — fill modes", () => {
 });
 
 describe("runWaterfall — months of essentials", () => {
+  function monthsPlan(): Bucket[] {
+    const [ef, savings, investment] = seedDefaultBuckets();
+    return [
+      {
+        ...ef,
+        targetRule: "months_of_essentials",
+        targetAmount: null,
+        targetMonths: DEFAULT_EF_MONTHS,
+      },
+      savings,
+      investment,
+    ];
+  }
+
   it("resolves EF target as months × average, then fills room", () => {
     const average = rupeesToPaise(10_000);
     const current = rupeesToPaise(47_600);
-    const buckets = seedDefaultBuckets();
+    const buckets = monthsPlan();
     expect(resolveBucketTarget(buckets[0]!, average)).toBe(rupeesToPaise(60_000));
 
     const result = runWaterfall(SURPLUS, buckets, { [EF]: current }, average);
@@ -299,7 +314,7 @@ describe("runWaterfall — months of essentials", () => {
   });
 
   it("throws if EF is months-of-essentials and no average is passed", () => {
-    expect(() => runWaterfall(SURPLUS, seedDefaultBuckets(), {})).toThrow(
+    expect(() => runWaterfall(SURPLUS, monthsPlan(), {})).toThrow(
       /essentialsMonthlyAverage/,
     );
   });

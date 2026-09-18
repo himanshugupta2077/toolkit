@@ -41,7 +41,7 @@ export type EngineSummary = {
   investPlan: InvestPlan | null;
   goals: Goal[];
   essentialsAverage: Paise;
-  efMonths: number;
+  efTarget: Paise;
   savingsTarget: Paise;
 };
 
@@ -100,8 +100,6 @@ export function buildEngineSummary(db: AppDb, today?: IsoDate): EngineSummary {
       balance: positionById.get(account.id) ?? ZERO_PAISE,
     }));
 
-  const settingsRow = books.buckets.find((row) => row.id === DEFAULT_BUCKET_IDS.emergencyFund);
-
   return {
     today: books.today,
     confirmation: formatSeedConfirmation(efTarget, savingsTarget),
@@ -110,7 +108,7 @@ export function buildEngineSummary(db: AppDb, today?: IsoDate): EngineSummary {
     investPlan: getCurrentInvestPlan(db),
     goals: listGoals(db),
     essentialsAverage: trailing.average,
-    efMonths: settingsRow?.targetMonths ?? 6,
+    efTarget,
     savingsTarget,
   };
 }

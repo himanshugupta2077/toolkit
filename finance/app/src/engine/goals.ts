@@ -72,7 +72,7 @@ function pillLabel(status: GoalPill, neededPerMonth: Paise | null): string {
     case "on_track":
       return "On track";
     case "behind":
-      return `Behind — ${formatInr(neededPerMonth ?? ZERO_PAISE)}/mo needed`;
+      return `Behind: ${formatInr(neededPerMonth ?? ZERO_PAISE)}/mo needed`;
     case "saving":
       return "Saving";
   }

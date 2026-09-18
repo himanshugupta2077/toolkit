@@ -137,6 +137,7 @@ function rec(
     endDate: null,
     active: true,
     kind: "lifestyle",
+    payFromAccountId: null,
     ...extra,
   };
 }

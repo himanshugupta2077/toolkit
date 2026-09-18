@@ -1,12 +1,7 @@
 import { eq } from "drizzle-orm";
-import {
-  DEFAULT_BUCKET_IDS,
-  DEFAULT_EF_MONTHS,
-  isPaise,
-  type Paise,
-} from "../../src/engine/index.ts";
+import { isPaise, type Paise } from "../../src/engine/index.ts";
 import type { AppDb } from "../db/client.ts";
-import { buckets, settings } from "../db/schema.ts";
+import { settings } from "../db/schema.ts";
 import { nowIso } from "../ids.ts";
 import { hashPin, isPin, verifyPin } from "../lock.ts";
 import { getMeta, setMeta } from "./store.ts";
@@ -81,12 +76,6 @@ export function updateMoneySettings(db: AppDb, patch: MoneyPatch): MoneySettings
       })
       .where(eq(settings.id, 1))
       .run();
-    if (patch.efMonths != null) {
-      tx.update(buckets)
-        .set({ targetMonths: next.efMonths, updatedAt: at })
-        .where(eq(buckets.id, DEFAULT_BUCKET_IDS.emergencyFund))
-        .run();
-    }
   });
   return getMoneySettings(db);
 }
@@ -144,6 +133,4 @@ export function unlockWithPin(db: AppDb, pin: string): boolean {
   return verifyPin(pin, stored);
 }
 
-export function defaultEfMonths(): number {
-  return DEFAULT_EF_MONTHS;
-}
+

@@ -10,7 +10,6 @@ import { BottomSheet } from "./BottomSheet.tsx";
 import {
   accountFlags,
   formatBalanceHero,
-  formatUtilisation,
   groupAccountRows,
   lastReconciledLabel,
 } from "./accounts.ts";
@@ -59,17 +58,17 @@ export function AccountsScreen() {
   }
 
   return (
-    <section className="px-5 pb-8">
+    <section className="page">
       <div className="flex items-center gap-2">
         <Link
           to="/more"
-          className="btn-ghost"
+          className="back-link btn-ghost"
         >
           ← More
         </Link>
       </div>
       <div className="mt-2 flex items-start justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">Accounts</h1>
+        <h1 className="page-title">Accounts</h1>
         <button
           type="button"
           onClick={() => setAddOpen(true)}
@@ -87,7 +86,7 @@ export function AccountsScreen() {
       ) : listQ.error ? (
         <FetchError error={listQ.error} onRetry={() => void listQ.refetch()} />
       ) : (
-        <div className="mt-4">
+        <div className="mt-4 desk:grid desk:grid-cols-2 desk:gap-x-10 desk:gap-y-2">
           {sections.map((section) => {
             const collapsed = section.group === "virtual" && !virtualOpen;
             return (
@@ -113,11 +112,9 @@ export function AccountsScreen() {
                       const hero = formatBalanceHero(row, row.balance);
                       const recon = lastReconciledLabel(row.lastReconciledAt, today);
                       const flags = accountFlags(row);
-                      const util = formatUtilisation(row.utilisation);
                       const bits = [
                         ...flags,
                         row.type !== "virtual" ? recon.text : null,
-                        util,
                       ].filter(Boolean);
                       return (
                         <li key={row.id}>
@@ -163,7 +160,6 @@ export function AccountsScreen() {
       <BottomSheet
         open={addOpen}
         title="Add account"
-        tall
         onClose={() => setAddOpen(false)}
       >
         <AccountFormSheet
